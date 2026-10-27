@@ -23,7 +23,7 @@ class IndexerDisconnected(ConnectionError):
 class Electrum:
     def __init__(self,host,port=50002):
         self.socket=ssl.create_default_context().wrap_socket(socket.create_connection((host,port),timeout=15),server_hostname=host);self.socket.settimeout(30);self.file=self.socket.makefile('rb');self.counter=0
-        try:self.call('server.version',['Wallaby Bitcoin Dashboard V1 Build 3','1.4'])
+        try:self.call('server.version',['Wallaby Bitcoin Dashboard V1 Build 4','1.4'])
         except BaseException:
             self.close();raise
     def close(self):

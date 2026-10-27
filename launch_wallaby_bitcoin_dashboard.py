@@ -775,7 +775,7 @@ def main():
     agent.start()
     host='[::1]' if server.has_ipv6 else '127.0.0.1'
     url=f'http://{host}:{server.server_port}/'
-    print('Wallaby Bitcoin Dashboard V1 Build 3 · '+str(ROOT),flush=True)
+    print('Wallaby Bitcoin Dashboard V1 Build 4 · '+str(ROOT),flush=True)
     print('Wallaby Bitcoin Dashboard: '+url,flush=True)
     print(f'Wallaby Agent listener: loopback port {agent.server_port} (wallaby-agent JSON/HTTP v1 over SSH)',flush=True)
     print(f'Fee estimates (bookmark): http://{host}:{server.server_port}/#/fees',flush=True)

@@ -1,4 +1,4 @@
-# V1 Build 3 — validation
+# V1 Build 4 — validation
 
 The Python regressions include receive-only personal balance provenance, zero/SMSF exclusion, complete non-joint family balance verification without generating tax reports, context-bound persistent decisions, profile isolation and watch display naming. The actual Agent transport fixture confirms that a wallet with a normal name is recognised as watch-only from Core metadata, while names containing Watch are not classified as watch-only when private keys are enabled.
 
@@ -9,3 +9,5 @@ Balance Trace reuses the established historical lot/accounting logic; real famil
 Corrected Build 3 adds graph regressions for converging/splitting transaction topology, idempotent import, source/destination fact reuse, profile isolation, conservative group answers, exact-output ownership resolution, migration and concurrent branch merging. A real Balance Trace then fresh Exchange Tracer asks once for a shared relationship and preserves its expected cost basis. Synthetic allocation records are excluded from factual graph nodes. The existing tax formulas and financial-year optimisation engine are unchanged.
 
 Partial evidence persistence is tested separately from balance readiness: an incomplete trace cannot unlock Wallet Balances, and saving further evidence retains an existing verified snapshot. Statement identities are independent of temporary job directories and distinguish separate equal-amount entries by their recorded balance/occurrence.
+
+Build 4 adds a two-owner, three-renamed-descriptor joint-payment fixture through the real ownership adapter and joint expansion. The Build 3 implementation fails with MissingOwnership; Build 4 preserves assigned identities and payment quantities. Real Balance Trace planner tests cover unresolved source/destination No/No continuation, Yes-to-source failure, and Yes-to-destination failure after the relevant question. The icon shares one SVG definition across all placements; its 128×96 silhouette is visually inspected.

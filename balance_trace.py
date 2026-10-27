@@ -105,8 +105,11 @@ def run(core,calculation,joints,snapshot,user,console,emit,client):
         emit('stage',stage='balances',label='Balance Trace · '+profile['name'])
         core.WalletOwnership=calculation.base_ownership
         wallets=calculation.physical_rows(calculation.now)
+        # Joint sources/recipients retain Core names. Capture their stable-ID
+        # mapping before display-name application mutates DESCRIPTOR_WALLETS.
+        descriptor_names=dict(getattr(core,'DESCRIPTOR_WALLETS',{}))
         own,other=apply_ownership(core,snapshot,profile,wallets,calculation.other,require_bitaroo=bool(calculation.accounts[uid].get('directory')))
-        labels={name:calculation.snapshot_record('descriptor',ident)['name'] for name,ident in core.DESCRIPTOR_WALLETS.items()}
+        labels={name:calculation.snapshot_record('descriptor',ident)['name'] for name,ident in descriptor_names.items()}
         accounts=calculation.account_prefixes(calculation.now)
         wallets,synthetic=joint.apply(core,wallets,joints,calculation.allocations,labels,calculation.users,profile,accounts)
         for name,owner in synthetic.items():own.wallet_statuses[name]=own.PERSONAL if owner==uid else own.EXTERNAL
