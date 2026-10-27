@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+if [ "$1" = configure ]; then
+    getent group wallaby-dashboard >/dev/null || addgroup --system wallaby-dashboard
+    getent passwd wallaby-dashboard >/dev/null || adduser --system --ingroup wallaby-dashboard --home /var/lib/wallaby-dashboard --no-create-home --shell /usr/sbin/nologin wallaby-dashboard
+    install -d -m 0700 -o wallaby-dashboard -g wallaby-dashboard /var/lib/wallaby-dashboard /var/cache/wallaby-dashboard
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload
+        systemctl enable --now wallaby-dashboard.service
+    else
+        systemctl enable wallaby-dashboard.service
+    fi
+fi

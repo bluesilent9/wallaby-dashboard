@@ -1,0 +1,19 @@
+# Runtime family data must never be committed.
+config.cfg*
+descriptors.cfg*
+descriptors.txt
+data/
+templates/
+*.sqlite3*
+session-*/
+__pycache__/
+*.py[cod]
+*.log
+*.ods
+*.pdf
+*.csv
+*.psbt
+*.7z
+*.zip
+dist/
+build/

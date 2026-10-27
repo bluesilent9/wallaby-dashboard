@@ -1,0 +1,25 @@
+[Unit]
+Description=Wallaby Bitcoin Dashboard
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=wallaby-dashboard
+Group=wallaby-dashboard
+WorkingDirectory=/var/lib/wallaby-dashboard
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /usr/lib/wallaby-dashboard/launch_wallaby_bitcoin_dashboard.py --no-browser --config /var/lib/wallaby-dashboard/config.cfg --state-dir /var/cache/wallaby-dashboard
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/wallaby-dashboard /var/cache/wallaby-dashboard
+
+[Install]
+WantedBy=multi-user.target

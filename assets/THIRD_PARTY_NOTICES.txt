@@ -1,0 +1,1 @@
+Bundled public-key/transaction library: see vendor/README.txt and vendor/embit/LICENSE.
