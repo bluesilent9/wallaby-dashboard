@@ -5,6 +5,7 @@ from preferences import resource_id
 
 def suggest_wallet_name(name):
     stem=Path(name).stem.strip()
+    stem=re.sub(r'(?i)(?<![a-z0-9])watch(?![a-z0-9])',' ',re.sub(r'[_-]+',' ',stem))
     suggested=re.sub(r'\s+',' ',re.sub(r'_+',' ',stem)).strip().title() or 'Wallet'
     if not re.search(r'\bwallet\b',suggested,re.I):suggested+=' Wallet'
     return suggested
@@ -12,12 +13,13 @@ def suggest_wallet_name(name):
 def display_inventory(inventory,catalog):
     sources={w['id']:w['name'] for w in catalog['wallets']}
     vaults={w['id']:bool(w.get('has_vault')) for w in catalog['wallets']}
+    watch={w['id']:bool(w.get('watch_only')) for w in catalog['wallets']}
     result=[]
     for item in inventory:
         item=dict(item)
         if item['kind']=='descriptor':
             raw=sources.get(item['source'],item.get('source_name',item['name']))
-            item.update(source_name=raw,name=suggest_wallet_name(raw),has_vault=vaults.get(item['source'],False))
+            item.update(source_name=raw,name=suggest_wallet_name(raw),has_vault=vaults.get(item['source'],False),watch_only=watch.get(item['source'],False))
         result.append(item)
     return result
 

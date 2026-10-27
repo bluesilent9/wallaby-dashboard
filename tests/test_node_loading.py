@@ -45,7 +45,7 @@ class Loading(unittest.TestCase):
         elif method=='listwallets':reply['result']=names
         elif method=='listwalletdir':reply['result']={'wallets':[{'name':name} for name in names]}
         elif name not in wallets:reply['error']={'code':-18,'message':'Requested wallet does not exist or is not loaded'}
-        elif method=='getwalletinfo':reply['result']={'walletname':name,'scanning':False}
+        elif method=='getwalletinfo':reply['result']={'walletname':name,'scanning':False,'private_keys_enabled':name!='sample_0'}
         elif method=='listdescriptors':reply['result']=wallets[name]
         elif method=='listsinceblock':reply['result']={'transactions':[],'lastblock':'1'*64}
         else:reply['error']={'code':-32601,'message':'Unknown fixture method'}
@@ -60,7 +60,7 @@ class Loading(unittest.TestCase):
         time.sleep(.01)
       with patch.object(Session,'start_descriptor_scan',scan):
         self.session.start_node_wallets();self.assertTrue(done.wait(15),self.session.events)
-      saved=DescriptorStore(self.cfg).read()['wallets'];self.assertEqual(len(saved),12);self.assertEqual({n for m,n in seen if m=='getwalletinfo'},set(names));self.assertEqual(self.session.status,'complete');self.assertIsNone(self.session.last_job_error);self.assertEqual(process.poll(),None)
+      saved=DescriptorStore(self.cfg).read()['wallets'];self.assertEqual(len(saved),12);self.assertEqual([w['name'] for w in saved if w.get('watch_only')],['sample_0']);self.assertEqual({n for m,n in seen if m=='getwalletinfo'},set(names));self.assertEqual(self.session.status,'complete');self.assertIsNone(self.session.last_job_error);self.assertEqual(process.poll(),None)
     finally:
       stop.touch()
       try:process.communicate(timeout=3)

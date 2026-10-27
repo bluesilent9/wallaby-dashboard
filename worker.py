@@ -6,13 +6,15 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from portfolio import build_balances,replay_current_basis
+from balance_trace import run as balance_trace
+from balance_store import BalanceStore
+from report_store import signature as balance_signature
 from preferences import MissingOwnership
 from ownership import inventory_for
-from watch import watch_wallets,ChainClient
+from watch import ChainClient
 from explorer import enrich_history
 from address_book import build_address_book
-from descriptor_chain import HistoryClient,scan,wallet_rows,install_evidence,annotate_balances as descriptor_balances
+from descriptor_chain import HistoryClient,scan,wallet_rows,install_evidence
 from bitaroo_inputs import ledger_snapshot
 from descriptor_snapshot import shared_history,saved_history
 from matching_policy import matching_window, DEFAULT_WINDOW
@@ -62,8 +64,8 @@ def load_core():
 def install_trace_answers(core,console):
     """Only explicit answers from this worker run, scoped to the tax profile."""
     answers={}
-    core.WalletOwnership._run_trace_lookup=lambda owner,kind,key:answers.get((console.profile,kind,key))
-    core.WalletOwnership._run_trace_remember=lambda owner,kind,key,answer:answers.__setitem__((console.profile,kind,key),bool(answer))
+    core.WalletOwnership._run_trace_lookup=lambda owner,kind,key:answers.get((console.profile,kind,repr(key)))
+    core.WalletOwnership._run_trace_remember=lambda owner,kind,key,answer:answers.__setitem__((console.profile,kind,repr(key)),bool(answer))
     return answers
 
 
@@ -74,18 +76,11 @@ def install_gui_ownership(core,request=None,preferences=None):
         def _ask_wallet_status(self,*args,**kwargs):raise MissingOwnership('Error: Missing wallet or exchange ownership information. Run the Ownership Feature to fix this')
     core.WalletOwnership=Fixed;return Fixed
 
-def annotate_balances(balances,ownership):
-    for entry in balances['wallets']:
-        row=ownership.family_records.get(entry['name'])
-        if row:entry.update(owner_name=ownership.family_users.get(row['owner_id'],'Someone else / external'),smsf=row['smsf'])
-        elif entry['name']=='Bitaroo Exchange':entry.update(owner_name=ownership.taxpayer,smsf=False)
-
-
 def run(config):
     console=GuiConsole();sys.stdout=sys.stderr=console
     settings=config['settings'];paths=config['paths'];mode=config.get('mode','cgt');user=config.get('user');snapshot=config.get('family_snapshot')
     if not user or not snapshot:raise ValueError('Choose a family user before starting a job.')
-    if mode not in ('cgt','inventory','descriptors'):raise ValueError('Balances are produced by a completed CGT run. Rebuild the report to refresh them.')
+    if mode not in ('cgt','inventory','descriptors','balances'):raise ValueError('Unknown dashboard process.')
     def gui_input(prompt):
         console.flush()
         context=question_context(console.lines[max(console.prompt_start,len(console.lines)-28):],prompt)
@@ -100,6 +95,8 @@ def run(config):
         emit('log',text=('Answer: '+({'y':'Yes','yes':'Yes','n':'No','no':'No'}.get(answer.strip().lower(),answer))) if kind=='yesno' else prompt+answer)
         return answer
     def rank_users(fy,users):
+        fact_key=('__family__','ranking',repr((fy,tuple(sorted(u['id'] for u in users)))))
+        if fact_key in trace_answers:return trace_answers[fact_key]
         console.flush()
         emit('prompt',kind='ranking',prompt='',context=f'Place in order from highest to lowest the users with the highest and lowest predicted income for the {fy} - {fy+1} Financial Year',choices=[{'id':u['id'],'name':u['name']} for u in users])
         reply=sys.stdin.readline()
@@ -107,11 +104,18 @@ def run(config):
         order=json.loads(json.loads(reply)['answer'])
         if not isinstance(order,list) or sorted(order)!=sorted(u['id'] for u in users):raise ValueError('Rank every listed user exactly once.')
         emit('log',text='Income ranking for '+str(fy)+' - '+str(fy+1)+': '+' > '.join(next(u['name'] for u in users if u['id']==uid) for uid in order))
+        trace_answers[fact_key]=order
         return order
     builtins.input=gui_input
     core=load_core()
-    install_trace_answers(core,console)
+    trace_answers=install_trace_answers(core,console)
+    context_key=balance_signature(snapshot,config.get('descriptor_fingerprint')) if mode!='descriptors' else None
+    prior=BalanceStore(config['preferences']).load(context_key) if context_key else None
+    if prior:
+        for profile,kind,key,answer in prior['result'].get('trace_answers',[]):trace_answers[(profile,kind,key)]=answer
     def request_asset_basis(row,quantity):
+        fact_key=(console.profile,'asset_basis',repr((row.ref,str(quantity))))
+        if fact_key in trace_answers:return trace_answers[fact_key]
         console.flush()
         context=f"{row.exchange} — {row.currency} acquisition details\nSold at {core.display_time(row.dt)}; untraced acquisition quantity {quantity:f} {row.currency}, including any fee in that asset. The exchange spreadsheet already establishes the disposal proceeds. Identify the acquisition cost and holding period below. For an investment received from a chain split, select Chain split and enter its receipt date; the cost base is zero."
         from asset_disposals import validate_basis
@@ -126,6 +130,7 @@ def run(config):
                 context='Please correct the acquisition details: '+str(error)+'\n\n'+context.split('\n\n')[-1]
                 continue
             emit('log',text=f"Acquisition details confirmed for {quantity:f} {row.currency}; disposal consideration comes from the supplied BTC receipt.")
+            trace_answers[fact_key]=answer
             return answer
     core.request_asset_basis=request_asset_basis
     window=matching_window(settings.get('matching_window',DEFAULT_WINDOW))
@@ -140,7 +145,7 @@ def run(config):
     try:
         core.configure();emit('stage',stage='loading',label='Reading your statements and wallet records')
         core.FAMILY_TAX_CONTEXTS=tax_contexts(core,paths.get('tax_context'),snapshot['users'])
-        print('Wallaby Bitcoin Dashboard · V1 Build 2 calculation engine')
+        print('Wallaby Bitcoin Dashboard · V1 Build 3 calculation engine')
         print('Transaction matching tolerance: '+window['label'])
         if mode=='descriptors':
             emit('stage',stage='discovering',label='Discovering descriptor wallet blockchain history')
@@ -195,6 +200,10 @@ def run(config):
         emit('stage',stage='tracing',label='Preparing all family financial years and joint payments')
         joints=collect(core,chain,chain_client,accounts,snapshot['users'],snapshot=snapshot)
         calculation=FamilyCalculation(core,chain,historical_rows,accounts,other,snapshot,settings,console,emit,rank_users)
+        if mode=='balances':
+            merged=balance_trace(core,calculation,joints,snapshot,user,console,emit,chain_client)
+            result={'balances':merged,'trace_answers':[[*key,value] for key,value in trace_answers.items()]}
+            Path(config['result']).write_text(json.dumps(result));emit('complete',event_count=0,review_count=0);return 0
         report,engines=calculation.run(joints,user)
         engine=engines[user['id']]
         ownership=engine.ownership
@@ -203,40 +212,9 @@ def run(config):
         report['bitaroo_as_of_date']=coverage.get('bitaroo_as_of_date')
         for annual in report['annual_reports'].values():annual['matching_window']=window
         report['descriptor_scan']={'scanned_utc':chain['scanned_utc'],'timestamp_basis':chain['timestamp_basis'],'coverage':chain['coverage']}
-        emit('stage',stage='balances',label='Reading latest balances and current BTC/AUD value')
-        snapshots={};quote=None
-        emit('stage',stage='watching',label='Checking live balances of historical wallet addresses')
-        watched=watch_wallets(core,engine,client=chain_client)
-        for profile in calculation.users:
-            uid=profile['id'];current=engines[uid];console.profile=uid;basis_error=None
-            emit('stage',stage='balances',label='Tracing current acquisition costs · '+profile['name'])
-            try:current_basis=replay_current_basis(core,current)
-            except (core.MissingDestinationDataError,core.MissingWalletDataError):raise
-            except (RuntimeError,ValueError,OSError) as exc:
-                current_basis={};basis_error=str(exc)
-                print(profile['name']+' current acquisition costs could not all be established: '+basis_error)
-            balance=build_balances(core,current,basis=current_basis,watched=watched,quote=quote)
-            if balance.get('price_aud_per_btc'):quote=(balance['price_aud_per_btc'],balance['quote_source'])
-            balance['basis_replay_error']=basis_error
-            annotate_balances(balance,current.ownership)
-            descriptor_balances(balance,core.DESCRIPTOR_SNAPSHOT)
-            snapshots[uid]=balance
-        merged=snapshots[user['id']]
-        # Reuse the owning profile's complete cost basis for every family wallet.
-        # SMSF/external/unknown ownership remains explicitly uncosted.
-        owners={r['name']:r for r in snapshot['ownership'] if r.get('confirmed')}
-        for entry in merged['wallets']:
-            identity=owners.get(entry['name'])
-            if not identity or identity.get('smsf') or identity.get('external'):continue
-            source=next((w for w in snapshots.get(identity.get('owner_id'),{}).get('wallets',[]) if w['name']==entry['name']),None)
-            if source:
-                for key in ('cost_basis_aud','unrealised_gain_aud','state','cost_basis_note'):entry[key]=source[key]
-        for profile in calculation.users:
-            if profile['id']==user['id']:continue
-            entry=next((w for w in snapshots[profile['id']]['wallets'] if w['kind']=='exchange'),None)
-            if entry:merged['wallets'].append(dict(entry,name='Bitaroo Exchange · '+profile['name'],ownership='external',owner_name=profile['name']))
-        report['balances']=merged
-        report['balance_report']={'taxpayer':user['name'],'balances':merged}
+        saved_balances=BalanceStore(config['preferences']).personal(context_key,user)
+        if saved_balances:
+            report['balances']=saved_balances['balances'];report['balance_report']=saved_balances
         emit('stage',stage='explorer',label='Corroborating transaction links in every financial year')
         for profile in calculation.users:
             for key,annual in report['family_reports'][profile['id']].items():
@@ -250,6 +228,7 @@ def run(config):
         selected=report['annual_reports'][str(report['selected_year'])]
         report['events']=selected['events']
         report['profiles_calculated']=len(calculation.users)
+        report['_trace_answers']=[[*key,value] for key,value in trace_answers.items()]
         result_path=Path(config['result']);result_path.write_text(json.dumps(report,ensure_ascii=True))
         emit('complete',event_count=len(report['events']),review_count=len(report['review']))
         return 0

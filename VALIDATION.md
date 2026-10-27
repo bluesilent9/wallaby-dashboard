@@ -1,9 +1,7 @@
-# V1 Build 2 — validation
+# V1 Build 3 — validation
 
-Prepared 27 October 2026. Package: `wallaby-dashboard_1.0.0~dev2_all.deb`.
+The Python regressions include receive-only personal balance provenance, zero/SMSF exclusion, complete non-joint family balance verification without generating tax reports, context-bound persistent decisions, profile isolation and watch display naming. The actual Agent transport fixture confirms that a wallet with a normal name is recognised as watch-only from Core metadata, while names containing Watch are not classified as watch-only when private keys are enabled.
 
-The JavaScript regression executes the actual startJob and poll functions with a deliberately delayed prior descriptor-job response. It reproduces the incorrect state on Build 1 and passes on Build 2. It verifies immediate navigation to Terminal Activity before uploads finish, exclusion of the old poll, return to Ownership, Stage 3 scroll target and refreshed inventory. It also checks that the extinct upload selects the shared fossil icon and that the fossil uses a black fill without an outline stroke.
+JavaScript regressions cover the Build 2 poll race and restored descriptor readiness in a fresh page session. Existing ownership/transport/service checks are retained. Package inspection and IPv4/IPv6 extracted-runtime smoke checks are performed before publication. No supplied personal diagnostic logs or wallet records are included in the source/package.
 
-The four existing Python transport/error/service regressions pass, including the actual Agent Build 4 client through the Dashboard hub. Python/JavaScript/shell syntax and extracted-package runtime/source parity are checked. Packaged browser and Agent endpoints are smoke-tested on both IPv4 and IPv6 loopback. The installer starts/enables the service and restarts it on DEB upgrades. No live installation or service changes are performed by the build checks.
-
-Public history tracing, ownership identities and CGT arithmetic are unchanged. Personal records, node identities, wallet descriptors and the supplied diagnostic log are excluded from the repository/package.
+Balance Trace reuses the established historical lot/accounting logic; real family input completeness and online quote availability remain live-installation checks. Unknown owned sources fail rather than invent a cost base. CGT no longer invokes the removed portfolio current-basis replay.

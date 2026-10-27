@@ -55,7 +55,7 @@ class NodeWalletLoader:
         history=self.rpc(node,'listsinceblock',['',1,True,False,True],wallet=name)
         if not isinstance(history,dict) or not isinstance(history.get('transactions'),list) or not re.fullmatch('[0-9a-f]{64}',str(history.get('lastblock'))):raise ValueError('Invalid Core public history for '+name)
         self.progress(node['hostname']+' / '+(name or 'Default Core Wallet')+': public descriptors and wallet history received.')
-        return {'node':node,'rpc_name':name,'wallet':wallet,'history':history}
+        return {'node':node,'rpc_name':name,'wallet':wallet,'history':history,'private_keys_enabled':info.get('private_keys_enabled')}
     @staticmethod
     def descriptor_key(text):
         # Origins describe provenance, not the public locking policy. Core may
@@ -123,6 +123,7 @@ class NodeWalletLoader:
                     saved['next_index']=None if saved.get('next_index') is None or row.get('next_index') is None else max(values)
                 if 'timestamp' in row:saved['timestamp']=min(saved.get('timestamp',row['timestamp']),row['timestamp'])
         wallet=clean_wallet({'wallet_name':first['wallet']['name'],'descriptors':list(rows.values())})
+        wallet['watch_only']=all(r.get('private_keys_enabled') is False for r in group)
         wallet['node_sources']=[{'node_id':r['node']['id'],'hostname':r['node']['hostname'],'wallet_name':r['rpc_name']} for r in group]
         outputs={};addresses=set()
         for replica in group:

@@ -1,3 +1,4 @@
+from version import VERSION, BUILD, LABEL
 """Serialize the existing core's results and exact totals for the HTML views."""
 import builtins
 import base64
@@ -71,7 +72,7 @@ def build_report(core,engine):
                        'notes':list(e.notes),'lot_source':e.lot_source,'paths':engine.visual_events.get(id(e),[])})
     for event in result:event['disposal']=disposal_node(event,event['paths'])
     def stamp(v):return core.display_time(v)
-    return {'schema':1,'application':'Wallaby Bitcoin Dashboard','version':'1','build':1,'version_label':'V1 Build 2','core_version':'116',
+    return {'schema':1,'application':'Wallaby Bitcoin Dashboard','version':VERSION,'build':BUILD,'version_label':LABEL,'core_version':'116',
             'taxpayer':engine.taxpayer,'financial_year':core.fmt_fy(engine.fy_start),
             'created_utc':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
             'totals':totals,'annual_tax':{k:str(v) for k,v in core.annual_summary(events,core.CARRIED_LOSSES).items()},

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Local Firefox GUI for Wallaby Bitcoin Dashboard. Standard-library HTTP bridge only."""
+from balance_store import BalanceStore
 from ownership import saved_bitaroo_destinations
 from ownership_workspace import save_workspace,restore_workspace
 from datetime import datetime,timezone
@@ -102,7 +103,7 @@ class Session:
             elif saved is None:self.report=None;self.report_context=None
             self.report_generation=generation
         report_ready=ready and self.report is not None and self.report_context==context
-        return {'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
+        return {'balances_ready':bool(ready and BalanceStore(self.preferences_path).load(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
     def invalidate_transaction_refresh(self):
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False
     def confirm_transaction_refresh(self):
@@ -113,7 +114,7 @@ class Session:
         data=FamilyStore(self.preferences_path).snapshot();access=self.access(data);user=next((u for u in data['users'] if u['id']==self.user_id),None)
         active=WorkflowStore(self.preferences_path).active(self.user_id) if user else []
         latest=max(active,key=lambda row:row['created_utc'])['id'] if active else None
-        return {'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
+        return {'balance_report':BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user) if user and access['ownership_ready'] else None,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
                 'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':display_inventory(self.inventory,DescriptorStore(self.preferences_path).read()) if user else [],'inventory_ready':self.inventory_ready if user else False,
                 **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
                 'restore_error':self.restore_error,'settings':self.settings if user else {},'loaded_slots':{slot:([p.name for p in sorted(path.rglob('*')) if p.is_file()] if path.is_dir() else [path.name]) for slot,path in self.uploads.items()} if user else {}}
@@ -221,11 +222,11 @@ class Session:
             self.last_job_error=None
             user=self.user()
             if not user:raise ValueError('Select a family user first.')
-            if mode=='balances':raise ValueError(MISSING_CGT+' Rebuild the CGT report to refresh its balances.')
-            if mode not in ('cgt','inventory'):raise ValueError('Unknown job type.')
+            if mode not in ('cgt','inventory','balances'):raise ValueError('Unknown job type.')
             snapshot=FamilyStore(self.preferences_path).snapshot()
             access=self.access(snapshot)
-            if mode=='cgt' and not access['ownership_ready']:raise ValueError(MISSING_OWNERSHIP)
+            if mode in ('cgt','balances') and not access['ownership_ready']:raise ValueError(MISSING_OWNERSHIP)
+            if mode=='cgt' and not access['balances_ready']:raise ValueError('Verify Balances in Ownership before building a CGT report.')
             self.run_context=access['ownership_context']
             self.run_refresh=False
             descriptor_store=DescriptorStore(self.preferences_path)
@@ -238,7 +239,7 @@ class Session:
             merge_saved_uploads(self.uploads,self.input_dir)
             declarations(snapshot['users'],dict(self.settings,**settings),self.uploads)
             required=('historical','exchanges')
-            if mode=='cgt':required+=('chain',)
+            if mode in ('cgt','balances'):required+=('chain',)
             for slot in required:
                 if slot not in self.uploads:raise ValueError('Select the required files in Ownership first.')
             if mode=='inventory' and 'opening_losses_by_user' not in settings:
@@ -253,6 +254,7 @@ class Session:
                 self.report_generation=ReportStore(self.preferences_path).begin(self.run_signature)
             self.result_path=self.session_dir/'report.json'
             self.result_path.unlink(missing_ok=True)
+            if mode=='balances':self.run_signature=report_signature(snapshot,descriptor_store.summary()['fingerprint'])
             config={'mode':mode,'user':user,'family_snapshot':snapshot,'ownership_completed_utc':self.ownership_completed_utc,'bitaroo_as_of_date':self.bitaroo_as_of_date,'descriptor_catalog':descriptor_store.read(),'descriptor_fingerprint':descriptor_store.summary()['fingerprint'],'settings':settings,'paths':{k:str(v) for k,v in self.uploads.items()},
                     'preferences':str(self.preferences_path),'cache':str(self.root/'historical-cache.sqlite3'),'result':str(self.result_path)}
             config_path=self.session_dir/'run.json';config_path.write_text(json.dumps(config))
@@ -293,8 +295,17 @@ class Session:
                         snapshot=FamilyStore(self.preferences_path).snapshot()
                         current=report_signature(snapshot,DescriptorStore(self.preferences_path).summary()['fingerprint'])
                         if current!=self.run_signature:raise ValueError('Ownership or source records changed during this CGT run. Rebuild the report.')
+                        answers=completed.pop('_trace_answers',[])
+                        prior=BalanceStore(self.preferences_path).load(self.run_signature)
+                        if prior and answers:
+                            saved=prior['result'];saved['trace_answers']=answers;BalanceStore(self.preferences_path).save(self.run_signature,saved)
                         ReportStore(self.preferences_path).publish(self.report_generation,self.run_signature,completed,snapshot['users'])
                         self.report=None;self.report_context=None
+                    if self.mode=='balances':
+                        current=FamilyStore(self.preferences_path).snapshot()
+                        key=report_signature(current,DescriptorStore(self.preferences_path).summary()['fingerprint'])
+                        if key!=self.run_signature:raise ValueError('Ownership or records changed during Balance Trace. Verify balances again.')
+                        BalanceStore(self.preferences_path).save(key,completed)
                 except Exception as exc:data={'type':'error','message':'Could not read completed report: '+str(exc)}
             with self.lock:
                 if process is self.process and self.status!='cancelled':self.emit(data)
@@ -753,7 +764,7 @@ def main():
     agent.start()
     host='[::1]' if server.has_ipv6 else '127.0.0.1'
     url=f'http://{host}:{server.server_port}/'
-    print('Wallaby Bitcoin Dashboard V1 Build 2 · '+str(ROOT),flush=True)
+    print('Wallaby Bitcoin Dashboard V1 Build 3 · '+str(ROOT),flush=True)
     print('Wallaby Bitcoin Dashboard: '+url,flush=True)
     print(f'Wallaby Agent listener: loopback port {agent.server_port} (wallaby-agent JSON/HTTP v1 over SSH)',flush=True)
     print(f'Fee estimates (bookmark): http://{host}:{server.server_port}/#/fees',flush=True)

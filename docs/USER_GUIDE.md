@@ -1,4 +1,6 @@
-# Wallaby Bitcoin Dashboard — V1 Build 2
+> Build 3 workflow: Ownership Stage 3 ends with Verify Balances. Wallet Balances and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
+
+# Wallaby Bitcoin Dashboard — V1 Build 3
 
 Extract the complete ZIP. Start the service with `./Start_Wallaby_Bitcoin_Dashboard.sh`, or:
 
@@ -18,17 +20,17 @@ The `tzdata` Python package in requirements.txt supplies IANA timezone rules on 
 
 Public descriptor derivation and raw transaction parsing are bundled; no Bitcoin Core installation or wallet unlock is needed on the dashboard server.
 
-## V1 Build 2 setup
+## V1 Build 3 setup
 
 1. Open **Administration**, then select or create a family user. The sidebar and header remain visible before login; other pages unlock after a user is selected.
 2. Connect each node's Wallaby Agent, load the desired wallets in Bitcoin Core, then open **Ownership** and select **Load Node Wallets**. Every connected node is queried over read-only RPC. Identical public locking descriptors identify wallet copies, independently of wallet names; matching copies share RPC work. Ownership suggests the first reporting node's name. Different wallets with identical names stay separate. Public blockchain tracing then runs as before; after success Ownership opens at Stage 2. No console exports, private keys or wallet unlock are needed. Unloaded wallets or missing RPC capabilities stop discovery with an actionable error rather than accepting a partial collection.
 3. Open **Ownership**. Provide historical complete-year and current-year statements together in the **Bitaroo PDFs** card for each family profile, plus shared Wallets ODS and Exchanges ODS. Any logged-in user can provide the whole family’s data. A missing card is red, a supplied card is green; select **Non Bitaroo user** to disable that profile’s PDF card in grey. All cards must be complete or nonapplicable before loading records. Current-year statements are optional when either your browser's local date or UTC date is 30 June or 1 July. Other inputs remain required. Each Bitaroo period needs matching AUD/BTC statements. Optional price quotes, CPI and tax-context files remain available.
-4. Select **Load records and review ownership**. The dashboard reads the descriptor history already discovered, loads the other records and asks for each wallet's owner and SMSF status. Bitaroo account owners are fixed by their Stage 2 upload cards; exchanges cannot be marked as SMSF accounts. To refresh descriptor history, select Load Node Wallets in Stage 1; the old separate refresh checkbox is removed. Save all assignments.
+4. Select **Load records and review ownership**. The dashboard reads the descriptor history already discovered, loads the other records and asks for each wallet's owner and SMSF status. Bitaroo account owners are fixed by their Stage 2 upload cards; exchanges cannot be marked as SMSF accounts. To refresh descriptor history, select Load Node Wallets in Stage 1; the old separate refresh checkbox is removed. Select Verify Balances to save assignments and trace the family’s current holdings.
 5. Address Book, Wallet Key Explorer and CGT setup unlock. Choose a matching tolerance and build the report. It calculates all supplied family profiles and every financial year from the earliest record through the current year. Financial Year Totals and CGT Event History display **only the logged-in user**. Use their left/right year arrows; future years cannot be selected. The initial year uses the browser’s local year, with the previous-year exception on UTC 30 June / 1 July. Wallet Balances reuses each family owner’s known acquisition costs. Missing basis and SMSF costs can still be unavailable.
 
-The Bitcoin Core wallet CSV importer has been removed. Existing CSV-based Ownership snapshots need to be replaced by loading descriptors and completing a V1 Build 2 Ownership run. Wallets ODS now uses the exact owned-output format described below. Exchanges ODS retains its established format. Descriptor wallets retain Bitcoin Core’s original source name and stable key-based ID, with an editable display name saved in Ownership. ODS wallet names come from row 1; exchange names come from their sheets. They are not inferred from names, notes or built-in identities.
+The Bitcoin Core wallet CSV importer has been removed. Existing CSV-based Ownership snapshots need to be replaced by loading descriptors and completing a V1 Build 3 Ownership run. Wallets ODS now uses the exact owned-output format described below. Exchanges ODS retains its established format. Descriptor wallets retain Bitcoin Core’s original source name and stable key-based ID, with an editable display name saved in Ownership. ODS wallet names come from row 1; exchange names come from their sheets. They are not inferred from names, notes or built-in identities.
 
-## V1 Build 2 changes
+## V1 Build 3 changes
 
 - Ownership Stage 1 loads wallet names, complete public descriptors and legacy received-output metadata from every connected node. No manual descriptor/history paste workflow is shown.
 - Wallet replicas are grouped by overlapping public locking descriptors, ignoring key-origin annotations and checksum spelling. Their descriptor ranges/cursors and received outputs are merged. Unrelated equal names are disambiguated for display, not combined.
@@ -80,7 +82,7 @@ There is **no saved allocation ledger**, and neither saved transaction templates
 
 Optional whole-return tax context now needs explicit user/year scope, so another person's return or a different year is never reused accidentally. The JSON format is `{"users": {"User name or ID": {"2026-27": {"basic_tax": "0", "basic_tax_without_gain": "0"}}}}`, with the existing optional calculation fields inside each year object. Use `{"users": {}}` when no context is supplied. User names are matched without case sensitivity; stable profile IDs are also accepted.
 
-V1 Build 2 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
+V1 Build 3 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
 
 ## Descriptor wallet display names
 
@@ -108,7 +110,7 @@ There is no descriptor paste field on this page; it uses the saved node descript
 
 ## Blockchain discovery and accounting
 
-V1 Build 2 scans every address index covered by Bitcoin Core’s `next_index` cursor, including unused addresses inside that generated prefix, then looks ahead through 20 consecutive unused indexes on each branch. Finding activity extends the scan until another 20-index unused gap is reached. It does not impose a 100- or 200-address hard limit: a wallet that actually generated thousands of addresses still needs those indexes checked. The thousands of unused addresses in Core’s pre-generated keypool are no longer treated as generated/used history. If a descriptor has no cursor, the scanner conservatively covers its entire exported range instead. Receiving, change and inactive descriptors remain included.
+V1 Build 3 scans every address index covered by Bitcoin Core’s `next_index` cursor, including unused addresses inside that generated prefix, then looks ahead through 20 consecutive unused indexes on each branch. Finding activity extends the scan until another 20-index unused gap is reached. It does not impose a 100- or 200-address hard limit: a wallet that actually generated thousands of addresses still needs those indexes checked. The thousands of unused addresses in Core’s pre-generated keypool are no longer treated as generated/used history. If a descriptor has no cursor, the scanner conservatively covers its entire exported range instead. Receiving, change and inactive descriptors remain included.
 
 Let Core finish synchronising before loading node wallets. Core advances its cursor when it generates addresses or observes outputs at higher indexes, including during wallet restoration. Keep the node-loaded descriptors current if you generate many new addresses after the last node load; a 20-address gap cannot discover an arbitrary future jump beyond that gap. Reload Node Wallets when Core adds descriptors or generates more than 20 new unused addresses beyond the saved cursor. Legacy hardened paths use public received-output metadata collected automatically from Core. No wallet-specific shortcut or special limit is built in.
 
@@ -171,7 +173,7 @@ Once every wallet card is green, the profile that started the transaction receiv
 
 Older prepared V143 transactions are checked against saved public descriptor history to establish input ownership. If that cannot be established unambiguously, reopen and prepare the transaction again.
 
-V1 Build 2 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
+V1 Build 3 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
 
 
 ## Cancelling construction
@@ -186,7 +188,7 @@ Receipt validation checks all supplied historical wallet records, including rece
 
 A supplied crypto-to-BTC trade now records the sold asset's CGT as well as the BTC acquisition. AUD disposal proceeds come from the supplied BTC consideration and the existing timestamped BTC/AUD lookup. No additional crypto/crypto or USD conversion is needed. Network fees in the sold asset create separate disposal components; the existing BTC acquisition basis includes the fee's incidental acquisition cost once. Non-BTC amounts keep their own unit, without Bitcoin pipe notation.
 
-The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 2 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
+The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 3 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
 
 Prompt headings now use Exchange Tracer and Wallet Tracer. The wallaby logo retains its shape with a four-tile dashboard emblem.
 
