@@ -24,7 +24,7 @@ def main():
         if source.is_file() and source.suffix in ('.py','.html','.txt','.md','.sh'):
             if source.suffix=='.py':ast.parse(source.read_text(),filename=str(source))
             shutil.copy2(source,app/source.name)
-    for name in ('assets','vendor'):shutil.copytree(ROOT/name,app/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+    for name in ('assets','vendor','docs'):shutil.copytree(ROOT/name,app/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
     (stage/'DEBIAN/control').write_text(CONTROL)
     for name in ('postinst','prerm','postrm'):
         target=stage/'DEBIAN'/name;shutil.copy2(ROOT/'packaging'/name,target);target.chmod(0o755)

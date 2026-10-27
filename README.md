@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 1 · Development source. The DEB build is pending.** This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 1 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev1_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -37,11 +37,11 @@ Create family users, connect Agents with the desired Core wallets loaded, then r
 
 This is a trusted-family service behind SSH, not a public password-authenticated website. Node identity hints are not substitutes for SSH authentication. Core RPC cookies stay on the node computers.
 
-## Planned DEB installation
+## DEB installation
 
-The prepared package is `wallaby-dashboard`, version `1.0.0~dev1`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev1`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. Retire the exact legacy service before installing the new package to avoid port conflicts. Build/install instructions will accompany the tested DEB; no V1 Build 1 binary has been published yet.
+The installer does **not** remove an older manually installed service. Retire the exact legacy service before installing the new package to avoid port conflicts. See [clean-install instructions](docs/CLEAN_INSTALL.md). Installation on a live server and live Core node loading remain to be tested.
 
 ## Source checks and build
 
@@ -51,7 +51,7 @@ python3 -m unittest discover -s tests -v
 
 The cross-project integration test requires `WALLABY_AGENT_SOURCE` pointing to the matching Agent's `src` directory; otherwise that one test is skipped. Other tests run independently. See [VALIDATION.md](VALIDATION.md).
 
-After the explicit pre-build checkpoint, build with Python 3 and `dpkg-dev` installed:
+To rebuild from source with Python 3 and `dpkg-dev` installed:
 
 ```sh
 python3 packaging/build.py
