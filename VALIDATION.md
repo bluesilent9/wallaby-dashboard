@@ -7,3 +7,5 @@ Four focused Dashboard regressions pass: immediate loading failures remain on Ow
 All 44 matching Agent tests pass. The Dashboard's CGT arithmetic is unchanged by this update. Existing historical validation is not a substitute for testing a live Core node.
 
 Pending after the requested reboot: DEB generation/inspection, checksum generation, installation/startup and real node loading. The DEB is prepared to enable and immediately start wallaby-dashboard.service on installation, using ports 38951/56443 on IPv4/IPv6 loopback. No server or laptop service has been modified during preparation.
+
+Browser regression: clicking Load Node Wallets with no connected Agent switched to Terminal Activity, then returned to Ownership with the connection error visibly retained and Terminal Activity disabled. The user can retry from Ownership.
