@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 1 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev1_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 2 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev2_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -18,9 +18,11 @@ Vault monitoring remains a placeholder. Reports depend on complete source record
 
 ## This development update
 
-Use **Wallaby Agent V2 Development Build 4 or later** with this Dashboard. Agent Build 4 corrects wallet RPC URL construction: Core wallet names are encoded exactly, without an added trailing slash. It also handles bounded work without dropping its connection. The Dashboard limits each Agent to two active commands, shares follow-up work across equivalent wallet replicas, and keeps fast loading errors visible on Ownership after Terminal Activity locks again. No wallet names or transaction identities are embedded as exceptions.
+Build 2 fixes an Ownership browser race: a delayed poll from the previous descriptor job could replace the state of a new record-loading job, preventing navigation and the Stage 3 refresh. Starting a job now invalidates older poll responses. Load records switches immediately to Terminal Activity, then returns to Ownership and scrolls to Stage 3 when records complete. Upload/start errors remain visible on Ownership.
 
-The production Agent client is exercised end to end against a strict simulated Core HTTP endpoint, including twelve loaded wallets and empty, Unicode and punctuation-containing names. Public blockchain history tracing remains in use; this update changes node metadata collection, not CGT arithmetic.
+The Extinct Wallets ODS upload button now uses the same shared fossil icon as extinct wallet rows. The icon is a more detailed T-Rex skeleton with solid black bones. No second fossil icon is introduced.
+
+DEB upgrades restart the service so the updated backend is loaded. Existing configuration and data are preserved. Use Wallaby Agent V2 Development Build 4 or later for the exact Core wallet routing correction from Dashboard Build 1. Public blockchain tracing and CGT calculations are unchanged.
 
 ## Run from source
 
@@ -39,9 +41,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev1`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev2`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. Retire the exact legacy service before installing the new package to avoid port conflicts. See [clean-install instructions](docs/CLEAN_INSTALL.md). Installation on a live server and live Core node loading remain to be tested.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev2_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 
@@ -49,7 +51,7 @@ The installer does **not** remove an older manually installed service. Retire th
 python3 -m unittest discover -s tests -v
 ```
 
-The cross-project integration test requires `WALLABY_AGENT_SOURCE` pointing to the matching Agent's `src` directory; otherwise that one test is skipped. Other tests run independently. See [VALIDATION.md](VALIDATION.md).
+The cross-project integration test requires `WALLABY_AGENT_SOURCE` pointing to the matching Agent's `src` directory; otherwise that one test is skipped. The browser timing regression can be run with `node tests/ownership_navigation.js assets/app.js`. Other tests run independently. See [VALIDATION.md](VALIDATION.md).
 
 To rebuild from source with Python 3 and `dpkg-dev` installed:
 

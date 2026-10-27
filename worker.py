@@ -140,7 +140,7 @@ def run(config):
     try:
         core.configure();emit('stage',stage='loading',label='Reading your statements and wallet records')
         core.FAMILY_TAX_CONTEXTS=tax_contexts(core,paths.get('tax_context'),snapshot['users'])
-        print('Wallaby Bitcoin Dashboard · V1 Build 1 calculation engine')
+        print('Wallaby Bitcoin Dashboard · V1 Build 2 calculation engine')
         print('Transaction matching tolerance: '+window['label'])
         if mode=='descriptors':
             emit('stage',stage='discovering',label='Discovering descriptor wallet blockchain history')
