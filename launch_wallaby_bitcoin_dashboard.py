@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Local Firefox GUI for Wallaby Bitcoin Dashboard. Standard-library HTTP bridge only."""
 from balance_store import BalanceStore
+from wallet_names import source_suggestions
 from ownership import saved_bitaroo_destinations
 from ownership_workspace import save_workspace,restore_workspace
 from datetime import datetime,timezone
@@ -115,7 +116,7 @@ class Session:
         active=WorkflowStore(self.preferences_path).active(self.user_id) if user else []
         latest=max(active,key=lambda row:row['created_utc'])['id'] if active else None
         return {'balance_report':BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user) if user and access['ownership_ready'] else None,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
-                'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':display_inventory(self.inventory,DescriptorStore(self.preferences_path).read()) if user else [],'inventory_ready':self.inventory_ready if user else False,
+                'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':[dict(item,**source_suggestions(item,data['users'])) for item in display_inventory(self.inventory,DescriptorStore(self.preferences_path).read())] if user else [],'inventory_ready':self.inventory_ready if user else False,
                 **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
                 'restore_error':self.restore_error,'settings':self.settings if user else {},'loaded_slots':{slot:([p.name for p in sorted(path.rglob('*')) if p.is_file()] if path.is_dir() else [path.name]) for slot,path in self.uploads.items()} if user else {}}
     def select_user(self,user_id):
@@ -775,7 +776,7 @@ def main():
     agent.start()
     host='[::1]' if server.has_ipv6 else '127.0.0.1'
     url=f'http://{host}:{server.server_port}/'
-    print('Wallaby Bitcoin Dashboard V1 Build 4 · '+str(ROOT),flush=True)
+    print('Wallaby Bitcoin Dashboard V1 Build 5 · '+str(ROOT),flush=True)
     print('Wallaby Bitcoin Dashboard: '+url,flush=True)
     print(f'Wallaby Agent listener: loopback port {agent.server_port} (wallaby-agent JSON/HTTP v1 over SSH)',flush=True)
     print(f'Fee estimates (bookmark): http://{host}:{server.server_port}/#/fees',flush=True)

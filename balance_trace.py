@@ -39,8 +39,17 @@ def trace_current_basis(core,engine):
     while planner.wallet_queue or planner.bitaroo_queue:
         planner.process_wallet_queue();planner.process_bitaroo_queue(engine.reports)
     before_replace=core.replace
-    shadow=getattr(engine,'basis_engine_class',core.Engine)(engine.taxpayer,earliest,engine.wallets,engine.reports,ownership=engine.ownership,
-                       other_exchange_rows=engine.other_exchange_rows,active_wallet_rows=planner.required_wallet_rows)
+    Base=getattr(engine,'basis_engine_class',core.Engine)
+    class BalanceLedger(Base):
+        def _resolve_deferred_market_price(self,lot,wallet,dt):
+            # Joint parcel selection needs the same historical costs as CGT.
+            # Enable valuation for that selection without enabling tax events.
+            start,end=self.period_start,self.period_end
+            self.period_start=planner.start;self.period_end=latest
+            try:return super()._resolve_deferred_market_price(lot,wallet,dt)
+            finally:self.period_start,self.period_end=start,end
+    shadow=BalanceLedger(engine.taxpayer,earliest,engine.wallets,engine.reports,ownership=engine.ownership,
+                         other_exchange_rows=engine.other_exchange_rows,active_wallet_rows=planner.required_wallet_rows)
     # Reconstruct the first supplied statement's opening episode, once only.
     shadow.reset_bitaroo_to_target_opening()
     shadow.period_start=latest+timedelta(days=1)

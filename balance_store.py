@@ -4,6 +4,8 @@ from copy import deepcopy
 import json,os,uuid
 from storage import data_directory,storage_lock
 
+BALANCE_ALGORITHM=2
+
 class BalanceStore:
     def __init__(self,config):self.config=Path(config);self.path=data_directory(self.config)/'balance-trace.json'
     def load(self,key):
@@ -14,9 +16,12 @@ class BalanceStore:
         with storage_lock(self.config):
             previous=self.load(key)
             result=deepcopy(result)
+            if 'balances' in result:result['basis_algorithm']=BALANCE_ALGORITHM
             if previous:
                 old=previous['result']
-                if 'balances' in old and 'balances' not in result:result['balances']=deepcopy(old['balances'])
+                if 'balances' in old and 'balances' not in result:
+                    result['balances']=deepcopy(old['balances'])
+                    if 'basis_algorithm' in old:result['basis_algorithm']=old['basis_algorithm']
                 graph=old.get('trace_graph')
                 incoming=result.get('trace_graph')
                 if graph and incoming:
@@ -38,14 +43,14 @@ class BalanceStore:
             finally:tmp.unlink(missing_ok=True)
     def ready(self,key):
         saved=self.load(key)
-        return bool(saved and saved['result'].get('balances'))
+        return bool(saved and saved['result'].get('balances') and saved['result'].get('basis_algorithm')==BALANCE_ALGORITHM)
     def save_evidence(self,key,graph,answers):
         # Save discoveries even when an incomplete trace cannot produce balances.
         # This must never unlock the balance/report UI by itself.
         self.save(key,{'trace_graph':graph,'trace_answers':answers})
     def personal(self,key,user):
         saved=self.load(key)
-        if not saved or not saved['result'].get('balances'):return None
+        if not saved or not saved['result'].get('balances') or saved['result'].get('basis_algorithm')!=BALANCE_ALGORITHM:return None
         balance=deepcopy(saved['result']['balances'])
         for row in balance['wallets']:
             owned=row.get('owner_name')==user['name'] and not row.get('smsf')

@@ -7,6 +7,7 @@ def suggest_wallet_name(name):
     stem=Path(name).stem.strip()
     stem=re.sub(r'(?i)(?<![a-z0-9])watch(?![a-z0-9])',' ',re.sub(r'[_-]+',' ',stem))
     suggested=re.sub(r'\s+',' ',re.sub(r'_+',' ',stem)).strip().title() or 'Wallet'
+    suggested=re.sub(r'\bsmsf\b','SMSF',suggested,flags=re.I)
     if not re.search(r'\bwallet\b',suggested,re.I):suggested+=' Wallet'
     return suggested
 
@@ -46,3 +47,13 @@ def apply_display_names(core,wallets,resolved):
     # This snapshot is the CGT worker's private, in-memory copy, not descriptors.cfg.
     for w in getattr(core,'DESCRIPTOR_SNAPSHOT',{}).get('wallets',[]):
         if w['id'] in labels:w['name']=labels[w['id']]
+
+
+def source_suggestions(item,users):
+    """Suggestions use immutable imported source labels, never edited display names."""
+    raw=item.get('source_name',item.get('source','')) if item['kind']=='descriptor' else item.get('source','')
+    normalise=lambda value:' '.join(re.findall(r'[^\W_]+',str(value).casefold()))
+    words=' '+normalise(raw)+' '
+    matches=[u['id'] for u in users if normalise(u['name']) and ' '+normalise(u['name'])+' ' in words]
+    return {'suggested_owner_id':matches[0] if len(matches)==1 else None,
+            'smsf_detected':item['kind']=='descriptor' and ' smsf ' in words}

@@ -32,7 +32,7 @@ class BalanceTraceTests(unittest.TestCase):
  def test_balances_and_answers_persist_only_for_the_same_input_context(self):
     with tempfile.TemporaryDirectory() as d:
       store=BalanceStore(Path(d)/'config.cfg');result={'balances':{'wallets':[{'name':'Wallet','kind':'wallet','owner_name':'Owner','smsf':False}]},'trace_answers':[['id','source',"('tx', ())",False]]};store.save('context',result)
-      self.assertEqual(BalanceStore(store.config).load('context')['result'],result);self.assertIsNone(store.load('changed'))
+      self.assertEqual({k:v for k,v in BalanceStore(store.config).load('context')['result'].items() if k!='basis_algorithm'},result);self.assertIsNone(store.load('changed'))
       self.assertEqual(store.personal('context',{'name':'Owner'})['balances']['wallets'][0]['ownership'],'personal')
       self.assertEqual(store.personal('context',{'name':'Other'})['balances']['wallets'][0]['ownership'],'external')
  def test_answer_keys_are_profile_scoped_and_serialisable(self):

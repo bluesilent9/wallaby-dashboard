@@ -123,6 +123,6 @@ body{min-width:1120px}.family-login h1,.family-admin h1{font-size:40px;font-weig
 .node-card{padding:26px}.node-card>.card-icon{display:inline-flex;width:42px;height:42px;align-items:center;justify-content:center;border-radius:10px;background:#edf4f0;color:#397c67}.node-card>.card-icon svg{width:24px;height:24px}
 
 /* Three reserved, left-aligned source-icon positions in Ownership. */
-.ownership-icons{display:inline-grid;grid-template-columns:repeat(3,22px);gap:5px;width:76px;min-width:76px;vertical-align:middle;align-items:center}
+.ownership-icons{display:inline-grid;grid-template-columns:repeat(4,22px);gap:5px;width:103px;min-width:103px;vertical-align:middle;align-items:center}
 .ownership-icon-slot{display:inline-flex;width:22px;height:24px;align-items:center;justify-content:center}
 .ownership-icon-slot svg{width:22px;height:22px;flex:none}

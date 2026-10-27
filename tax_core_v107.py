@@ -1124,7 +1124,6 @@ def load_other_exchange_ods(path: str) -> List[OtherExchangeRow]:
         # A network fee belongs to the outgoing on-chain crypto asset. A fiat
         # purchase has no outgoing blockchain asset, so it uses incoming BTC.
         # This is one unit-based convention for all input tabs, not a venue rule.
-        network_unit = received_unit if sold_unit in FIAT_UNITS else sold_unit
         for unit in (sold_unit, received_unit):
             if not re.fullmatch(r'[A-Z][A-Z0-9]{1,11}', unit) or unit in reserved:
                 raise ValueError(f"{location}: use an asset ticker such as AUD, USD, BTC or BCH in the asset headings; got {unit!r}.")
@@ -1152,17 +1151,29 @@ def load_other_exchange_ods(path: str) -> List[OtherExchangeRow]:
                 raise ValueError(f"{where}: all five exchange columns must be present.")
             dt = ods_utc_timestamp(cells[0], cells[1], where)
             sold, network_fee, received = number(2, sold_unit), number(3, 'Network Fee'), number(4, received_unit)
-            if sold > 0 or received <= 0 or network_fee > 0:
-                raise ValueError(f"{where}: outgoing column C and Network Fee must be negative or zero; incoming column E must be positive.")
-            if sold_unit == 'BTC' and sold == 0:
-                raise ValueError(f"{where}: a BTC disposal must have a negative BTC amount.")
+            # Unit headings remain fixed within a sheet. Signed amounts allow
+            # purchases and sales on the same exchange tab without venue rules.
+            if network_fee > 0 or not ((sold <= 0 and received > 0) or (sold > 0 and received <= 0)):
+                raise ValueError(f"{where}: one asset amount must be negative (or zero for a free receipt), the other positive; Network Fee must be negative or zero.")
+            btc = sold if sold_unit == 'BTC' else received
+            fiat = received if sold_unit == 'BTC' else sold
+            if btc == 0 or (btc < 0 and fiat <= 0):
+                raise ValueError(f"{where}: a BTC disposal needs negative BTC and positive consideration.")
+            outgoing_unit = sold_unit if sold < 0 else received_unit
+            incoming_unit = received_unit if received > 0 else sold_unit
+            fee_unit = incoming_unit if outgoing_unit in FIAT_UNITS else outgoing_unit
             other_unit = received_unit if sold_unit == 'BTC' else sold_unit
-            out.append(OtherExchangeRow(dt, received if sold_unit == 'BTC' else sold,
-                sold if sold_unit == 'BTC' else received, other_unit, exchange, path, row_num, network_fee, network_unit))
+            out.append(OtherExchangeRow(dt, fiat, btc, other_unit, exchange, path, row_num, network_fee, fee_unit))
     if not out:
         raise ValueError(f"No exchange rows found in {Path(path).name}.")
     out.sort(key=lambda r:(utc_time(r.dt), r.exchange.casefold(), r.row_num))
     return out
+
+
+def match_other_exchange_sale(rows,amount,dt):
+    candidates=[r for r in rows if r.sell and abs(abs(r.btc)-abs(amount))<=Decimal('0.00000002') and date_close(r.dt,dt)]
+    if len(candidates)>1:raise ValueError('Multiple supplied exchange sales match one transfer; provide unambiguous amounts/times.')
+    return candidates[0] if candidates else None
 
 
 def classify_other_exchange_ownership(rows: List[OtherExchangeRow], taxpayer: str) -> List[OtherExchangeRow]:
@@ -1869,9 +1880,8 @@ class WalletOwnership:
         if owned is None:
             print(f"\n{trace_source.upper()} — UNRESOLVED BITCOIN DESTINATION")
             print(f"Origin: {origin}")
-            when = f" {utc_time(dt):%H:%M:%S}z" if has_precise_time(dt) else ""
-            shown_date = human_date(utc_time(dt)) if has_precise_time(dt) else human_date(dt)
-            print(f"Date: {shown_date}{when}")
+            print(f"Date UTC: {utc_time(dt):%d/%m/%Y}" if has_precise_time(dt) else f"Date UTC: {dt:%d/%m/%Y}")
+            print(f"Time UTC: {utc_time(dt):%H:%M:%S}" if has_precise_time(dt) else "Time UTC: Not supplied")
             print(f"Amount sent: {qb(amount)} BTC")
             print(f"Transaction ID: {transaction_id}")
             if address:
@@ -1941,7 +1951,8 @@ class WalletOwnership:
         if owned is None:
             print(f"\n{trace_source.upper()} — UNRESOLVED BITCOIN SOURCE")
             print(f"Receiving wallet: {w.sheet}")
-            print(f"Date: {human_date(w.dt)}")
+            print(f"Date UTC: {utc_time(w.dt):%d/%m/%Y}" if has_precise_time(w.dt) else f"Date UTC: {w.dt:%d/%m/%Y}")
+            print(f"Time UTC: {utc_time(w.dt):%H:%M:%S}" if has_precise_time(w.dt) else "Time UTC: Not supplied")
             print(f"Amount received: {qb(w.principal)} BTC")
             print(f"Transaction ID: {w.txid or '<not available>'}")
             if addresses:
@@ -2342,6 +2353,8 @@ class HistoryPlanner:
                 if deposit is not None:
                     continue
 
+                if match_other_exchange_sale(self.other_exchange_rows,w.principal,w.dt) is not None:
+                    continue
                 # Any other unresolved destination is outside the supplied wallet set.
                 if w.address:
                     self.ownership.decide_external_address(w, trace_source=trace_source)
@@ -4386,6 +4399,26 @@ class Engine:
     def build_events(self) -> List[LedgerEvent]:
         events: List[LedgerEvent] = []
 
+        # Resolve supplied sales to their funding transfer once, before replay.
+        # A transfer into an exchange is not a second disposal of the same BTC.
+        self.other_sale_sources={};self.other_sale_transfers={}
+        for row in self.other_exchange_rows:
+            if not row.sell or row.dt>self.period_end:continue
+            candidates=[]
+            for name,rows in self.wallets.items():
+                if self.ownership.wallet_statuses.get(name)!=WalletOwnership.PERSONAL:continue
+                for w in rows:
+                    if w.outgoing and w.dt<=self.period_end and match_other_exchange_sale([row],w.principal,w.dt) and self.find_wallet_dest_for_row(w) is None and match_bitaroo_deposit_row(self.reports,w) is None:
+                        candidates.append(('wallet',w))
+            for r in self.reports.btc_rows:
+                if r.tx_type=='Withdrawal' and tax_date(r.dt)<=self.period_end and self.find_wallet_incoming_for_withdrawal(abs(r.amount),r.dt) is None and match_other_exchange_sale([row],abs(r.amount),tax_date(r.dt)):
+                    candidates.append(('bitaroo',r))
+            if len(candidates)>1:raise ValueError(f'{row.exchange} row {row.row_num}: multiple transfers match this exchange sale.')
+            if candidates:
+                kind,source=candidates[0];key=(kind,source.ref if kind=='wallet' else id(source))
+                if key in self.other_sale_transfers:raise ValueError('One transfer cannot fund two supplied exchange sales.')
+                self.other_sale_transfers[key]=row;self.other_sale_sources[row.ref]=(kind,source)
+
         # Bitaroo rows.
         for i, r in enumerate(self.reports.btc_rows):
             if self.active_bitaroo_rows is not None and id(r) not in self.active_bitaroo_rows:
@@ -4418,7 +4451,7 @@ class Engine:
                 continue
             if row.buy or row.sell:
                 events.append(LedgerEvent(
-                    utc_time(row.dt).replace(tzinfo=None),
+                    max(utc_time(row.dt),utc_time(self.other_sale_sources[row.ref][1].dt)).replace(tzinfo=None) if row.ref in self.other_sale_sources else utc_time(row.dt).replace(tzinfo=None),
                     'other_exchange_buy' if row.buy else 'other_exchange_sell',
                     row,
                 ))
@@ -4534,7 +4567,8 @@ class Engine:
                     if isinstance(part, WalletTx):
                         sheet, row_num = globals().get("DESCRIPTOR_SOURCE_NAMES", {}).get(part.descriptor_id, part.sheet), part.row_num
                         break
-            return (e.when, priority.get(e.kind, 90), sheet, row_num)
+            sale_after_funding = e.kind == 'other_exchange_sell' and e.payload.ref in self.other_sale_sources
+            return (e.when, 45 if sale_after_funding else priority.get(e.kind, 90), sheet, row_num)
 
         events.sort(key=event_sort_key)
         return events
@@ -4675,6 +4709,10 @@ class Engine:
         if kind == "bitaroo_withdrawal":
             _, r, recipient = ev.payload
             qty = abs(r.amount)
+            sale=getattr(self,'other_sale_transfers',{}).get(('bitaroo',id(r)))
+            if sale is not None:
+                self.move('Bitaroo',sale.exchange,qty,tax_date(r.dt),desc='Transfer funding supplied exchange sale')
+                return
             if recipient is None:
                 dt = tax_date(r.dt)
                 fy = r.dt.year if r.dt.month >= 7 else r.dt.year - 1
@@ -4903,6 +4941,12 @@ class Engine:
 
         if kind == "wallet_out":
             w: WalletTx = ev.payload
+            sale=getattr(self,'other_sale_transfers',{}).get(('wallet',w.ref))
+            if sale is not None:
+                if w.ref not in self.processed_wallet:
+                    self.move(w.sheet,sale.exchange,w.principal,w.dt,fee=self.claim_wallet_fee(w),desc='Transfer funding supplied exchange sale')
+                    self.processed_wallet.add(w.ref)
+                return
             trace_source = self._trace_source_for_wallet_row(w)
             if w.ref in self.processed_wallet:
                 return

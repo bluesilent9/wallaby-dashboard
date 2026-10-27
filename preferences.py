@@ -257,6 +257,8 @@ class FamilyStore:
             for row in rows:
                 src=expected[row['id']];name=str(row.get('name','')).strip();owner=row.get('owner_id');external=row.get('external')
                 row=dict(row)
+                from wallet_names import source_suggestions
+                if source_suggestions(src,data['users'])['smsf_detected']:row['smsf']=True
                 if src['kind']=='bitaroo':
                     if src['source'] not in users:raise ValueError('Bitaroo account owner no longer exists.')
                     owner=src['source'];external=False;row['smsf']=False
