@@ -8,6 +8,7 @@ import traceback
 from pathlib import Path
 from balance_trace import run as balance_trace
 from balance_store import BalanceStore
+from trace_graph import TraceGraph
 from report_store import signature as balance_signature
 from preferences import MissingOwnership
 from ownership import inventory_for
@@ -61,11 +62,11 @@ def load_core():
     return core
 
 
-def install_trace_answers(core,console):
-    """Only explicit answers from this worker run, scoped to the tax profile."""
+def install_trace_answers(core,console,graph=None):
+    """Use shared relationship evidence; retain the legacy adapter for standalone tests."""
     answers={}
-    core.WalletOwnership._run_trace_lookup=lambda owner,kind,key:answers.get((console.profile,kind,repr(key)))
-    core.WalletOwnership._run_trace_remember=lambda owner,kind,key,answer:answers.__setitem__((console.profile,kind,repr(key)),bool(answer))
+    core.WalletOwnership._run_trace_lookup=lambda owner,kind,key:graph.lookup(console.profile,kind,key) if graph is not None else answers.get((console.profile,kind,repr(key)))
+    core.WalletOwnership._run_trace_remember=lambda owner,kind,key,answer:graph.remember(console.profile,kind,key,answer) if graph is not None else answers.__setitem__((console.profile,kind,repr(key)),bool(answer))
     return answers
 
 
@@ -108,11 +109,17 @@ def run(config):
         return order
     builtins.input=gui_input
     core=load_core()
-    trace_answers=install_trace_answers(core,console)
     context_key=balance_signature(snapshot,config.get('descriptor_fingerprint')) if mode!='descriptors' else None
     prior=BalanceStore(config['preferences']).load(context_key) if context_key else None
+    graph=TraceGraph(prior['result'].get('trace_graph') if prior else None)
+    core.TRACE_GRAPH=graph
+    graph.install(core,console)
+    trace_answers=install_trace_answers(core,console,graph)
     if prior:
-        for profile,kind,key,answer in prior['result'].get('trace_answers',[]):trace_answers[(profile,kind,key)]=answer
+        legacy=prior['result'].get('trace_answers',[])
+        graph.migrate(legacy)
+        for profile,kind,key,answer in legacy:
+            if kind not in ('source','destination'):trace_answers[(profile,kind,key)]=answer
     def request_asset_basis(row,quantity):
         fact_key=(console.profile,'asset_basis',repr((row.ref,str(quantity))))
         if fact_key in trace_answers:return trace_answers[fact_key]
@@ -196,13 +203,14 @@ def run(config):
                     'coverage_by_user':{uid:a['coverage'] for uid,a in accounts.items()},'family_accounts':active,
                     'historical_balances':{name:str(rows[-1].balance) if rows else '0' for name,rows in historical_rows.items()},**coverage}
             Path(config['result']).write_text(json.dumps(result));emit('complete',event_count=0,review_count=0);return 0
+        graph.seed(core,wallets,chain,snapshot,accounts,other)
         print('Ownership loaded from config.cfg. SMSF ownership is recorded separately and excluded from personal CGT.')
         emit('stage',stage='tracing',label='Preparing all family financial years and joint payments')
         joints=collect(core,chain,chain_client,accounts,snapshot['users'],snapshot=snapshot)
         calculation=FamilyCalculation(core,chain,historical_rows,accounts,other,snapshot,settings,console,emit,rank_users)
         if mode=='balances':
             merged=balance_trace(core,calculation,joints,snapshot,user,console,emit,chain_client)
-            result={'balances':merged,'trace_answers':[[*key,value] for key,value in trace_answers.items()]}
+            result={'balances':merged,'trace_graph':graph.export(),'trace_answers':[[*key,value] for key,value in trace_answers.items()]}
             Path(config['result']).write_text(json.dumps(result));emit('complete',event_count=0,review_count=0);return 0
         report,engines=calculation.run(joints,user)
         engine=engines[user['id']]
@@ -228,6 +236,7 @@ def run(config):
         selected=report['annual_reports'][str(report['selected_year'])]
         report['events']=selected['events']
         report['profiles_calculated']=len(calculation.users)
+        report['_trace_graph']=graph.export()
         report['_trace_answers']=[[*key,value] for key,value in trace_answers.items()]
         result_path=Path(config['result']);result_path.write_text(json.dumps(report,ensure_ascii=True))
         emit('complete',event_count=len(report['events']),review_count=len(report['review']))
@@ -240,6 +249,8 @@ def run(config):
         console.flush();emit('error',message=str(exc) or type(exc).__name__)
         traceback.print_exc(file=console);console.flush();return 2
     finally:
+        if mode in ('balances','cgt') and context_key and not Path(config['result']).exists():
+            emit('trace_evidence',graph=graph.export(),trace_answers=[[*key,value] for key,value in trace_answers.items()])
         if engine and hasattr(engine,'close_observer'):engine.close_observer()
         console.flush();sys.stdout=sys.stderr=OUTPUT
 

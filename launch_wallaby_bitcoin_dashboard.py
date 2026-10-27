@@ -103,7 +103,7 @@ class Session:
             elif saved is None:self.report=None;self.report_context=None
             self.report_generation=generation
         report_ready=ready and self.report is not None and self.report_context==context
-        return {'balances_ready':bool(ready and BalanceStore(self.preferences_path).load(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
+        return {'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
     def invalidate_transaction_refresh(self):
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False
     def confirm_transaction_refresh(self):
@@ -266,6 +266,14 @@ class Session:
         for line in process.stdout:
             try:data=json.loads(line)
             except ValueError:data={'type':'log','text':line.rstrip()}
+            if data.get('type')=='trace_evidence':
+                if process is self.process and self.mode in ('balances','cgt'):
+                    current=report_signature(FamilyStore(self.preferences_path).snapshot(),DescriptorStore(self.preferences_path).summary()['fingerprint'])
+                    if current==self.run_signature:
+                        try:BalanceStore(self.preferences_path).save_evidence(current,data['graph'],data.get('trace_answers',[]))
+                        except Exception as exc:
+                            with self.lock:self.emit({'type':'log','text':'Could not preserve incomplete trace evidence: '+str(exc)})
+                continue
             if data.get('type')=='complete' and process is self.process and self.status!='cancelled':
                 try:
                     completed=json.loads(self.result_path.read_text())
@@ -296,9 +304,12 @@ class Session:
                         current=report_signature(snapshot,DescriptorStore(self.preferences_path).summary()['fingerprint'])
                         if current!=self.run_signature:raise ValueError('Ownership or source records changed during this CGT run. Rebuild the report.')
                         answers=completed.pop('_trace_answers',[])
+                        graph=completed.pop('_trace_graph',None)
                         prior=BalanceStore(self.preferences_path).load(self.run_signature)
-                        if prior and answers:
-                            saved=prior['result'];saved['trace_answers']=answers;BalanceStore(self.preferences_path).save(self.run_signature,saved)
+                        if prior and (answers or graph):
+                            saved=prior['result'];saved['trace_answers']=answers
+                            if graph is not None:saved['trace_graph']=graph
+                            BalanceStore(self.preferences_path).save(self.run_signature,saved)
                         ReportStore(self.preferences_path).publish(self.report_generation,self.run_signature,completed,snapshot['users'])
                         self.report=None;self.report_context=None
                     if self.mode=='balances':

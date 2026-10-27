@@ -1881,7 +1881,7 @@ class WalletOwnership:
             owned = self._ask_yes_no("Enter Y if it is, or N if it belongs to somebody else: ")
             getattr(self, '_run_trace_remember', lambda *args: None)('destination', decision_key, owned)
         else:
-            print(f"Reusing this run's {'Yes' if owned else 'No'} destination answer for {self.taxpayer}: {transaction_id}.")
+            print(f"Reusing confirmed {'Yes' if owned else 'No'} destination evidence for {self.taxpayer}: {transaction_id}.")
         status = self.PERSONAL if owned else self.EXTERNAL
         self.destination_statuses[key] = status
         if address:
@@ -1957,11 +1957,12 @@ class WalletOwnership:
             owned = self._ask_yes_no("Enter Y if it is, or N if it belongs to somebody else: ")
             getattr(self, '_run_trace_remember', lambda *args: None)('source', decision_key, owned)
         else:
-            print(f"Reusing this run's {'Yes' if owned else 'No'} source answer for {self.taxpayer}: {txid}.")
+            print(f"Reusing confirmed {'Yes' if owned else 'No'} source evidence for {self.taxpayer}: {txid}.")
         status = self.PERSONAL if owned else self.EXTERNAL
         self.source_tx_statuses[txid] = status
-        for addr in addresses:
-            self.address_statuses.setdefault(addr, status)
+        # A group answer does not identify which individual addresses are owned.
+        if len(addresses) == 1:
+            self.address_statuses.setdefault(addresses[0], status)
 
         if owned:
             shown = ", ".join(addresses) if addresses else (f"transaction {w.txid}" if w.txid else "the unresolved source")
