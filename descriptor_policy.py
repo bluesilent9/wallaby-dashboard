@@ -1,5 +1,6 @@
 """Core public descriptor compatibility, including migrated combo policies."""
 import re
+_PRIVATE=re.compile(r'\b[xtyzuYZUV]prv[1-9A-HJ-NP-Za-km-z]+|(?<=[(\s])[5KLc9][1-9A-HJ-NP-Za-km-z]{50,51}(?=[/)\s])')
 from vendor.embit.descriptor import Descriptor
 from vendor.embit import script
 

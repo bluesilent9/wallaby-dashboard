@@ -4,7 +4,7 @@ from decimal import Decimal,ROUND_CEILING,ROUND_FLOOR
 from pathlib import Path
 from descriptor_store import DescriptorStore
 from descriptor_snapshot import saved_history
-from descriptor_chain import HistoryClient,script_hash,address_for
+from descriptor_chain import address_for
 from vendor.embit.script import Script,address_to_scriptpubkey
 from preferences import resource_id
 from address_book import valid_address
@@ -155,50 +155,36 @@ def live_coins(session,catalog,source_ids,force=False):
     with _LOCK:
         cached=_CACHE.get(key)
         if not force and cached and time.monotonic()-cached[0]<30:return cached[1]
-    # Instantiate the indexer without mutating the calculation engine's global module.
-    from worker import load_core
-    from transaction_builder import _HISTORICAL_LOCK
-    with _HISTORICAL_LOCK:core=load_core()
-    client=HistoryClient(core,str(Path(session.root)/'descriptor-chain.sqlite3'))
-    result={};seen=set();tip_height=None
-    try:
-        for uid in source_ids:
-            wallet=by_resource.get(uid)
-            if not wallet:raise ValueError('Only descriptor wallets can fund this transaction.')
-            own=scripts[wallet['id']];items=sorted(own)
-            ok,lists=client._request('blockchain.scripthash.listunspent',[[script_hash(bytes.fromhex(s))] for s in items],batch=True)
-            if not ok:
-                lists=[]
-                for raw in items:
-                    address=address_for(Script(bytes.fromhex(raw)))
-                    if not address:raise ValueError('A legacy input requires a TLS indexer for a live fee estimate.')
-                    rows=client._http('https://blockstream.info/api/address/'+address+'/utxo');lists.append([{'tx_hash':r['txid'],'tx_pos':r['vout'],'value':r['value'],'height':r['status'].get('block_height',0)} for r in rows])
-            if len(lists)!=len(items):raise ValueError('Incomplete public UTXO response; fees were not estimated.')
-            utxos=[]
-            for raw,rows in zip(items,lists):
-                if not isinstance(rows,list):raise ValueError('Invalid public UTXO response.')
-                for row in rows:
-                    if type(row.get('height')) is not int or row['height']<=0:continue
-                    txid=row['tx_hash'];vout=row['tx_pos'];value=row['value'];keyout=(txid,vout)
-                    if not isinstance(txid,str) or len(txid)!=64 or type(vout) is not int or type(value) is not int or value<=0:raise ValueError('Invalid public UTXO.')
-                    tx=client.tx(txid)
-                    if not 0<=vout<len(tx.vout) or tx.vout[vout].value!=value or tx.vout[vout].script_pubkey.data.hex()!=raw:raise ValueError('Public UTXO did not match its transaction.')
-                    if len(tx.vin)==1 and tx.vin[0].txid==b'\0'*32:
-                        if tip_height is None:
-                            tip_ok,tip=client._request('blockchain.headers.subscribe',[])
-                            tip_height=int(tip['height']) if tip_ok else int(client._http('https://blockstream.info/api/blocks/tip/height',text=True))
-                        if tip_height-row['height']+1<100:continue
-                    if keyout in seen:raise ValueError('Overlapping wallet UTXOs cannot be counted twice.')
-                    seen.add(keyout)
-                    if Script(bytes.fromhex(raw)).script_type()=='p2sh':
-                        policies=[r['desc'] for r in wallet['raw']['descriptors']]
-                        if not any(d.startswith(('sh(wpkh(','combo(')) for d in policies) or any(d.startswith('sh(') and not d.startswith('sh(wpkh(') for d in policies):raise ValueError('Wrapped input policy needs more size information.')
-                    if Script(bytes.fromhex(raw)).script_type()=='p2tr':
-                        from descriptor_policy import parse_policy
-                        if any(bool(parse_policy(r['desc'].split('#')[0])[0].taptree) for r in wallet['raw']['descriptors'] if r['desc'].startswith('tr(')):raise ValueError('Taproot script-path inputs need signing-size information before estimating fees.')
-                    weight,witness=input_weight(raw);utxos.append({'txid':txid,'vout':vout,'value':value,'weight':weight,'witness':witness,'script':raw,'raw_tx':tx.serialize().hex()})
-            result[uid]=utxos
-    finally:client.close()
+    from node_chain import NodeChain,RegistryRPC,satoshis
+    client=NodeChain(RegistryRPC(session.node_registry),store.read())
+    result={};seen=set()
+    for uid in source_ids:
+        wallet=by_resource.get(uid)
+        if not wallet:raise ValueError('Only descriptor wallets can fund this transaction.')
+        wallet['node_sources']=raw_wallets[wallet['id']].get('node_sources',[])
+        utxos=[]
+        for row in client.wallet_unspent(wallet):
+            if int(row.get('confirmations',0))<1 or not row.get('safe',True):continue
+            txid=row['txid'];vout=row['vout'];value=satoshis(row['amount']);raw=row['scriptPubKey'];keyout=(txid,vout)
+            if type(vout) is not int or vout<0 or value<=0:raise ValueError('Invalid node UTXO')
+            client.hints[txid]=wallet['node_sources']
+            tx=client.transaction(txid)
+            if not vout<len(tx.vout) or tx.vout[vout].value!=value or tx.vout[vout].script_pubkey.data.hex()!=raw:raise ValueError('Node UTXO did not match its raw transaction.')
+            # listunspent is Core's authoritative wallet ownership check. Do not
+            # restrict it to scripts in an earlier Dashboard snapshot.
+            if not row.get('solvable',False):continue
+            if len(tx.vin)==1 and tx.vin[0].txid==b'\0'*32 and int(row['confirmations'])<100:continue
+            if keyout in seen:raise ValueError('Overlapping wallet UTXOs cannot be counted twice.')
+            seen.add(keyout)
+            if Script(bytes.fromhex(raw)).script_type()=='p2sh':
+                policies=[r['desc'] for r in wallet['raw']['descriptors']]
+                if not any(d.startswith(('sh(wpkh(','combo(')) for d in policies) or any(d.startswith('sh(') and not d.startswith('sh(wpkh(') for d in policies):raise ValueError('Wrapped input policy needs more size information.')
+            if Script(bytes.fromhex(raw)).script_type()=='p2tr':
+                from descriptor_policy import parse_policy
+                if any(bool(parse_policy(r['desc'].split('#')[0])[0].taptree) for r in wallet['raw']['descriptors'] if r['desc'].startswith('tr(')):raise ValueError('Taproot script-path inputs need signing-size information before estimating fees.')
+            if Script(bytes.fromhex(raw)).script_type()=='p2wsh':raise ValueError('Vault or multisignature inputs need signing-size information before estimating fees.')
+            weight,witness=input_weight(raw);utxos.append({'txid':txid,'vout':vout,'value':value,'weight':weight,'witness':witness,'script':raw,'raw_tx':tx.serialize().hex()})
+        result[uid]=utxos
     with _LOCK:
         if len(_CACHE)>64:_CACHE.clear()
         _CACHE[key]=(time.monotonic(),result)

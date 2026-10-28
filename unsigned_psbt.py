@@ -75,28 +75,27 @@ def construct(session,catalog,edges,reserved):
     ids={resource_id('descriptor',w['id']):w['id'] for w in store['wallets']}
     sources={e['from'] for e in edges if e.get('max') or int(e['amount_sats']) or e['fee_rate'].strip('0.')}
     coins=live_coins(session,catalog,sources,force=True);change={}
-    # Change scripts come only from each source wallet's public internal descriptor.
-    from descriptor_chain import HistoryClient,script_hash
-    from worker import load_core
-    from transaction_builder import _HISTORICAL_LOCK
-    with _HISTORICAL_LOCK:core=load_core()
-    client=HistoryClient(core,str(session.root/'descriptor-chain.sqlite3'))
-    try:
-        maximum_sources={e['from'] for e in edges if e.get('max')}
-        for uid in sorted(sources):
-            if uid in maximum_sources:continue
-            if uid not in ids:raise ValueError('A funding descriptor is unavailable.')
-            for attempt in range(20):
-                choice=public_change_candidate(store,chain,ids[uid],reserved);spk,derived,key,index,origin=choice
-                ok,history=client._request('blockchain.scripthash.get_history',[script_hash(spk.data)])
-                if not ok:
-                    from descriptor_chain import address_for
-                    history=client._http('https://blockstream.info/api/address/'+address_for(spk)+'/txs')
-                if not isinstance(history,list):raise ValueError('Could not verify the change address history.')
-                reserved[key]=index+1
-                if not history:change[uid]=choice;break
-            else:raise ValueError('Refresh the descriptor export; its saved change cursor is behind blockchain activity.')
-    finally:client.close()
+    # Refresh Core's change cursors, including all replicas, immediately before
+    # deriving change. No private keys, generated address RPC or explorer call.
+    from node_chain import NodeChain,RegistryRPC
+    from node_wallets import NodeWalletLoader
+    client=NodeChain(RegistryRPC(session.node_registry),store)
+    maximum_sources={e['from'] for e in edges if e.get('max')}
+    for uid in sorted(sources):
+        if uid in maximum_sources:continue
+        if uid not in ids:raise ValueError('A funding descriptor is unavailable.')
+        wallet=next(w for w in store['wallets'] if w['id']==ids[uid]);connected={n['id'] for n in client.nodes()};found=False
+        for replica in wallet.get('node_sources',[]):
+            if replica['node_id'] not in connected:continue
+            raw=client.rpc.call(replica['node_id'],'listdescriptors',[False],replica['wallet_name']);found=True
+            by_policy={NodeWalletLoader.descriptor_key(r['desc']):r for r in raw['descriptors']}
+            for row in wallet['raw']['descriptors']:
+                live=by_policy.get(NodeWalletLoader.descriptor_key(row['desc']))
+                if live is None:raise ValueError('Core change policy changed. Reload node wallets before constructing a transaction.')
+                row['next_index']=max(row.get('next_index') or 0,live.get('next_index') or live.get('next') or 0)
+        if not found:raise ValueError('Connect the funding wallet node before constructing a transaction.')
+        choice=public_change_candidate(store,chain,ids[uid],reserved);spk,derived,key,index,origin=choice
+        reserved[key]=index+1;change[uid]=choice
     result=plan(edges,catalog,coins,{u:v[0] for u,v in change.items()},details=True)
     if not result['can_continue']:raise ValueError(result['validation_message'])
     psbt,tx=encode_psbt(result,change)

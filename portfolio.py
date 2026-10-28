@@ -79,7 +79,7 @@ def build_balances(core,engine,quote=None,now=None,basis=None,watched=None):
            'value_aud':str(value) if value is not None else None,'btc_value_aud':str(market) if market is not None else None,
            'cost_basis_aud':str(cost) if cost is not None else None,'unrealised_gain_aud':str(gain) if gain is not None else None,
            'state':status,'cost_basis_note':reason,'last_update_utc':core.display_time(last) if last is not None else None,
-           'ownership':ownership,'record_count':rows,'last_record':record})
+           'ownership':ownership,'record_count':rows,'last_record':record,'sources':(basis or {}).get('Bitaroo' if kind=='exchange' else name,{}).get('sources',[])})
     for name,original in sorted(engine.wallets.items(),key=lambda item:item[0].casefold()):
         if name in getattr(engine,'synthetic_accounts',{}):continue
         if not original:

@@ -2,15 +2,15 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 5 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev5_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 6 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev6_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
 ## What it does
 
 - Australian CGT working papers, financial year totals and visual transaction histories for supplied family records.
-- Shared Ownership, Address Book, wallet balances and public Wallet Key Explorer.
-- Fee Estimates with Bitcoin Core unit conversions.
+- Shared Ownership, Address Book and wallet balances.
+- Node-driven Fee Estimates, pending/mined blocks and transaction tracking, with Bitcoin Core unit conversions.
 - Shared transaction templates, unsigned PSBT preparation and verified partial-signature collection. Private keys remain in Bitcoin Core; the Dashboard does not sign or broadcast.
 - Node discovery through Wallaby Agent, querying every connected node and deduplicating wallet replicas by public descriptors.
 
@@ -18,13 +18,11 @@ Vault monitoring remains a placeholder. Reports depend on complete source record
 
 ## This development update
 
-Ownership Stage 3 now ends with **Verify Balances**. It saves every ownership assignment, opens Terminal Activity and runs the new **Balance Trace** for the family. Nonzero personal wallet holdings are traced back to funding, including receive-only wallets; SMSFs are excluded from personal cost tracing. Unknown sources require an explicit answer, and a missing owned source stops the process until its records are provided. Retained lots use the existing transfer/fee and joint-payment accounting rules. Ambiguous joint-payment history reuses the established annual allocation engine; it does not publish a CGT report during balance verification.
+All blockchain lookups now use connected Bitcoin Core nodes through Wallaby Agent. Core wallet history replaces address-range scanning. Builder inputs and change-cursor checks also use RPC. There is no public blockchain fallback. A pruned node must retain the required transactions in a loaded wallet; missing creating/spending evidence stops the trace rather than accepting an incomplete ledger. Load Node Wallets, review Ownership and Verify Balances after upgrading. Saved graph evidence is retained, but old balance snapshots require verification.
 
-Wallet Balances unlocks after Balance Trace, independently of tax reports. Snapshots and a shared evidence graph are stored under `data/balance-trace.json`, included in profile backups. The graph merges transactions, owned outputs, source records, ownership assignments and explored trace branches using stable identities. Balance, Exchange and Wallet traces extend that structure; confirmed ownership relationships can resolve later questions about the same addresses. Group answers remain group facts, and unknown ownership is never treated as an external source. Evidence is scoped to the family ownership/record signature and profile; changing records or owners invalidates it. Earlier Build 3 ownership answers are migrated into graph facts automatically. Income rankings and asset-basis forms retain their existing specialised storage. Concurrent runs merge evidence rather than overwriting another trace’s branches. If an incomplete trace stops with an error, its confirmed discoveries are preserved without marking balances as verified. Derived event classifications are labelled as recomputed interpretations; parcel allocations and tax arithmetic are not stored as blockchain facts. CGT no longer performs a separate current-balance replay; it uses the saved Balance Trace snapshot. Financial Year Totals and CGT Event History still require the CGT report.
+Verify Balances opens Wallet Balances. Cards share Ownership's vault/wallet/watch/SMSF icons; the new S-shaped SMSF mark replaces the bank symbol. Shorter balance tooltips show gain/loss, owner, SMSF, retained purchase cost and source records. Wallet Key Explorer has been removed; public descriptor validation remains where needed by node loading and PSBT construction.
 
-Reopening a browser restores all completed Ownership stages from server data. The shared extinct icon is now a larger solid-black T-Rex skull. Suggested descriptor-wallet display names omit the standalone word “watch”; exact Core RPC names remain unchanged. An eye icon denotes confirmed watch-only metadata from `getwalletinfo` (`private_keys_enabled=false` across wallet replicas), not an assumption based on the name. Reload node wallets once to collect this metadata from older installations.
-
-DEB upgrades preserve records and restart the service. Wallaby Agent V2 Development Build 4 or later is required. Public blockchain tracing and actual CGT calculation rules remain in place.
+Fee Estimates use Core at the lowest request priority, pausing behind foreground jobs. The simplified pending/mined block view adapts Mempool's AGPL component code and includes TXID tracking. BTC/AUD and historical currency/market price services remain external; CPI, when needed, comes from the supplied file. No signing or broadcasting RPC is added.
 
 ## Run from source
 
@@ -43,9 +41,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev5`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev6`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev5_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev6_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 
@@ -74,3 +72,7 @@ Balance Trace resolves deferred historical prices before optimised joint-parcel 
 Exchange unit columns can now contain both trading directions: one signed negative asset and one positive asset. Fees remain nonpositive and use the actual outgoing crypto unit (or incoming BTC for a fiat purchase). Supplied BTC sales are uniquely linked to matching wallet sends or Bitaroo withdrawals so the funding transfer and sale are not counted as two disposals. Ambiguous matches stop for corrected records. No venue, person, transaction or address is embedded in this matching logic.
 
 After upgrading to Build 5, run Verify Balances again. Earlier balance-cost snapshots remain available only as historical stored data and do not unlock current balances; confirmed trace evidence is retained for reuse.
+
+## Licence
+
+This combined distribution is provided under GNU AGPL version 3. [Full licence](LICENSE.txt). Mempool component copyright and original pinned sources are retained in [vendor/mempool](vendor/mempool/UPSTREAM.md); other bundled libraries retain their notices. The running service provides corresponding source through its Source code link (`/source.zip`).

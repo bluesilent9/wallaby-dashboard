@@ -8,7 +8,7 @@ from vendor.embit.networks import NETWORKS
 from preferences import FamilyStore
 from storage import migrate_storage
 from descriptor_policy import parse_policy,needs_history
-from wallet_keys import _PRIVATE
+from descriptor_policy import _PRIVATE
 
 MAX_TEXT=4*1024*1024
 
@@ -57,7 +57,6 @@ def clean_wallet(raw):
         if d.is_wildcard:
             bounds=row.get('range');nxt=row.get('next_index',row.get('next'))
             if not isinstance(bounds,list) or len(bounds)!=2 or not all(type(x) is int for x in bounds) or not 0<=bounds[0]<=bounds[1]<0x80000000:raise ValueError('Ranged descriptors require their complete Core range metadata.')
-            if bounds[1]-bounds[0]>100000:raise ValueError('Descriptor range exceeds the 100,000-address scan budget per branch. Reduce the range explicitly before using this import.')
             if nxt is not None and (type(nxt) is not int or not 0<=nxt<0x80000000):raise ValueError('Invalid next_index.')
             item['range']=bounds;item['next_index']=nxt
         if type(row.get('timestamp')) is int and row['timestamp']>=0:item['timestamp']=row['timestamp']

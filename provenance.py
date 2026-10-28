@@ -39,7 +39,7 @@ def make_engine(core):
             elif isinstance(obj,core.OtherExchangeRow):
                 data={'record_type':'Exchange acquisition' if obj.buy else 'Exchange disposal','location':obj.exchange,
                       'utc':self.stamp(obj.dt),'btc':str(obj.btc),'other_asset':obj.currency,'other_asset_amount':str(obj.fiat),
-                      'source_row':obj.row_num,'network_fee':str(obj.network_fee),'network_fee_unit':obj.network_fee_unit}
+                      'source_file':Path(obj.source_file).name,'source_row':obj.row_num,'network_fee':str(obj.network_fee),'network_fee_unit':obj.network_fee_unit}
             elif isinstance(obj,core.BitarooRow):
                 data={'record_type':obj.tx_type,'location':'Bitaroo','utc':self.stamp(core.tax_date(obj.dt)),
                       'amount':str(obj.amount),'unit':obj.asset,'balance':str(obj.balance),

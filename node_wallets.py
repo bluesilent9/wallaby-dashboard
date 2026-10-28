@@ -135,7 +135,8 @@ class NodeWalletLoader:
                 previous=outputs.get((txid,vout))
                 if previous is None or int(row.get('confirmations',0))>int(previous.get('confirmations',0)):outputs[(txid,vout)]=row
                 if row.get('address'):addresses.add(row['address'])
-        if needs_history(wallet):wallet['public_history']={'exported_utc':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),'lastblock':first['history']['lastblock'],'outputs':[{'txid':t,'vout':v} for t,v in sorted(outputs)]}
+        wallet['public_history']={'exported_utc':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),'lastblock':first['history']['lastblock'],'outputs':[{'txid':t,'vout':v} for t,v in sorted(outputs)]}
+        wallet['node_history']=list({(r['txid'],r.get('vout'),r.get('category')):deepcopy(r) for replica in group for r in replica['history']['transactions'] if not r.get('abandoned') and int(r.get('confirmations',0))>=0}.values())
         # Inspect only addresses Core actually received funds at, not its keypool.
         has_policy=any(self.vault_height(r['desc']) for r in wallet['raw']['descriptors'])
         evidence=[]
@@ -145,6 +146,16 @@ class NodeWalletLoader:
                 if height:
                     for (txid,vout),entry in outputs.items():
                         if entry.get('address')==address and int(entry.get('confirmations',0))>0:evidence.append({'txid':txid,'vout':vout,'address':address,'height':height})
+        wallet['receiving_address']=None
+        # Keep the Address Book's most recent receiving address; distinguish
+        # change using Core metadata, including publicly underivable policies.
+        candidates=sorted(outputs.values(),key=lambda r:(r.get('blocktime',r.get('time',0)),r['txid'],r['vout']),reverse=True)
+        checked=set()
+        for row in candidates:
+            addr=row.get('address')
+            if not addr or addr in checked:continue
+            checked.add(addr);_,info=self.address_info((group,addr))
+            if not info.get('ischange',False):wallet['receiving_address']=addr;break
         wallet['vault_evidence']=evidence;wallet['has_vault']=bool(evidence)
         return wallet
     def collect(self):
@@ -173,5 +184,5 @@ class NodeWalletLoader:
             if name.casefold() in used:name=base+' · '+wallet['node_sources'][0]['hostname']
             if name.casefold() in used:name+=' · '+wallet['id'][:8]
             wallet['name']=name;wallet['raw']['wallet_name']=name;used.add(name.casefold())
-        self.check();self.progress(str(len(wallets))+' unique public wallets collected from all '+str(len(nodes))+' connected nodes. Public blockchain tracing follows.')
+        self.check();self.progress(str(len(wallets))+' unique public wallets collected from all '+str(len(nodes))+' connected nodes. Connected-node wallet history reconstruction follows.')
         return wallets

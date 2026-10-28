@@ -83,7 +83,17 @@ def trace_current_basis(core,engine):
                         known=False;reasons.append(str(exc))
             qty=sum((lot.qty for lot in lots),ZERO)
             cost=sum((lot.cost for lot in lots),ZERO) if known else None
-            result[name]={'qty':qty,'cost':cost,'reason':'Acquisition costs established by Balance Trace for retained holdings.' if known else ' '.join(dict.fromkeys(reasons))}
+            sources=[]
+            for lot in lots:
+                path=shadow.path(lot) if hasattr(shadow,'path') else ()
+                root=path[0] if path else {}
+                details=root.get('details',{})
+                reference=details.get('transaction_id')
+                if not reference and details.get('source_file'):
+                    reference='ODS:'+str(details['source_file'])+':'+str(details.get('location',''))+':row'+str(details.get('source_row',''))
+                if not reference:reference=lot.source
+                if reference and reference not in sources:sources.append(reference)
+            result[name]={'qty':qty,'cost':cost,'sources':sources,'reason':'Acquisition costs established by Balance Trace for retained holdings.' if known else ' '.join(dict.fromkeys(reasons))}
         return result
     finally:
         if hasattr(shadow,'close_observer'):shadow.close_observer()
@@ -144,7 +154,13 @@ def run(core,calculation,joints,snapshot,user,console,emit,client):
                 record=own.family_records.get(entry['name'])
                 if record:entry.update(owner_name=own.family_users.get(record.get('owner_id'),'Someone else / external'),smsf=record.get('smsf',False))
                 elif entry['kind']=='exchange':entry.update(owner_name=profile['name'],smsf=False)
-            descriptor_balances(balance,core.DESCRIPTOR_SNAPSHOT);snapshots[uid]=balance
+            for entry in balance['wallets']:entry['descriptor_id']=own.descriptor_wallet_ids.get(entry['name'])
+            descriptor_balances(balance,core.DESCRIPTOR_SNAPSHOT)
+            by_id={w['id']:w for w in core.DESCRIPTOR_SNAPSHOT['wallets']}
+            for entry in balance['wallets']:
+                meta=by_id.get(own.descriptor_wallet_ids.get(entry['name']),{})
+                entry.update(has_vault=bool(meta.get('has_vault')),watch_only=bool(meta.get('watch_only')))
+            snapshots[uid]=balance
         finally:current.close_observer()
     merged=snapshots[user['id']]
     owners={r['name']:r for r in snapshot['ownership'] if r.get('confirmed')}
@@ -153,7 +169,7 @@ def run(core,calculation,joints,snapshot,user,console,emit,client):
         if not identity or identity.get('smsf') or identity.get('external'):continue
         source=next((r for r in snapshots.get(identity.get('owner_id'),{}).get('wallets',[]) if r['name']==entry['name']),None)
         if source:
-            for key in ('cost_basis_aud','unrealised_gain_aud','state','cost_basis_note'):entry[key]=source[key]
+            for key in ('cost_basis_aud','unrealised_gain_aud','state','cost_basis_note','sources'):entry[key]=source.get(key,[] if key=='sources' else None)
     for profile in calculation.users:
         if profile['id']==user['id']:continue
         entry=next((r for r in snapshots[profile['id']]['wallets'] if r['kind']=='exchange'),None)

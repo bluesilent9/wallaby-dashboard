@@ -119,4 +119,8 @@ Application-internal read workflows consume completed RPC payloads promptly. Sho
 
 Wallet-scoped requests use `/wallet/` plus the URL-encoded exact Core wallet name, without appending a slash. A null wallet is node-wide; an empty string denotes Core's default wallet. Names are never inferred from display labels.
 
-Dashboard V1 Build 5 limits delivered/running work to two commands per Agent connection, with queued work released as results arrive. Agent V2 Development Build 4 independently bounds execution to two workers and tolerates a brief completion/slot-release race. Multiple nodes can execute concurrently, and equivalent public-descriptor replicas can share follow-up reads. These limits do not insert an artificial delay between successful requests.
+Dashboard V1 Build 6 limits delivered/running work to two commands per Agent connection, with queued work released as results arrive. Agent V2 Development Build 4 independently bounds execution to two workers and tolerates a brief completion/slot-release race. Multiple nodes can execute concurrently, and equivalent public-descriptor replicas can share follow-up reads. These limits do not insert an artificial delay between successful requests.
+
+## Build 6 background scheduling
+
+Read-only calculation workers use a private loopback bridge with a per-workspace bearer secret and a strict method allowlist. Core cookies and private keys never enter worker configuration. Foreground calls use priority 0; fee observations use priority 100. Queued foreground work precedes background work, and background calls wait while foreground commands are queued or executing. Already executing RPCs are not preempted. No Agent wire-protocol change or signing permission is required.

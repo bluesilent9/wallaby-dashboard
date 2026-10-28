@@ -450,6 +450,7 @@ def match_bitaroo_deposit_row(reports, wallet_row: "WalletTx") -> Optional[Tuple
     if not wallet_row.outgoing:
         return None
 
+    if not any(r.tx_type=='Deposit' and r.amount>0 and date_close(tax_date(r.dt),wallet_row.dt) for r in reports.btc_rows):return None
     info = lookup_transaction_online(wallet_row.txid) if wallet_row.txid else None
     principal = wallet_row.principal
     gross_csv = abs(wallet_row.tx_total)
@@ -1592,62 +1593,14 @@ class MissingDestinationDataError(MissingWalletDataError):
 
 @lru_cache(maxsize=8192)
 def lookup_transaction_online(txid: str) -> Optional[ChainTxInfo]:
-    """Look up a Bitcoin transaction from public explorers.
-
-    Mempool.space documents GET /api/tx/:txid as returning fee, inputs and
-    outputs. Blockstream's Esplora API exposes the same transaction fields as a
-    fallback. All amounts returned by the explorers are converted from satoshis
-    to BTC here.
-
-    This lookup is cached by txid so multiple wallet blockchain rows belonging to the
-    same transaction result in a single public request per endpoint.
-    """
-    if not re.fullmatch(r"[0-9a-fA-F]{64}", txid or ""):
-        return None
-
-    urls = [
-        (f"https://mempool.space/api/tx/{urllib.parse.quote(txid)}", "mempool.space"),
-        (f"https://blockstream.info/api/tx/{urllib.parse.quote(txid)}", "blockstream.info"),
-    ]
-    for url, source in urls:
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "User-Agent": "Bitcoin-CGT-Generator/40",
-                    "Accept": "application/json",
-                },
-                method="GET",
-            )
-            raw = cached_http(url, dict(req.header_items()), timeout=8).decode("utf-8", errors="replace")
-            data = json.loads(raw)
-            fee_sat = data.get("fee")
-            fee = Decimal(str(fee_sat)) / Decimal("100000000") if fee_sat is not None else None
-            outputs: List[ChainTxOutput] = []
-            for idx, vout in enumerate(data.get("vout", [])):
-                # Mempool.space/Esplora normally expose scriptpubkey_address;
-                # tolerate the alternative key spelling defensively.
-                addr = (vout.get("scriptpubkey_address") or vout.get("scriptpubkey_address_string") or "")
-                value_sat = vout.get("value")
-                if value_sat is None:
-                    value_sat = vout.get("value_sat")
-                if value_sat is None:
-                    continue
-                outputs.append(
-                    ChainTxOutput(idx, Decimal(str(value_sat)) / Decimal("100000000"), str(addr or ""))
-                )
-
-            input_addresses: List[str] = []
-            for vin in data.get("vin", []):
-                prevout = vin.get("prevout") or {}
-                addr = prevout.get("scriptpubkey_address") or prevout.get("scriptpubkey_address_string")
-                if addr and addr not in input_addresses:
-                    input_addresses.append(str(addr))
-
-            return ChainTxInfo(txid, fee, outputs, input_addresses, source)
-        except Exception:
-            continue
-    return None
+    """Resolve Bitcoin evidence exclusively through the connected node transport."""
+    if not re.fullmatch(r"[0-9a-fA-F]{64}",txid or ''):return None
+    from node_chain import current
+    row=current().tx(txid.lower())
+    addresses=list(dict.fromkeys(v.get('prevout',{}).get('scriptpubkey_address') for v in row['vin']))
+    return ChainTxInfo(txid,Decimal(row['fee'])/Decimal(100000000) if 'fee' in row else None,
+        [ChainTxOutput(i,Decimal(o['value'])/Decimal(100000000),o.get('scriptpubkey_address','')) for i,o in enumerate(row['vout'])],
+        [a for a in addresses if a],'Connected Bitcoin Core node')
 
 
 @lru_cache(maxsize=4096)
@@ -4068,31 +4021,7 @@ class Engine:
             if value is None or value <= 0:
                 raise ValueError(f"Missing verified ABS CPI for {q} in --cpi. Supply all needed quarters on one consistent reference base.")
             return value
-        if not hasattr(self, '_cpi_cache'):
-            self._cpi_cache = {}
-        if q not in self._cpi_cache:
-            period = q[:4] + '-Q' + q[-1]
-            url = ('https://data.api.abs.gov.au/rest/data/ABS,CPI,2.0.0/1.10001.10.50.Q?'
-                   + urllib.parse.urlencode({'startPeriod': period, 'endPeriod': period}))
-            try:
-                raw = cached_http(url, {'Accept': 'application/vnd.sdmx.data+csv;version=1.0.0'}).decode('utf-8-sig')
-                rows = list(csv.DictReader(io.StringIO(raw)))
-                rows = [r for r in rows if r.get('TIME_PERIOD') == period and r.get('MEASURE') == '1'
-                        and r.get('INDEX') == '10001' and r.get('TSEST') == '10'
-                        and r.get('REGION') == '50' and r.get('FREQ') == 'Q']
-                if len(rows) != 1:
-                    raise ValueError('Requested quarterly All Groups index not uniquely available')
-                value = D(rows[0]['OBS_VALUE'])
-                base = rows[0].get('BASE_PERIOD')
-                if hasattr(self, '_cpi_base') and self._cpi_base != base:
-                    raise ValueError('ABS CPI reference base changed between queries; supply a consistent --cpi file')
-                self._cpi_base = base
-                if not value.is_finite() or value <= 0:
-                    raise ValueError('Invalid CPI value')
-                self._cpi_cache[q] = value
-            except (ValueError, KeyError, urllib.error.URLError, OSError) as exc:
-                raise RuntimeError(f"ABS CPI {q} is unavailable/unpublished: {exc}. Supply --cpi with verified consistent quarterly indices when published.") from exc
-        return self._cpi_cache[q]
+        raise ValueError(f"Missing verified CPI for {q}. Supply the quarterly CPI file in Ownership; only currency/market prices are fetched from external services.")
 
     # ---------- Other Exchange / foreign fiat ----------
     def other_exchange_aud_value(self, row: OtherExchangeRow) -> Tuple[Decimal, Decimal, str]:

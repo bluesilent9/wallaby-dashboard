@@ -99,7 +99,8 @@ class RPCBroker:
                     if row['token']==token and row['state'] in ('queued','delivered','running'):
                         self._finish(row,'failed',{'code':'identity_conflict','message':'RPC stopped because the node hostname or MAC has a conflicting live connection.'})
         self.condition.notify_all()
-    def queue(self,node_id,method,params=None,wallet=None,timeout_seconds=30,owner=None):
+    def queue(self,node_id,method,params=None,wallet=None,timeout_seconds=30,owner=None,priority=0):
+        if type(priority) is not int or not 0<=priority<=100:raise ValueError('Invalid internal RPC priority.')
         params,size=request(method,[] if params is None else params,wallet)
         if type(timeout_seconds) not in (int,float) or not 1<=timeout_seconds<=3600:raise ValueError('RPC timeout must be from 1 to 3600 seconds.')
         with self.condition:
@@ -110,13 +111,15 @@ class RPCBroker:
             if method not in connection.get('rpc_methods',[]):raise ValueError('The connected agent has not enabled this RPC method.')
             if sum(r['node_id']==node_id and r['state'] in ('queued','delivered','running') for r in self.rows.values())>=MAX_PENDING_PER_NODE:raise ValueError('Too many pending RPC requests for this node.')
             if len(self.rows)>=MAX_REQUESTS or self.total_bytes+size>MAX_TOTAL_BYTES:raise ValueError('RPC request/result storage is full. Wait for completed requests to expire.')
-            ident=uuid.uuid4().hex;now=self.registry.clock();self.rows[ident]={'id':ident,'node_id':node_id,'method':method,'params':params,'wallet':wallet,'owner':owner,'token':token,'state':'queued','created_utc':stamp(),'deadline':now+timeout_seconds,'timeout_seconds':timeout_seconds,'size':size};self.total_bytes+=size;self.condition.notify_all();return self.status(ident,owner)
+            ident=uuid.uuid4().hex;now=self.registry.clock();self.rows[ident]={'id':ident,'node_id':node_id,'method':method,'params':params,'wallet':wallet,'owner':owner,'priority':priority,'token':token,'state':'queued','created_utc':stamp(),'deadline':now+timeout_seconds,'timeout_seconds':timeout_seconds,'size':size};self.total_bytes+=size;self.condition.notify_all();return self.status(ident,owner)
     def _commands(self,token):
         connection=self._connection(token);self._maintain()
         if not self._unique(connection):return []
         commands=[]
         active=sum(r['token']==token and r['state'] in ('delivered','running') for r in self.rows.values())
-        for row in self.rows.values():
+        foreground=any(r['token']==token and r['state'] in ('queued','delivered','running') and r.get('priority',0)==0 for r in self.rows.values())
+        for row in sorted(self.rows.values(),key=lambda r:r.get('priority',0)):
+            if foreground and row.get('priority',0)>0 and row['state']=='queued':continue
             if row['token']==token and (row['state']=='delivered' or row['state']=='queued' and active<MAX_IN_FLIGHT_PER_AGENT):
                 row['state']='delivered';commands.append({'id':row['id'],'kind':'rpc','method':row['method'],'params':deepcopy(row['params']),'wallet':row['wallet'],'expires_in_seconds':max(0,row['deadline']-self.registry.clock())});break
         return commands
@@ -161,9 +164,9 @@ class RPCBroker:
         with self.condition:
             self.registry._expire();self._maintain()
             return any(row['owner']==owner and row['state'] in ('queued','delivered','running') for row in self.rows.values())
-    def call(self,node_id,method,params=None,wallet=None,timeout_seconds=30,consume=False,cancel=None):
+    def call(self,node_id,method,params=None,wallet=None,timeout_seconds=30,consume=False,cancel=None,priority=0):
         """Blocking read workflow; optional cancellation and consumed internal results."""
-        queued=self.queue(node_id,method,params,wallet,timeout_seconds)
+        queued=self.queue(node_id,method,params,wallet,timeout_seconds,priority=priority)
         with self.condition:
             while True:
                 row=self.rows.get(queued['id'])

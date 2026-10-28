@@ -30,7 +30,8 @@ from nodes import NodeRegistry,create_agent_server,DEFAULT_AGENT_PORT
 from preferences import FamilyStore,MISSING_OWNERSHIP,MissingOwnership,resolve_ownership
 from address_book import shared_address_book
 from fees import FeeService,FeeUnavailable
-from wallet_keys import analyse as analyse_keys
+from node_bridge import NodeBridge
+from node_chain import RegistryRPC,configure as configure_nodes
 from descriptor_store import DescriptorStore
 from node_wallets import NodeWalletLoader
 from wallet_names import display_inventory,display_summary
@@ -59,7 +60,7 @@ class Session:
         self.workspace_dirty=False;self.workspace_stamp=None;self.report_generation=None
         self.session_dir=self.root/('session-'+secrets.token_hex(8));self.session_dir.mkdir(mode=0o700)
         self.input_dir=self.session_dir/'inputs';self.input_dir.mkdir(mode=0o700)
-        self.log_path=self.session_dir/'activity.log';self.log_path.touch(mode=0o600);self.active_operations=0;self.rpc_broker=None;self.rpc_logged=set();self.node_load_cancel=threading.Event();self.node_registry=None;self.node_load_lock=threading.Lock();self.profile_gate=ProfileGate()
+        self.log_path=self.session_dir/'activity.log';self.log_path.touch(mode=0o600);self.active_operations=0;self.rpc_broker=None;self.node_bridge=None;self.rpc_logged=set();self.node_load_cancel=threading.Event();self.node_registry=None;self.node_load_lock=threading.Lock();self.profile_gate=ProfileGate()
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False;self.ownership_completed_utc=None;self.descriptor_fingerprint=None;self.bitaroo_as_of_date=None;self.restore_error='';self.sequence=0;self.activity_started=False;self.closed=False;self.user_id=None;self.mode='cgt';self.job_result=None;self.inventory=[];self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
     def user(self):
         return FamilyStore(self.preferences_path).user(self.user_id) if self.user_id else None
@@ -135,6 +136,7 @@ class Session:
             if self.process:
                 try:self.process.wait(timeout=3)
                 except subprocess.TimeoutExpired:self.process.kill();self.process.wait(timeout=3)
+            if self.node_bridge:self.node_bridge.close();self.node_bridge=None
             shutil.rmtree(self.session_dir,ignore_errors=True)
     def emit(self,data):
         with self.lock:
@@ -175,6 +177,9 @@ class Session:
             if self.closed:raise ValueError('This browser workspace is closed')
             if self.status in {'running','waiting'}:raise ValueError('Calculation is still active')
             shutil.rmtree(self.input_dir/slot,ignore_errors=True);self.uploads.pop(slot,None);self.workspace_dirty=True;self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
+    def worker_nodes(self):
+        if self.node_bridge is None:self.node_bridge=NodeBridge(self.node_registry,lambda:self.closed or self.status not in {'running','waiting'})
+        return self.node_bridge.settings()
     def start_node_wallets(self):
         with self.lock:
             if self.closed:raise ValueError('This browser workspace is closed')
@@ -210,6 +215,7 @@ class Session:
             self.report=None;self.report_context=None
             self.result_path=self.session_dir/'report.json';self.result_path.unlink(missing_ok=True)
             config={'mode':'descriptors','user':self.user(),'family_snapshot':FamilyStore(self.preferences_path).snapshot(),'descriptor_catalog':ds.read(),'settings':{},'paths':{},'preferences':str(self.preferences_path),'cache':str(self.root/'historical-cache.sqlite3'),'result':str(self.result_path)}
+            config['node_rpc']=self.worker_nodes()
             path=self.session_dir/'run.json';path.write_text(json.dumps(config))
             try:
                 self.process=subprocess.Popen([sys.executable,str(ROOT/'worker.py'),str(path)],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',env=dict(os.environ,PYTHONUNBUFFERED='1',PYTHONDONTWRITEBYTECODE='1'),cwd=self.session_dir)
@@ -258,6 +264,7 @@ class Session:
             if mode=='balances':self.run_signature=report_signature(snapshot,descriptor_store.summary()['fingerprint'])
             config={'mode':mode,'user':user,'family_snapshot':snapshot,'ownership_completed_utc':self.ownership_completed_utc,'bitaroo_as_of_date':self.bitaroo_as_of_date,'descriptor_catalog':descriptor_store.read(),'descriptor_fingerprint':descriptor_store.summary()['fingerprint'],'settings':settings,'paths':{k:str(v) for k,v in self.uploads.items()},
                     'preferences':str(self.preferences_path),'cache':str(self.root/'historical-cache.sqlite3'),'result':str(self.result_path)}
+            config['node_rpc']=self.worker_nodes()
             config_path=self.session_dir/'run.json';config_path.write_text(json.dumps(config))
             env=dict(os.environ,PYTHONUNBUFFERED='1',PYTHONDONTWRITEBYTECODE='1')
             self.process=subprocess.Popen([sys.executable,str(ROOT/'worker.py'),str(config_path)],
@@ -395,7 +402,8 @@ class Sessions:
 
 def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_seconds=86400,ipv6=True,ipv4=True):
     sessions=Sessions(state_dir,preferences_path,max_sessions,idle_seconds)
-    fee_service=FeeService()
+    configure_nodes(RegistryRPC(sessions.nodes),default=True)
+    fee_service=FeeService(sessions.nodes,busy=lambda:any(s.status in {'running','waiting'} for s in list(sessions.sessions.values())))
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):pass
         def json(self,body,status=200):
@@ -420,29 +428,25 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
         def do_GET(self):
             exclusive=urlsplit(self.path).path=='/api/profile/save'
             with sessions.profile_gate.access(exclusive):
-                session=self.authorized() if urlsplit(self.path).path=='/api/fees' else None
-                if session:
-                    with session.lock:session.active_operations+=1
-                try:self.handle_get()
-                finally:
-                    if session:
-                        with session.lock:session.active_operations-=1
+                self.handle_get()
         def handle_get(self):
             path=urlsplit(self.path).path
             if not self.safe_endpoint():return self.json({'error':'This browser endpoint is not authorised'},403)
+            if path=='/source.zip':
+                import io,zipfile
+                buffer=io.BytesIO()
+                with zipfile.ZipFile(buffer,'w',zipfile.ZIP_DEFLATED) as archive:
+                    for source in ROOT.iterdir():
+                        if source.is_file() and source.suffix in ('.py','.html','.txt','.md','.sh'):archive.write(source,source.name)
+                    for directory in ('assets','vendor','docs','packaging','tests'):
+                        for source in (ROOT/directory).rglob('*'):
+                            if source.is_file() and '__pycache__' not in source.parts and source.suffix not in ('.pyc','.deb'):archive.write(source,source.relative_to(ROOT))
+                body=buffer.getvalue();self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Disposition','attachment; filename="Wallaby_Dashboard_Source.zip"');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
             if path.startswith('/api/'):
-                # This remains public without a workspace. A logged-in browser may
-                # optionally record generic activity; no private data enters the quote.
-                if path=='/api/fees':
-                    fee_session=sessions.get(self.headers.get('X-Session-Token'))
-                    activity_user=fee_session.user_id if fee_session and fee_session.user() else None
-                    if activity_user:fee_session.record_activity('Fee Estimates: refresh started.',activity_user)
-                    try:quote=fee_service.snapshot(force=True)
-                    except FeeUnavailable as exc:
-                        if activity_user:fee_session.record_activity('Fee Estimates: refresh unavailable.',activity_user)
-                        return self.json({'error':str(exc)},503)
-                    if activity_user:fee_session.record_activity('Fee Estimates: refresh complete.',activity_user)
-                    return self.json(quote)
+                if path=='/api/fees':return self.json(fee_service.snapshot())
+                if path=='/api/fees/track':
+                    try:return self.json(fee_service.track(parse_qs(urlsplit(self.path).query).get('txid',[''])[0]))
+                    except (ValueError,FeeUnavailable) as exc:return self.json({'error':str(exc)},400)
                 session=self.authorized()
                 if not session:return self.json({'error':'This browser workspace is not authorised'},403)
                 if path=='/api/logs':
@@ -525,7 +529,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/':'index.html','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/wallet_keys.js':'assets/wallet_keys.js','/assets/console_json.js':'assets/console_json.js','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/':'index.html','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
@@ -536,7 +540,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
         def do_POST(self):
             exclusive=urlsplit(self.path).path in ('/api/profile/load','/api/profile/clear')
             with sessions.profile_gate.access(exclusive):
-                session=self.authorized() if urlsplit(self.path).path in ('/api/keys/analyse','/api/descriptors/load','/api/descriptors/history') else None
+                session=self.authorized() if urlsplit(self.path).path in ('/api/descriptors/load','/api/descriptors/history') else None
                 if session:
                     with session.lock:session.active_operations+=1
                 try:self.handle_post()
@@ -556,7 +560,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
             if not session:return self.json({'error':'This browser workspace is not authorised'},403)
             try:
                 length=int(self.headers.get('Content-Length','0'))
-                if path in ('/api/keys/analyse','/api/descriptors/load','/api/descriptors/history') and length>4*1024*1024+10000:raise ValueError('Descriptor request is too large (maximum 4 MB of descriptor text)')
+                if path in ('/api/descriptors/load','/api/descriptors/history') and length>4*1024*1024+10000:raise ValueError('Descriptor request is too large (maximum 4 MB of descriptor text)')
                 if path=='/api/nodes/rpc' and length>4*1024*1024+4096:raise ValueError('Node RPC request is too large.')
                 if path=='/api/messages/send' and length>20000:raise ValueError('Message request is too large.')
                 if path=='/api/transaction/upload' and length>12*1024*1024:raise ValueError('Select a signed PSBT file up to 8 MB.')
@@ -568,7 +572,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     manager=ProfileArchive(session.preferences_path)
                     if path=='/api/profile/load':manager.load(parse_qs(urlsplit(self.path).query).get('name',[''])[0],body)
                     else:manager.replace()
-                    sessions.close_all();sessions.user_activity.clear();sessions.nodes.reset()
+                    fee_service.close();sessions.close_all();sessions.user_activity.clear();sessions.nodes.reset()
                     return self.json({'reset':True})
                 if path.startswith('/api/upload/'):
 
@@ -682,18 +686,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/ownership/save':
                     if not session.user() or not session.inventory_ready:raise ValueError('Scan the current input files in Ownership first.')
                     store.save_ownership(data.get('rows'),data.get('revision'),session.inventory);session.confirm_transaction_refresh();return self.json(session.family())
-                if path in ('/api/keys/analyse','/api/start') and not session.user():raise ValueError('Select a family user first.')
-                if path=='/api/keys/analyse':
-                    if not session.access()['ownership_ready']:raise ValueError('Complete Ownership Run and complete all ownership assignments to unlock the Wallet Key Explorer')
-                    data={'text':json.dumps(DescriptorStore(session.preferences_path).wallet(data.get('wallet_id'))),'target':data.get('target',''),'start':data.get('start',0),'count':data.get('count',20)}
-                    activity_user=session.user_id
-                    session.record_activity('Wallet Key Explorer: analysing public descriptors.',activity_user)
-                    try:result=analyse_keys(data)
-                    except Exception:
-                        session.record_activity('Wallet Key Explorer: analysis failed. See Wallet Key Explorer for details.',activity_user)
-                        raise
-                    session.record_activity('Wallet Key Explorer: analysis complete.',activity_user)
-                    return self.json(result)
+                if path in ('/api/start',) and not session.user():raise ValueError('Select a family user first.')
                 if path=='/api/clear':session.clear_slot(data['slot'])
                 elif path=='/api/start':session.start(data,data.get('mode','cgt'))
                 elif path=='/api/answer':session.answer(int(data['sequence']),data['answer'])
@@ -746,7 +739,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
             for listener,thread in zip(listeners[1:],self.threads):
                 if thread.is_alive():listener.shutdown();thread.join(2)
             for listener in listeners:listener.server_close()
-            sessions.close_all()
+            fee_service.close();sessions.close_all()
     server=ServerGroup()
     def reap():
         while not server.reaper_stop.wait(60):sessions.expire()
@@ -776,7 +769,7 @@ def main():
     agent.start()
     host='[::1]' if server.has_ipv6 else '127.0.0.1'
     url=f'http://{host}:{server.server_port}/'
-    print('Wallaby Bitcoin Dashboard V1 Build 5 · '+str(ROOT),flush=True)
+    print('Wallaby Bitcoin Dashboard V1 Build 6 · '+str(ROOT),flush=True)
     print('Wallaby Bitcoin Dashboard: '+url,flush=True)
     print(f'Wallaby Agent listener: loopback port {agent.server_port} (wallaby-agent JSON/HTTP v1 over SSH)',flush=True)
     print(f'Fee estimates (bookmark): http://{host}:{server.server_port}/#/fees',flush=True)

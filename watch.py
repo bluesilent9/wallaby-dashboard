@@ -1,7 +1,7 @@
 """Corroborate ODS UTXOs, then read fresh balances for those addresses only."""
 from datetime import datetime,timezone
 from decimal import Decimal
-import json,re,urllib.request,urllib.parse
+
 
 SAT=Decimal('0.00000001')
 
@@ -13,66 +13,15 @@ def sats(value):
 
 
 class ChainClient:
-    def __init__(self,core):self.core=core;self.transactions={};self.blocks={};self.wallet_evidence={}
-    def immutable(self,path,binary=False):
-        errors=[]
-        for base in ('https://mempool.space/api/','https://blockstream.info/api/'):
-            try:
-                data=self.core.cached_http(base+path,{'User-Agent':'Wallaby-Bitcoin-Dashboard/132'},timeout=20)
-                if binary:return data
-                text=data.decode().strip()
-                return json.loads(text) if text[:1] in '[{' else text
-            except (ValueError,OSError) as exc:errors.append(str(exc))
-        raise RuntimeError('Blockchain evidence lookup failed: '+'; '.join(errors))
-    def tx(self,txid):
-        txid=txid.lower()
-        if not re.fullmatch('[0-9a-fA-F]{64}',txid):raise ValueError('Invalid transaction ID')
-        if txid not in self.transactions:
-            tx=self.immutable('tx/'+txid)
-            if not isinstance(tx,dict) or tx.get('txid')!=txid:raise ValueError('Unexpected transaction returned by explorer')
-            if not tx.get('status',{}).get('confirmed'):
-                # An older cached mempool response must not hide a confirmation.
-                errors=[]
-                for base in ('https://mempool.space/api/','https://blockstream.info/api/'):
-                    try:
-                        request=urllib.request.Request(base+'tx/'+txid,headers={'Cache-Control':'no-cache','Accept':'application/json'})
-                        with urllib.request.urlopen(request,timeout=20) as response:tx=json.load(response)
-                        if not isinstance(tx,dict) or tx.get('txid')!=txid:raise ValueError('Unexpected transaction returned by explorer')
-                        break
-                    except (ValueError,OSError) as exc:errors.append(str(exc))
-                else:raise RuntimeError('Fresh transaction lookup failed: '+'; '.join(errors))
-            self.transactions[txid]=tx
-        return self.transactions[txid]
-    def outspend(self,txid,index):
-        """Mutable spend status is fresh each run, shared across all consumers."""
-        key=(txid,index)
-        if not hasattr(self,'outspends'):self.outspends={}
-        if key not in self.outspends:
-            errors=[]
-            for base in ('https://mempool.space/api/','https://blockstream.info/api/'):
-                try:
-                    req=urllib.request.Request(base+f'tx/{txid}/outspend/{index}',headers={'User-Agent':'Wallaby-Bitcoin-Dashboard/151','Cache-Control':'no-cache','Accept':'application/json'})
-                    with urllib.request.urlopen(req,timeout=20) as response:data=json.load(response)
-                    if not isinstance(data,dict) or type(data.get('spent')) is not bool:raise ValueError('Invalid output spend response')
-                    if data['spent'] and (not re.fullmatch('[0-9a-f]{64}',data.get('txid','')) or type(data.get('vin')) is not int or data['vin']<0):raise ValueError('Invalid spending transaction reference')
-                    self.outspends[key]=data;break
-                except (ValueError,OSError) as exc:errors.append(str(exc))
-            else:raise RuntimeError('Output spend lookup failed: '+'; '.join(errors))
-        return self.outspends[key]
-    def live_utxos(self,address):
-        errors=[]
-        for base in ('https://mempool.space/api/','https://blockstream.info/api/'):
-            url=base+'address/'+urllib.parse.quote(address,safe='')+'/utxo'
-            try:
-                # Address state changes. Never use the permanent historical HTTP cache.
-                req=urllib.request.Request(url,headers={'User-Agent':'Wallaby-Bitcoin-Dashboard/132','Cache-Control':'no-cache','Accept':'application/json'})
-                with urllib.request.urlopen(req,timeout=20) as response:data=json.load(response)
-                if not isinstance(data,list):raise ValueError('Invalid UTXO response')
-                for output in data:
-                    if not re.fullmatch('[0-9a-fA-F]{64}',output.get('txid','')) or not isinstance(output.get('vout'),int) or not isinstance(output.get('value'),int) or output['value']<0:raise ValueError('Invalid UTXO in address response')
-                return data,base+'address/'+address+'/utxo'
-            except (ValueError,OSError) as exc:errors.append(str(exc))
-        raise RuntimeError('Live address lookup failed: '+'; '.join(errors))
+    def __init__(self,core):
+        self.core=core;self.wallet_evidence={}
+    @property
+    def chain(self):
+        from node_chain import current
+        return current()
+    def tx(self,txid):return self.chain.tx(txid)
+    def outspend(self,txid,index):return self.chain.outspend(txid,index)
+    def live_utxos(self,address):return self.chain.live_utxos(address)
 
 
 def discover_outputs(core,engine,name,client,evidence=None):
