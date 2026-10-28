@@ -20,7 +20,7 @@ def display_inventory(inventory,catalog):
         item=dict(item)
         if item['kind']=='descriptor':
             raw=sources.get(item['source'],item.get('source_name',item['name']))
-            item.update(source_name=raw,name=suggest_wallet_name(raw),has_vault=vaults.get(item['source'],False),watch_only=watch.get(item['source'],False))
+            item.update(source_name=raw,name=raw if item.get('extinct') else suggest_wallet_name(raw),has_vault=vaults.get(item['source'],False),watch_only=watch.get(item['source'],False))
         result.append(item)
     return result
 
@@ -29,7 +29,7 @@ def display_summary(summary,snapshot):
     summary=dict(summary);summary['wallets']=[dict(w) for w in summary['wallets']]
     for w in summary['wallets']:
         w['source_name']=w['name'];record=records.get(resource_id('descriptor',w['id']))
-        w['name']=record['name'] if record and record.get('confirmed') else suggest_wallet_name(w['name'])
+        w['name']=record['name'] if record and record.get('confirmed') else (w['name'] if w.get('extinct') else suggest_wallet_name(w['name']))
     return summary
 
 def apply_display_names(core,wallets,resolved):

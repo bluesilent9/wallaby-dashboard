@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 6 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev6_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 7 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev7_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -35,15 +35,15 @@ python3 launch_wallaby_bitcoin_dashboard.py --no-browser
 
 The shell launcher also defaults to no browser. The browser service uses **38951** and the Agent HTTP/JSON interface uses **56443**. Both bind to IPv4/IPv6 loopback. Reach them through authorised SSH tunnels; client-side forwarded ports may differ. Open `http://[::1]:38951/` on the tunnel client. No Bitcoin Core installation is needed on the server.
 
-Create family users, connect Agents with the desired Core wallets loaded, then run Ownership → Load Node Wallets. Upload each applicable profile's Bitaroo PDFs, shared Extinct Wallets ODS and Exchanges ODS, and confirm ownership. Extinct Wallets ODS has one sheet, wallet names in row 1, and owned `TXID:output_index` entries beneath each name. Select Verify Balances in Stage 3. Wallet Balances then becomes available. Generate the separate family CGT report for tax totals/history, which show the logged-in profile only.
+Create family users, connect Agents with the desired Core wallets loaded, then run Ownership → Load Node Wallets. This also reads fixed `addr()` policies from watch-only wallets and groups their addresses using Core labels. Upload each applicable profile's Bitaroo PDFs and the shared Exchanges ODS, then confirm ownership and select Verify Balances in Stage 3. The Extinct Wallets ODS is no longer uploaded. Wallet Balances then becomes available. Generate the separate family CGT report for tax totals/history, which show the logged-in profile only.
 
 This is a trusted-family service behind SSH, not a public password-authenticated website. Node identity hints are not substitutes for SSH authentication. Core RPC cookies stay on the node computers.
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev6`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev7`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev6_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev7_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 
@@ -72,6 +72,14 @@ Balance Trace resolves deferred historical prices before optimised joint-parcel 
 Exchange unit columns can now contain both trading directions: one signed negative asset and one positive asset. Fees remain nonpositive and use the actual outgoing crypto unit (or incoming BTC for a fiat purchase). Supplied BTC sales are uniquely linked to matching wallet sends or Bitaroo withdrawals so the funding transfer and sale are not counted as two disposals. Ambiguous matches stop for corrected records. No venue, person, transaction or address is embedded in this matching logic.
 
 After upgrading to Build 5, run Verify Balances again. Earlier balance-cost snapshots remain available only as historical stored data and do not unlock current balances; confirmed trace evidence is retained for reuse.
+
+## Build 7
+
+Extinct wallets now come from labelled fixed-address `addr()` descriptors in a Core wallet with private keys disabled. Labels group addresses into logical wallets, independently of the parent Core wallet's name. `Load Node Wallets` queries all connected nodes and merges matching replicas. The obsolete historical-wallet ODS upload is removed; exchange ODS input remains unchanged. Historical group labels are read-only in Ownership and cannot be used as receiving/payment destinations.
+
+A label `Earlier Wallet | LOST:DD/MM/YYYY HH:MM:SS UTC` declares irreversible loss of access at that time, without compensation. Build 7 records the affected retained outputs as a separate CGT event C1, consumes their quantity once, and calculates a loss from the traced reduced cost base using the existing proportional parcel convention. It does not use loss-date market value, indexation or a 50% loss discount. Existing annual loss application and carry-forward apply. The original blockchain outputs remain in the evidence graph. A label is a user declaration, not blockchain proof that a key was lost. Later receipts/spends conflicting with the declaration, missing history and unresolved acquisition cost require correction rather than an invented deduction.
+
+After upgrading, run **Load Node Wallets**, load the exchange statements and **Verify Balances**, then regenerate CGT reports. Older descriptor scans and balance costs do not unlock the revised workflow. Your node must have completed its relevant watch-wallet rescan.
 
 ## Licence
 

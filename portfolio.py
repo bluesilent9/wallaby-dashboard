@@ -82,13 +82,15 @@ def build_balances(core,engine,quote=None,now=None,basis=None,watched=None):
            'ownership':ownership,'record_count':rows,'last_record':record,'sources':(basis or {}).get('Bitaroo' if kind=='exchange' else name,{}).get('sources',[])})
     for name,original in sorted(engine.wallets.items(),key=lambda item:item[0].casefold()):
         if name in getattr(engine,'synthetic_accounts',{}):continue
+        extinct=any(w.get('extinct') and w['id']==engine.ownership.descriptor_wallet_ids.get(name) for w in getattr(core,'DESCRIPTOR_SNAPSHOT',{}).get('wallets',[]))
         if not original:
+            if extinct:continue
             if name in engine.ownership.descriptor_wallet_ids:add(name,'wallet',ZERO,None,0,ZERO,'No confirmed blockchain transactions for this descriptor wallet.',ownership=engine.ownership.wallet_statuses.get(name,'unknown'))
             continue
         rows=sorted(original,key=lambda row:(core.utc_time(row.dt),row.row_num))
         last=rows[-1]
         is_ods=all(getattr(row,'is_historical_ods',False) for row in rows)
-        if is_ods and last.balance==0:continue
+        if (is_ods or extinct) and last.balance==0:continue
         cost,reason=retained_basis(core,engine,name,rows,last.balance)
         cost,reason=choose_basis(name,last.balance,cost,reason)
         balance=last.balance

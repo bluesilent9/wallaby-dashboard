@@ -4,7 +4,7 @@ from copy import deepcopy
 import json,os,uuid
 from storage import data_directory,storage_lock
 
-BALANCE_ALGORITHM=3
+BALANCE_ALGORITHM=4
 
 class BalanceStore:
     def __init__(self,config):self.config=Path(config);self.path=data_directory(self.config)/'balance-trace.json'

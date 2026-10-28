@@ -35,6 +35,7 @@ def make_engine(core):
                       'balance_btc':str(obj.balance),'onchain_fee_source':obj.onchain_fee_source or None,
                       'fee_known':obj.fee_known,'transaction_id':obj.txid or None,'address':obj.address or None,
                       'source_row':obj.row_num,'output_index':obj.output_index if obj.output_index>=0 else None,'source_type':'Historical ODS' if obj.is_historical_ods else 'Descriptor blockchain'}
+                if obj.cgt_loss:data.update(record_type='Declared loss of access',transaction_id=None,cgt_event='C1',loss_outpoints=list(obj.loss_outpoints),loss_label=obj.loss_label,source_type='Core address label; user-declared loss time')
                 if obj.accounting_flow:data.update(accounting_flow=obj.accounting_flow,allocation_basis='Year-bounded collaborative-payment accounting convention; not an on-chain input/output attribution')
             elif isinstance(obj,core.OtherExchangeRow):
                 data={'record_type':'Exchange acquisition' if obj.buy else 'Exchange disposal','location':obj.exchange,
@@ -233,7 +234,10 @@ def make_engine(core):
                     if 'fee' in desc.lower():label='Network fee';kind='fee';stage='fee'
                     else:
                         ev=self.visual_context
-                        if ev and ev.kind=='bitaroo_withdrawal':
+                        if ev and ev.kind=='wallet_loss':
+                            label='Lost access — CGT event C1';kind='external'
+                            detail.update(price_status='No compensation; zero proceeds',cgt_event='C1')
+                        elif ev and ev.kind=='bitaroo_withdrawal':
                             recipient=ev.payload[2];label=recipient.sheet if recipient else 'External destination';kind='external'
                         elif ev and ev.kind=='wallet_out':
                             label=self.process_locals().get('dest') or 'External destination';kind='external'

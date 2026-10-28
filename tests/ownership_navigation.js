@@ -14,7 +14,7 @@ async function main(){
  assert.equal(c.route(),'ownership');assert.equal(c.scrolled,'ownership-confirm');assert.equal(c.family.inventory_ready,true);assert.equal(c.jobLoaded,true);
  const attrs=()=>({attributes:{},setAttribute(k,v){this.attributes[k]=v;},append(p){this.path=p;}});const icons={document:{createElementNS:()=>attrs()}};vm.createContext(icons);vm.runInContext(take('const icons=','function el('),icons);
  const fossil=icons.icon('extinct');assert.equal(fossil.attributes.viewBox,'0 0 128 96');assert.equal(fossil.attributes.fill,'#000');assert.equal(fossil.attributes.stroke,'none');assert.equal(fossil.path.attributes['fill-rule'],'evenodd');
- assert.match(source,/historical:\{[^}]+kind:'extinct'/);
+ assert(!source.includes("historical:{title:'Extinct Wallets ODS'"),'retired ODS upload removed');
  console.log('PASS: delayed prior-job poll ignored; immediate Activity and completed Stage 3; shared filled fossil upload icon.');
 }
 main().catch(e=>{console.error(e);process.exit(1);});

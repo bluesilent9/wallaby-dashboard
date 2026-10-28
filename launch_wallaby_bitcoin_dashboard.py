@@ -45,7 +45,7 @@ from transaction_builder import builder_catalog
 from fee_planner import plan as estimate_fee_plan,live_coins
 
 ROOT=Path(__file__).resolve().parent
-SLOTS={'bitaroo':{'.pdf'},'bitaroo_history':{'.pdf'},'bitaroo_current':{'.pdf'},'historical':{'.ods'},'exchanges':{'.ods'},
+SLOTS={'bitaroo':{'.pdf'},'bitaroo_history':{'.pdf'},'bitaroo_current':{'.pdf'},'exchanges':{'.ods'},
        'quotes':{'.csv'},'cpi':{'.csv'},'tax_context':{'.json'}}
 MAX_FILE=256*1024*1024
 MISSING_CGT='Complete a CGT run after confirming Ownership to view wallet balances.'
@@ -245,7 +245,7 @@ class Session:
             zone=settings.get('browser_timezone') or self.settings.get('browser_timezone') or 'UTC'
             merge_saved_uploads(self.uploads,self.input_dir)
             declarations(snapshot['users'],dict(self.settings,**settings),self.uploads)
-            required=('historical','exchanges')
+            required=('exchanges',)
             if mode in ('cgt','balances'):required+=('chain',)
             for slot in required:
                 if slot not in self.uploads:raise ValueError('Select the required files in Ownership first.')
@@ -295,7 +295,7 @@ class Session:
                         if chain_path!=self.result_path.with_name('descriptor_history.json') or not chain_path.is_file():raise ValueError('The descriptor history scan did not complete.')
                         self.uploads['chain']=chain_path
                         chain=json.loads(chain_path.read_text());self.descriptor_fingerprint=chain['catalog_fingerprint'];self.bitaroo_as_of_date=completed['bitaroo_as_of_date']
-                        if {'historical','exchanges','chain'}.issubset(self.uploads):
+                        if {'exchanges','chain'}.issubset(self.uploads):
                             for profile in FamilyStore(self.preferences_path).snapshot()['users']:
                                 uid=profile['id'];coverage=completed.get('coverage_by_user',{}).get(uid,{})
                                 saved=save_workspace(self.preferences_path,uid,self.uploads,self.inventory,book,self.settings,metadata={'descriptor_fingerprint':self.descriptor_fingerprint,'bitaroo_as_of_date':coverage.get('bitaroo_as_of_date'),'bitaroo_data':completed.get('bitaroo_data_by_user',{}).get(uid,{}),'historical_balances':completed.get('historical_balances',{}),'family_accounts':completed.get('family_accounts',{})})

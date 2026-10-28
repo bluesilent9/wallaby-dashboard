@@ -265,7 +265,7 @@ class FamilyStore:
                 elif src['kind']=='exchange':row['smsf']=False
                 if type(row.get('smsf')) is not bool or type(external) is not bool or (owner not in users if not external else owner is not None):raise ValueError('Choose a user or Someone else / external for every entry.')
                 if not name or len(name)>1000 or any(ord(c)<32 for c in name):raise ValueError('Every wallet needs a name (maximum 1,000 characters).')
-                if src['kind']!='descriptor' and name!=src['name']:raise ValueError('Wallet and exchange names must match their source.')
+                if (src['kind']!='descriptor' or src.get('extinct')) and name!=src['name']:raise ValueError('Wallet and exchange names must match their source.')
                 existing[row['id']]={'display_name_set':True,'id':row['id'],'kind':src['kind'],'source':src['source'],'name':name,'owner_id':owner,'external':external,'smsf':row['smsf'],'confirmed':True}
             names=[existing[r['id']]['name'].casefold() for r in inventory if r['kind'] in ('descriptor','wallet','exchange')]
             if len(set(names))!=len(names) or 'bitaroo' in names:raise ValueError('Wallet names must be unique; Bitaroo is reserved for the exchange ledger.')

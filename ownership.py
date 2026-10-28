@@ -29,7 +29,7 @@ def inventory_for(core,wallets,other,user):
         kind='descriptor' if uid else 'wallet';source=uid or name
         evidence=next((w for w in getattr(core,'DESCRIPTOR_SNAPSHOT',{}).get('wallets',[]) if w['id']==uid),{})
         original=getattr(core,'DESCRIPTOR_SOURCE_NAMES',{}).get(uid,name) if uid else name
-        rows.append({'id':resource_id(kind,source),'kind':kind,'source':source,'extinct':not bool(uid),'has_vault':bool(evidence.get('has_vault')),'watch_only':bool(evidence.get('watch_only')),'name':suggest_wallet_name(original) if uid else name,**({'source_name':original} if uid else {})})
+        rows.append({'id':resource_id(kind,source),'kind':kind,'source':source,'extinct':bool(evidence.get('extinct')) or not bool(uid),'has_vault':bool(evidence.get('has_vault')),'watch_only':bool(evidence.get('watch_only')),'name':suggest_wallet_name(original) if uid and not evidence.get('extinct') else name,**({'source_name':original} if uid else {})})
     rows += [{'id':resource_id('exchange',name),'kind':'exchange','source':name,'name':name} for name in sorted({r.exchange for r in other})]
     for profile in getattr(core,'FAMILY_ACCOUNT_USERS',[user]):
         rows.append({'id':resource_id('bitaroo',profile['id']),'kind':'bitaroo','source':profile['id'],'name':'Bitaroo Exchange · '+profile['name']})

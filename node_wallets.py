@@ -8,6 +8,7 @@ from descriptor_store import clean_wallet
 from descriptor_policy import needs_history,parse_policy
 from vendor.embit.descriptor.miniscript import Wrapper
 from vendor.embit.base import EmbitError
+from labelled_wallets import expand
 
 REQUIRED={'listwallets','listwalletdir','getwalletinfo','listdescriptors','listsinceblock','getaddressinfo'}
 
@@ -55,7 +56,12 @@ class NodeWalletLoader:
         history=self.rpc(node,'listsinceblock',['',1,True,False,True],wallet=name)
         if not isinstance(history,dict) or not isinstance(history.get('transactions'),list) or not re.fullmatch('[0-9a-f]{64}',str(history.get('lastblock'))):raise ValueError('Invalid Core public history for '+name)
         self.progress(node['hostname']+' / '+(name or 'Default Core Wallet')+': public descriptors and wallet history received.')
-        return {'node':node,'rpc_name':name,'wallet':wallet,'history':history,'private_keys_enabled':info.get('private_keys_enabled')}
+        replica={'node':node,'rpc_name':name,'wallet':wallet,'history':history,'private_keys_enabled':info.get('private_keys_enabled')}
+        def address_info(address):
+            value=self.rpc(node,'getaddressinfo',[address],wallet=name)
+            if not isinstance(value,dict) or value.get('address')!=address or not (value.get('ismine') or value.get('iswatchonly')):raise ValueError('Core could not confirm its historical watched address '+address)
+            return value
+        return expand(replica,address_info)
     @staticmethod
     def descriptor_key(text):
         # Origins describe provenance, not the public locking policy. Core may
@@ -111,6 +117,15 @@ class NodeWalletLoader:
         except (ValueError,TypeError,AttributeError,EmbitError):return None
     def merge(self,group):
         first=group[0];rows={}
+        historical=first['wallet'].get('extinct',False)
+        if any(r['wallet'].get('extinct',False)!=historical for r in group):raise ValueError('A historical address is also claimed by a live node wallet. Supply each wallet only once.')
+        labels={}
+        if historical:
+            for replica in group:
+                if replica['wallet']['name'].casefold()!=first['wallet']['name'].casefold():raise ValueError('Node replicas disagree on historical wallet labels. Correct the labels in Core and retry.')
+                for address,metadata in replica['wallet']['address_labels'].items():
+                    if address in labels and labels[address]['lost_utc']!=metadata['lost_utc']:raise ValueError('Node replicas disagree on a historical address loss timestamp. Correct the labels in Core and retry.')
+                    labels.setdefault(address,deepcopy(metadata))
         for replica in group:
             for row in replica['wallet']['raw']['descriptors']:
                 key=self.descriptor_key(row['desc'])
@@ -124,6 +139,7 @@ class NodeWalletLoader:
                 if 'timestamp' in row:saved['timestamp']=min(saved.get('timestamp',row['timestamp']),row['timestamp'])
         wallet=clean_wallet({'wallet_name':first['wallet']['name'],'descriptors':list(rows.values())})
         wallet['watch_only']=all(r.get('private_keys_enabled') is False for r in group)
+        if historical:wallet.update(extinct=True,address_labels=labels)
         wallet['node_sources']=[{'node_id':r['node']['id'],'hostname':r['node']['hostname'],'wallet_name':r['rpc_name']} for r in group]
         outputs={};addresses=set()
         for replica in group:
@@ -151,7 +167,7 @@ class NodeWalletLoader:
         # change using Core metadata, including publicly underivable policies.
         candidates=sorted(outputs.values(),key=lambda r:(r.get('blocktime',r.get('time',0)),r['txid'],r['vout']),reverse=True)
         checked=set()
-        for row in candidates:
+        for row in ([] if historical else candidates):
             addr=row.get('address')
             if not addr or addr in checked:continue
             checked.add(addr);_,info=self.address_info((group,addr))
@@ -165,7 +181,7 @@ class NodeWalletLoader:
             missing=REQUIRED-set(node.get('rpc_methods',[]))
             if not node.get('rpc_ready') or missing:raise ValueError(node['hostname']+': resolve node conflicts or enable required Agent RPC methods: '+', '.join(sorted(missing)))
             self.limits[node['id']]=threading.BoundedSemaphore(4)
-        replicas=self.parallel([r for batch in self.parallel(nodes,self.discover_node) for r in batch],self.export)
+        replicas=[r for batch in self.parallel([r for batch in self.parallel(nodes,self.discover_node) for r in batch],self.export) for r in batch]
         if not replicas:raise ValueError('The connected nodes have no loaded descriptor wallets.')
         groups=[]
         for replica in replicas:

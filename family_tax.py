@@ -19,7 +19,7 @@ from replay_matching import matching_cache
 from replay_prefix import PrefixCache
 import joint_allocations as joint
 
-ALGORITHM='150.1'
+ALGORITHM='1.7'
 
 def financial_year(core,when):
     day=core.tax_date(when) if isinstance(when,datetime) else when

@@ -3,8 +3,22 @@ import re
 _PRIVATE=re.compile(r'\b[xtyzuYZUV]prv[1-9A-HJ-NP-Za-km-z]+|(?<=[(\s])[5KLc9][1-9A-HJ-NP-Za-km-z]{50,51}(?=[/)\s])')
 from vendor.embit.descriptor import Descriptor
 from vendor.embit import script
+from vendor.embit.networks import NETWORKS
+from vendor.embit.base import EmbitError
+
+class AddressPolicy:
+    """A fixed mainnet script for monitoring; never a spend/change policy."""
+    keys=();is_wildcard=False;num_branches=1;taproot=False;miniscript=None
+    def __init__(self,address):
+        self.address=address
+        try:self.output=script.Script.from_address(address)
+        except (ValueError,EmbitError):raise ValueError('A valid Bitcoin mainnet address is required.') from None
+        if self.output.address(NETWORKS['main'])!=address:raise ValueError('A canonical Bitcoin mainnet address is required.')
+    def script_pubkey(self):return self.output
 
 def parse_policy(body):
+    if body.startswith('addr(') and body.endswith(')'):
+        return AddressPolicy(body[5:-1]),False,False
     combo=body.startswith('combo(') and body.endswith(')')
     parsed='pkh('+body[6:-1]+')' if combo else body
     # embit has no hardened-wildcard parser. Preserve the original descriptor;

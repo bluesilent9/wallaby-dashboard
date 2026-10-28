@@ -7,7 +7,7 @@ from family_inputs import account_id,folder_slot
 from storage import data_directory
 
 FOLDERS={'bitaroo','bitaroo_history','bitaroo_current'}
-SLOTS={'bitaroo','bitaroo_history','bitaroo_current','historical','exchanges','quotes','cpi','tax_context','chain'}
+SLOTS={'bitaroo','bitaroo_history','bitaroo_current','exchanges','quotes','cpi','tax_context','chain'}
 
 def data_root(config):return data_directory(config)/'ownership'
 def digest(path):
@@ -26,6 +26,7 @@ def save_workspace(config,user_id,uploads,inventory,address_book,settings,comple
     meta.update({k:v for k,v in (metadata or {}).items() if k in {'descriptor_fingerprint','bitaroo_as_of_date','bitaroo_data','historical_balances','family_accounts'}})
     try:
         for slot,path in uploads.items():
+            if slot=='historical':continue  # Retired ODS input; node labels now define historical wallets.
             if slot not in SLOTS and account_id(slot) is None:raise ValueError('Unknown saved input type.')
             path=Path(path);files=sorted(p for p in path.rglob('*') if p.is_file()) if folder_slot(slot) else [path]
             for source in files:
@@ -58,13 +59,14 @@ def restore_workspace(config,user_id,input_dir):
             if not isinstance(files,list) or len(files)>100000:raise ValueError('Invalid Ownership input manifest.')
             for item in files:
                 slot=item['slot'];name=PurePosixPath(item['name'])
+                if slot=='historical':continue
                 if (slot not in SLOTS and account_id(slot) is None) or name.is_absolute() or not name.parts or any(p in {'.','..'} for p in name.parts) or '\\' in str(name) or (not folder_slot(slot) and len(name.parts)!=1):raise ValueError('Invalid saved Ownership filename.')
                 if (slot,str(name)) in seen or (not folder_slot(slot) and slot in uploads):raise ValueError('Duplicate saved Ownership input.')
                 seen.add((slot,str(name)));source=root/slot/Path(*name.parts)
                 if not source.is_file() or source.is_symlink() or digest(source)!=item['sha256']:raise ValueError('Saved Ownership inputs are missing or changed. Run Ownership again.')
                 target=input_dir/slot/Path(*name.parts);target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,target);target.chmod(0o600)
                 uploads[slot]=input_dir/slot if folder_slot(slot) else target
-            if not {'historical','exchanges','chain'}.issubset(uploads):raise ValueError('Saved Ownership inputs are incomplete. Run Ownership again.')
+            if not {'exchanges','chain'}.issubset(uploads):raise ValueError('Saved Ownership inputs are incomplete. Run Ownership again.')
             datetime.fromisoformat(meta['completed_utc'].replace('Z','+00:00'))
             if not isinstance(meta.get('inventory'),list) or not isinstance(meta.get('settings'),dict):raise ValueError('Invalid saved Ownership metadata.')
         except (KeyError,TypeError,ValueError,OSError) as exc:

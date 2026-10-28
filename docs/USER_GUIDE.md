@@ -1,6 +1,6 @@
 > Build 3 workflow: Ownership Stage 3 ends with Verify Balances. Wallet Balances and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
 
-# Wallaby Bitcoin Dashboard — V1 Build 6
+# Wallaby Bitcoin Dashboard — V1 Build 7
 
 Extract the complete ZIP. Start the service with `./Start_Wallaby_Bitcoin_Dashboard.sh`, or:
 
@@ -20,21 +20,21 @@ The `tzdata` Python package in requirements.txt supplies IANA timezone rules on 
 
 Public descriptor derivation and raw transaction parsing are bundled; no Bitcoin Core installation or wallet unlock is needed on the dashboard server.
 
-## V1 Build 6 setup
+## V1 Build 7 setup
 
 1. Open **Administration**, then select or create a family user. The sidebar and header remain visible before login; other pages unlock after a user is selected.
 2. Connect each node's Wallaby Agent, load the desired wallets in Bitcoin Core, then open **Ownership** and select **Load Node Wallets**. Every connected node is queried over read-only RPC. Identical public locking descriptors identify wallet copies, independently of wallet names; matching copies share RPC work. Ownership suggests the first reporting node's name. Different wallets with identical names stay separate. Core wallet history is reconstructed through the same connected nodes; after success Ownership opens at Stage 2. No console exports, private keys or wallet unlock are needed. Unloaded wallets or missing RPC capabilities stop discovery with an actionable error rather than accepting a partial collection.
-3. Open **Ownership**. Provide historical complete-year and current-year statements together in the **Bitaroo PDFs** card for each family profile, plus shared Wallets ODS and Exchanges ODS. Any logged-in user can provide the whole family’s data. A missing card is red, a supplied card is green; select **Non Bitaroo user** to disable that profile’s PDF card in grey. All cards must be complete or nonapplicable before loading records. Current-year statements are optional when either your browser's local date or UTC date is 30 June or 1 July. Other inputs remain required. Each Bitaroo period needs matching AUD/BTC statements. Optional price quotes, CPI and tax-context files remain available.
+3. Open **Ownership**. Provide historical complete-year and current-year statements together in the **Bitaroo PDFs** card for each family profile, plus the shared Exchanges ODS. Any logged-in user can provide the whole family’s data. A missing card is red, a supplied card is green; select **Non Bitaroo user** to disable that profile’s PDF card in grey. All cards must be complete or nonapplicable before loading records. Current-year statements are optional when either your browser's local date or UTC date is 30 June or 1 July. Other inputs remain required. Each Bitaroo period needs matching AUD/BTC statements. Optional price quotes, CPI and tax-context files remain available.
 4. Select **Load records and review ownership**. The dashboard reads the descriptor history already discovered, loads the other records and asks for each wallet's owner and SMSF status. Bitaroo account owners are fixed by their Stage 2 upload cards; exchanges cannot be marked as SMSF accounts. To refresh descriptor history, select Load Node Wallets in Stage 1; the old separate refresh checkbox is removed. Select Verify Balances to save assignments and trace the family’s current holdings.
 5. Address Book and CGT setup unlock. Choose a matching tolerance and build the report. It calculates all supplied family profiles and every financial year from the earliest record through the current year. Financial Year Totals and CGT Event History display **only the logged-in user**. Use their left/right year arrows; future years cannot be selected. The initial year uses the browser’s local year, with the previous-year exception on UTC 30 June / 1 July. Wallet Balances reuses each family owner’s known acquisition costs. Missing basis and SMSF costs can still be unavailable.
 
-The Bitcoin Core wallet CSV importer has been removed. Existing CSV-based Ownership snapshots need to be replaced by loading descriptors and completing a V1 Build 6 Ownership run. Wallets ODS now uses the exact owned-output format described below. Exchanges ODS retains its established format. Descriptor wallets retain Bitcoin Core’s original source name and stable key-based ID, with an editable display name saved in Ownership. ODS wallet names come from row 1; exchange names come from their sheets. They are not inferred from names, notes or built-in identities.
+The Bitcoin Core CSV and historical-wallet ODS upload workflows have been replaced by node wallet discovery. Live descriptor wallets retain Bitcoin Core's original source name and stable descriptor-based ID, with an editable display name saved in Ownership. Historical group names come from Core address labels and are read-only; exchange names come from their sheets.
 
 ## Shared tracing behaviour
 
 - Ownership Stage 1 loads wallet names, complete public descriptors and legacy received-output metadata from every connected node. No manual descriptor/history paste workflow is shown.
 - Wallet replicas are grouped by overlapping public locking descriptors, ignoring key-origin annotations and checksum spelling. Their descriptor ranges/cursors and received outputs are merged. Unrelated equal names are disambiguated for display, not combined.
-- The Extinct Wallets ODS still uses one tab of wallet-name columns and exact owned `TXID:output_index` values. No broad historical date/amount search was restored.
+- Fixed-address `addr()` descriptors in private-key-disabled Core wallets are grouped by address label. The Core parent wallet name is retained for RPC requests; the group label identifies the historical wallet in Ownership. No historical-wallet ODS is requested.
 - Ownership reserves three left-aligned icon slots: funded vault evidence, extinct fossil and wallet, or the exchange symbol as applicable. A vault descriptor alone is insufficient: positive received-output history must establish funding of its locked address. Historical funding remains evidence after spending or expiry. The Vaults page remains a placeholder.
 - Requests to different nodes run concurrently. Additional address ownership reads rotate among replicas, with read-only fallback. Per-node concurrency is bounded and consumed internal RPC results are released to avoid filling the broker.
 - All blockchain data is read through connected Agents. No public blockchain indexer or explorer API is queried. Price and FX feeds remain external. If indexation is required, supply the verified CPI file; CPI is no longer fetched externally.
@@ -56,19 +56,26 @@ Firefox uses its normal download location or Save dialog, with `profile.7z` as t
 
 **Load and Clear replace the entire shared family dashboard**, not just one logged-in user. The confirmation states this; connected browser sessions are reset to Administration. Clear removes the shared config, descriptor collection, data and templates. Save first to preserve them. Active discovery/calculation jobs must finish or be cancelled before saving, loading or clearing. Ordinary clients remain concurrent; profile operations obtain exclusive access to shared data during replacement/snapshotting.
 
-### Historical owned-output format (introduced in V147)
+### Historical watch-only address groups
 
-Wallets ODS contains exactly one tab. Each populated column has its wallet name in row 1, followed by `TXID:output_index` text values for outputs owned by that wallet. Indexes start at zero. Include received outputs and change, whether spent or unspent. Each output may belong to only one supplied wallet; do not also supply that wallet through descriptors. Do not list recipient outputs under the sending wallet.
+Use a Core wallet with private keys disabled and imported `addr(address)` descriptors. Every address needs one nonempty label naming its historical wallet. The same base label on several addresses groups them into one wallet. Ordinary descriptor wallets remain separate. No parent wallet name, person, address or transaction is hardcoded.
 
-The importer retrieves each specified transaction directly and checks the output's spending link. It reads complete confirmed spending transactions to recover outgoing payments, network fees and change, then reconstructs UTC dates, amounts and balances. It does not search blocks, amounts or date windows to discover historical wallet transactions. Existing matching-window settings still apply where Bitaroo/exchange statements do not contain blockchain IDs. Supplied output indexes distinguish equal-sized outputs of the same transaction.
+For an irreversible loss with no compensation, use exactly:
 
-Confirmed transaction bodies are cached. Spend status is refreshed each run because an unspent output can subsequently be spent. One shared lookup client supplies Ownership, Address Book, CGT history and live balance evidence; opening Transaction Templates uses balances saved by Ownership rather than repeating ODS/network work. Live balances still check the known addresses for new activity. New wallet addresses/change outputs must be supplied through the ODS or covered by descriptors.
+```text
+Earlier Wallet | LOST:DD/MM/YYYY HH:MM:SS UTC
+```
 
-The old six-column per-wallet-tab ODS format is removed. Upload the new file and rerun Ownership after upgrading. No user records are bundled in the release.
+The suffix applies only to that address; its base label still groups it with the other addresses of Earlier Wallet. Supply the actual date/time when the loss was discovered, supported by your records. Core reports output and spending history, not proof that private keys were lost. The Dashboard records retained outputs at that instant as CGT event C1, with zero proceeds and the reduced acquisition cost traced using the existing wallet parcel convention. It does not apply a market-value disposal, indexation or a 50% loss discount. Unused losses carry forward through the annual report calculations. Conflicting later receipts/spends, future loss dates or missing acquisition evidence stop the process for correction. Compensation/recovery needs separate review; this label workflow does not infer it.
+
+Original output identities remain in the shared trace graph. The loss is an economic record, never a fabricated blockchain transaction. Lost quantity is removed once from retained holdings; zero-balance historical wallets are hidden from balances. Historical groups are excluded from Address Book and transaction construction. Names must be changed at their source labels in Core, followed by Load Node Wallets.
+
+Reference: [ATO crypto asset loss guidance](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/crypto-asset-transactions-with-capital-gains-tax/loss-or-theft-of-crypto-assets), [ITAA 1997 section 104-20](https://www.legislation.gov.au/C2004A05138/latest/text).
+
 
 ### Joint-payment accounting convention
 
-Public blockchain confirmation times are used, not exchange execution times. Wallet ownership comes from supplied public descriptors, owned outpoints and confirmed Ownership assignments. No identities, personal addresses or transaction IDs are built into the program. A retired wallet must not also be supplied through descriptors: reload the public descriptor catalogue without it when moving it into the historical ODS.
+Public blockchain confirmation times are used, not exchange execution times. Wallet ownership comes from supplied public descriptors, owned outpoints and confirmed Ownership assignments. No identities, personal addresses or transaction IDs are built into the program. A historical address must not also be claimed by a distinct live descriptor wallet; duplicate script ownership is rejected.
 
 For jointly funded payments, the program uses the requested **accounting assumption**, not a claimed on-chain input/output mapping. The network fee is split equally between source wallets, with deterministic whole-satoshi rounding. Every input budget and every output amount, including wallet-controlled change, is conserved. Senders’ existing parcels are reserved before processing any of that transaction’s receipts; a new output cannot fund an input of the same transaction. Parent transactions sharing a block timestamp are processed before their children.
 
@@ -82,13 +89,13 @@ There is **no saved allocation ledger**, and neither saved transaction templates
 
 Optional whole-return tax context now needs explicit user/year scope, so another person's return or a different year is never reused accidentally. The JSON format is `{"users": {"User name or ID": {"2026-27": {"basic_tax": "0", "basic_tax_without_gain": "0"}}}}`, with the existing optional calculation fields inside each year object. Use `{"users": {}}` when no context is supplied. User names are matched without case sensitivity; stable profile IDs are also accepted.
 
-V1 Build 6 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
+V1 Build 7 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
 
 ## Descriptor wallet display names
 
-In Ownership, Core descriptor wallets have an editable name field. Suggestions follow the earlier CSV naming rules: underscores become spaces, words are title-cased, and “Wallet” is appended if it is not already a word in the name. For example, `family_savings` suggests `Family Savings Wallet`; `emergency_wallet` suggests `Emergency Wallet`. Edit the suggestion and select **Save all ownership**. Existing custom labels are preserved.
+In Ownership, Core descriptor wallets have an editable name field. Suggestions follow the earlier CSV naming rules: underscores become spaces, words are title-cased, and “Wallet” is appended if it is not already a word in the name. For example, `family_savings` suggests `Family Savings Wallet`; `emergency_wallet` suggests `Emergency Wallet`. Edit the suggestion and select **Verify Balances**. Existing custom labels are preserved.
 
-Only descriptor wallets can be renamed. ODS wallet and exchange names remain fixed. Names must be non-empty and unique across the loaded wallets and exchanges. The selected label is shared through config.cfg and used in Address Book, balances and CGT history. Changing a label invalidates an existing report, which can then be rebuilt with that label.
+Only live descriptor wallets can be renamed. Historical group labels and exchange names remain fixed. Names must be non-empty and unique across the loaded wallets and exchanges. The selected label is shared through config.cfg and used in Address Book, balances and CGT history. Changing a label invalidates an existing report, which can then be rebuilt with that label.
 
 These are display aliases: Bitcoin Core’s wallet name, descriptor strings, stable wallet IDs and saved scan fingerprint do not change. Reloading unchanged node descriptors or rerunning Ownership retains the saved alias. RPC requests always retain the original wallet name for each node.
 
@@ -98,9 +105,9 @@ Every loaded wallet supplies `listsinceblock` with change outputs included. Core
 
 Load Node Wallets again after upgrading from earlier builds to collect the complete node-history metadata. Refresh it when Core learns new transactions or policies. Current builder inputs use fresh wallet `listunspent` and verified raw transactions. Change selection refreshes the public internal-descriptor cursors across connected replicas, then respects Dashboard reservations. No RPC generates private keys, signs, unlocks a wallet or broadcasts.
 
-A pruned node can still return transactions retained by its loaded wallets, even if their blocks have been pruned. It cannot return arbitrary extinct-wallet history it never retained. For historical `TXID:output_index` records, the creating and spending transactions must be available from a loaded/rescanned wallet or a node with the required history/index. `gettxout` returning null does not identify the spender. Missing evidence stops reconstruction with an actionable error; there is no public fallback and no automatic blockchain re-download. Ancestors of external incoming payments may remain unknown without changing the explicitly received amount; the source remains unresolved, and no network fee is invented. Unknown input values on an owned spend stop the trace.
+A pruned node can still return transactions retained by its loaded wallets, even if their blocks have been pruned. It cannot return arbitrary historical wallet transactions it never retained. Load the watch-only address descriptors and rescan with the necessary blocks available before running Load Node Wallets. Missing evidence stops reconstruction with an actionable error; there is no public fallback and no automatic blockchain re-download. Ancestors of external incoming payments may remain unknown without changing the explicitly received amount; the source remains unresolved, and no network fee is invented. Unknown input values on an owned spend stop the trace.
 
-Active ODS-address monitoring uses Core's confirmed UTXO-set scan. It does not discover unlisted change addresses or claim to include unconfirmed receipts. Prefer a loaded watch-only wallet for complete live monitoring.
+Historical address monitoring uses the loaded Core watch-only wallet's reconstructed history. Import all relevant addresses and complete the rescan; the Dashboard cannot discover unknown change addresses or recover arbitrary pruned blocks.
 
 ## Fee Estimates
 
@@ -134,7 +141,7 @@ On CGT Event History, CGT Report, Financial Year Totals, Wallet Balances, Transa
 
 Family profile selection is password-free because access is controlled by your SSH tunnels. The service binds loopback, supports IPv4/IPv6 and different client-side tunnel ports, and separates browser workspaces. Shared configuration writes are locked and atomic. Public descriptors cannot sign transactions, but reveal wallet addresses/history and are private financial information. Wallet descriptors and blockchain queries remain between the Dashboard, Agents and connected nodes. Never export with `true` or paste private keys, seeds or passphrases; private descriptors are rejected.
 
-The fee estimator, history graphs, Address Book and offline HTML reports remain available. Zero-balance historical ODS wallets remain hidden from balance/address cards; descriptor wallets remain visible at zero. Historical exchanges are excluded from Address Book. Saved tax HTML does not contain the public descriptor collection.
+The fee estimator, history graphs, Address Book and offline HTML reports remain available. Zero-balance labelled historical wallets remain hidden from balance cards; historical addresses are excluded from Address Book and transaction construction. Live descriptor wallets remain visible at zero. Historical exchanges are excluded from Address Book. Saved tax HTML does not contain the public descriptor collection.
 
 This ZIP contains runtime files and bundled-library notices only: no user configuration, wallet exports, test records, reports or caches.
 
@@ -163,7 +170,7 @@ Once every wallet card is green, the profile that started the transaction receiv
 
 Older prepared V143 transactions are checked against saved public descriptor history to establish input ownership. If that cannot be established unambiguously, reopen and prepare the transaction again.
 
-V1 Build 6 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
+V1 Build 7 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
 
 
 ## Cancelling construction
@@ -178,7 +185,7 @@ Receipt validation checks all supplied historical wallet records, including rece
 
 A supplied crypto-to-BTC trade now records the sold asset's CGT as well as the BTC acquisition. AUD disposal proceeds come from the supplied BTC consideration and the existing timestamped BTC/AUD lookup. No additional crypto/crypto or USD conversion is needed. Network fees in the sold asset create separate disposal components; the existing BTC acquisition basis includes the fee's incidental acquisition cost once. Non-BTC amounts keep their own unit, without Bitcoin pipe notation.
 
-The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 6 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
+The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 7 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
 
 Prompt headings now use Exchange Tracer and Wallet Tracer. The wallaby logo retains its shape with a four-tile dashboard emblem.
 

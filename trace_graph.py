@@ -41,6 +41,9 @@ class TraceGraph:
             fields={'location':row.sheet,'utc':core.utc_time(row.dt).isoformat(),'btc':str(row.tx_total),
                     'principal_btc':str(row.principal),'fee_btc':str(row.fee),'txid':row.txid or None,
                     'source_type':'historical_ods' if row.is_historical_ods else 'descriptor_history'}
+            if row.cgt_loss:
+                key=['capital_loss',row.descriptor_id or row.sheet,row.txid]
+                fields.update(txid=None,source_type='declared_access_loss',cgt_event='C1',loss_label=row.loss_label,loss_outpoints=list(row.loss_outpoints))
         elif isinstance(row,core.BitarooRow):
             key=['statement',self.statement_accounts.get(str(row.source_file),Path(row.source_file).parent.name),Path(row.source_file).name,row.page,
                  str(row.dt),row.tx_type,row.asset,str(row.amount),str(row.balance),row.trade_occurrence]
@@ -51,6 +54,10 @@ class TraceGraph:
                     'other_asset':row.currency,'other_amount':str(row.fiat),'source_type':'exchange_ods'}
         else:return None
         result=self.node('record',key,**fields)
+        if isinstance(row,core.WalletTx) and row.cgt_loss:
+            for output in row.loss_outpoints:
+                txid,index=output.rsplit(':',1)
+                self.edge(result,'declares_lost',self.node('outpoint',[txid,int(index)]),evidence='user_declared_Core_label')
         location=self.node('location',[key[0],fields['location']])
         self.edge(result,'recorded_at',location)
         if fields.get('txid'):

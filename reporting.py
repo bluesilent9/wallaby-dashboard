@@ -64,7 +64,7 @@ def build_report(core,engine):
         return ('-' if rounded<0 else '')+f'${abs(rounded):,.2f}'
     result=[]
     for i,e in enumerate(events,1):
-        kind='fee' if 'fee' in e.description.lower() else ('sale' if 'sale' in e.description.lower() else 'transfer')
+        kind='loss' if e.bucket=='CGT event C1' else 'fee' if 'fee' in e.description.lower() else ('sale' if 'sale' in e.description.lower() else 'transfer')
         result.append({'id':i,'utc':core.display_time(e.date),'description':e.description,'wallet':e.wallet,
                        'kind':kind,'bucket':e.bucket,'btc':str(e.btc),'btc_display':core.qb(e.btc),'asset_unit':e.asset_unit,
                        'proceeds':str(e.proceeds),'cost':str(e.cost),'gain':str(e.gain_loss),

@@ -155,7 +155,7 @@ def run(config):
     try:
         core.configure();emit('stage',stage='loading',label='Reading your statements and wallet records')
         core.FAMILY_TAX_CONTEXTS=tax_contexts(core,paths.get('tax_context'),snapshot['users'])
-        print('Wallaby Bitcoin Dashboard · V1 Build 6 calculation engine')
+        print('Wallaby Bitcoin Dashboard · V1 Build 7 calculation engine')
         print('Transaction matching tolerance: '+window['label'])
         if mode=='descriptors':
             emit('stage',stage='discovering',label='Discovering descriptor wallet blockchain history')
@@ -165,7 +165,7 @@ def run(config):
             Path(config['result']).write_text(json.dumps({'descriptor_fingerprint':chain['catalog_fingerprint'],'scanned_utc':chain['scanned_utc']}))
             emit('complete',event_count=0,review_count=0);return 0
         taxpayer=user['name']
-        historical=paths['historical'];exchanges=paths['exchanges']
+        exchanges=paths['exchanges']
         combined=Path(config['result']).parent/'bitaroo_combined'
         accounts=prepare_family(core,snapshot['users'],settings,paths,combined)
         active=declarations(snapshot['users'],settings,paths)
@@ -185,7 +185,7 @@ def run(config):
             if chain['catalog_fingerprint']!=config['descriptor_fingerprint']:raise ValueError('Wallet descriptors changed. Run Ownership again before CGT.')
         descriptor_rows=wallet_rows(core,chain)
         chain_client=ChainClient(core)
-        historical_rows=core.load_historical_wallet_ods(historical,client=chain_client,defer_joint=True)
+        historical_rows={}  # All historical wallet groups are reconstructed from Core's labelled addr() policies.
         validate_sources(core,chain)
         wallets=core.merge_wallets(descriptor_rows,historical_rows)
         install_evidence(core,chain)

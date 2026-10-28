@@ -31,6 +31,7 @@ def builder_catalog(session,price=None):
         aud=str(amount*Decimal(price['aud_per_btc'])) if amount is not None and price else None
         cards[ident]={'id':ident,'kind':kind,'name':name,'owner_id':owner_id,'owner':user.get('name','Someone else / external'),'colour':user.get('colour','neutral'),'btc':str(amount) if amount is not None else None,'aud':aud,'address':address,'can_send':send,'can_receive':bool(address)}
     for wallet in chain['wallets']:
+        if wallet.get('extinct'):continue
         ident=resource_id('descriptor',wallet['id']);own=owners.get(ident,{})
         groups={}
         for r in wallet['records']:groups.setdefault(r['txid'],[]).append(r)
@@ -49,6 +50,7 @@ def builder_catalog(session,price=None):
             add(ident,'bitaroo','Bitaroo Exchange',last['balance'] if last else None)
     from unsigned_psbt import public_change_candidate
     for w in chain['wallets']:
+        if w.get('extinct'):continue
         ident=resource_id('descriptor',w['id'])
         try:cards[ident]['change_script_size']=len(public_change_candidate(store=public_store,chain=chain,wallet_id=w['id'])[0].data)
         except ValueError:pass

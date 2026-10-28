@@ -447,7 +447,7 @@ def match_bitaroo_deposit_row(reports, wallet_row: "WalletTx") -> Optional[Tuple
     The Bitaroo PDF transaction type is authoritative: only BTC ``Deposit`` rows
     are candidates. The wallet ``Details`` field is never consulted.
     """
-    if not wallet_row.outgoing:
+    if wallet_row.cgt_loss or not wallet_row.outgoing:
         return None
 
     if not any(r.tx_type=='Deposit' and r.amount>0 and date_close(tax_date(r.dt),wallet_row.dt) for r in reports.btc_rows):return None
@@ -643,6 +643,9 @@ class WalletTx:
     output_index: int = -1
     accounting_flow: str = ""
     accounting_joint: bool = False
+    cgt_loss: bool = False
+    loss_outpoints: tuple = ()
+    loss_label: str = ''
 
     @property
     def incoming(self) -> bool:
@@ -1237,7 +1240,7 @@ def wallet_transfer_amount_candidates(outgoing: WalletTx) -> List[Decimal]:
 
 def _wallet_transfer_match_score(outgoing: WalletTx, incoming: WalletTx) -> Optional[Decimal]:
     """Return the best BTC-quantity difference for an outgoing/incoming pair."""
-    if not outgoing.outgoing or not incoming.incoming:
+    if outgoing.cgt_loss or incoming.cgt_loss or not outgoing.outgoing or not incoming.incoming:
         return None
     target = incoming.principal
     diffs = [abs(amount - target) for amount in wallet_transfer_amount_candidates(outgoing)]
@@ -1259,6 +1262,7 @@ def find_loaded_wallet_counterparty(
     dedicated Fee column when converting a gross debit to the net transferred
     quantity.
     """
+    if row.cgt_loss:return None
     row_is_outgoing = row.outgoing
     candidates = []
 
@@ -1270,6 +1274,7 @@ def find_loaded_wallet_counterparty(
             if other_wallet == wallet_name and not row.accounting_flow:
                 continue
             for idx, candidate in enumerate(rows):
+                if candidate.cgt_loss:continue
                 if row_is_outgoing and not candidate.incoming:
                     continue
                 if not row_is_outgoing and not candidate.outgoing:
@@ -1320,6 +1325,7 @@ def find_loaded_wallet_counterparty(
         if other_wallet == wallet_name:
             continue
         for idx, candidate in enumerate(rows):
+            if candidate.cgt_loss:continue
             if (row.accounting_flow or candidate.accounting_flow) and row.accounting_flow != candidate.accounting_flow:
                 continue
             if (re.fullmatch(r"[0-9a-fA-F]{64}", row.txid or "")
@@ -2277,6 +2283,7 @@ class HistoryPlanner:
                     )
                     continue
 
+                if w.cgt_loss:continue  # Declared loss has no recipient to resolve.
                 # Outgoing: follow a loaded wallet destination first using TXID or
                 # unique BTC/date evidence; no wallet Details text is consulted.
                 dest_match = find_loaded_wallet_counterparty(self.wallets, wallet, w)
@@ -3728,6 +3735,15 @@ class Engine:
                     if lot.deferred_market_price:
                         self._resolve_deferred_market_price(lot, wallet, dt)
 
+        if getattr(self,'_c1_loss_context',None) is not None:
+            if any(not lot.basis_known for lot in lots):raise ValueError('Cannot calculate CGT event C1 without the affected holdings acquisition cost. Resolve the source records first.')
+            cost=sum((lot.cost for lot in lots),Decimal(0))
+            notes=[f'TRANSACTION TIME: {display_time(dt)}','Declared irreversible loss of access, no compensation; this is not a blockchain spend.',
+                   'Reduced cost base uses the same traced parcel allocation as other disposals; no market-value proceeds, indexation or 50% loss discount.',
+                   'Affected outputs: '+', '.join(self._c1_loss_context.loss_outpoints)]
+            self.events.append(EventComponent(dt,desc,wallet,total,Decimal(0),cost,-cost,'CGT event C1',Decimal(0),'Traced acquisition parcels',notes,total,pool_qty_before,Decimal(0),gross_gain=Decimal(0),gross_loss=cost))
+            return
+
         # Historical Bitaroo deposits with no supplied source wallet are carried
         # as quantity-only reconciliation lots. Their cost base is unknown, so
         # the corresponding sale proceeds are excluded from calculated CGT totals
@@ -4337,7 +4353,7 @@ class Engine:
             for name,rows in self.wallets.items():
                 if self.ownership.wallet_statuses.get(name)!=WalletOwnership.PERSONAL:continue
                 for w in rows:
-                    if w.outgoing and w.dt<=self.period_end and match_other_exchange_sale([row],w.principal,w.dt) and self.find_wallet_dest_for_row(w) is None and match_bitaroo_deposit_row(self.reports,w) is None:
+                    if not w.cgt_loss and w.outgoing and w.dt<=self.period_end and match_other_exchange_sale([row],w.principal,w.dt) and self.find_wallet_dest_for_row(w) is None and match_bitaroo_deposit_row(self.reports,w) is None:
                         candidates.append(('wallet',w))
             for r in self.reports.btc_rows:
                 if r.tx_type=='Withdrawal' and tax_date(r.dt)<=self.period_end and self.find_wallet_incoming_for_withdrawal(abs(r.amount),r.dt) is None and match_other_exchange_sale([row],abs(r.amount),tax_date(r.dt)):
@@ -4399,6 +4415,10 @@ class Engine:
                 if w.dt > self.period_end or not w.outgoing or w.ref in self.processed_wallet:
                     continue
 
+                if w.cgt_loss:
+                    if self.ownership.wallet_statuses.get(wallet_name)==WalletOwnership.PERSONAL:
+                        events.append(LedgerEvent(utc_time(w.dt).replace(tzinfo=None),'wallet_loss',w))
+                    continue
                 source_status = self.ownership.wallet_statuses.get(wallet_name)
                 if source_status == WalletOwnership.EXTERNAL:
                     match = match_bitaroo_deposit_row(self.reports, w)
@@ -4481,6 +4501,7 @@ class Engine:
             "wallet_to_exchange": 30,
             "wallet_out": 40,
             "wallet_from_exchange": 41,
+            "wallet_loss": 90,  # Loss may concern change created by this same confirmed transaction.
             "bitaroo_sell": 50,
             "bitaroo_fee": 60,
             "transition_marker": 0,
@@ -4531,6 +4552,15 @@ class Engine:
 
     def process_event(self, ev: LedgerEvent):
         kind = ev.kind
+        if kind == 'wallet_loss':
+            w=ev.payload
+            if w.ref in self.processed_wallet:return
+            if self.qty(w.sheet)+BTC_EPS<w.principal:raise ValueError('The declared C1 loss exceeds the reconstructed wallet holdings. Resolve missing acquisition records first.')
+            self._c1_loss_context=w
+            try:self.dispose(w.sheet,w.principal,Decimal(0),w.dt,'Lost access — CGT event C1')
+            finally:self._c1_loss_context=None
+            self.processed_wallet.add(w.ref)
+            return
         if kind == "wallet_external_in":
             w: WalletTx = ev.payload
             trace_source = self._trace_source_for_wallet_row(w)
@@ -5088,7 +5118,7 @@ def write_report(path: str, engine: Engine):
 
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"BITCOIN CGT WORKING PAPER — {engine.taxpayer} — FY {fmt_fy(engine.fy_start)}\n")
-        f.write("Generated from Bitaroo AUD/BTC statements, Bitcoin Core wallet descriptor-derived records, historical wallet ODS, and the owned tabs of the Other Exchanges ODS data when supplied.\n")
+        f.write("Generated from Bitaroo AUD/BTC statements, Bitcoin Core wallet histories (including labelled historical watch-only groups), and the owned tabs of the Other Exchanges ODS data when supplied.\n")
         f.write("V107: CSV local timestamps converted to UTC using OS historical timezone rules (or --timezone). ODS Date (UTC)/Time (UTC) cells are read as UTC. Matching requires timestamps and uses the configured elapsed-time tolerance. Financial years use the local tax calendar.\n")
         f.write("V107 prices: BTC valuations use direct BTC/AUD trades or completed BTC/AUD trading minutes; no USD bridge. Minute prices disclose their availability bounds and do not supply exact tick times. Automatic FX uses fully available historical minute quotes, with source bar labels and conservative availability bounds; exact tick times are not supplied by these archives. Weekend FX uses the immediately preceding Friday's last available quote, disclosing each conversion leg and its age. BTC trade freshness remains separately enforced.\n")
         f.write("Timestamped valuations use the latest observed market trade/rate at or before the instant, with a maximum quote age of 60 minutes by default; observed timestamps are disclosed. Date-only valuations use daily close.\n")

@@ -45,6 +45,7 @@ def build_address_book(core,wallets,reports,other,user,client=None):
         return matches[0] if len(matches)==1 and valid_address(matches[0]) else None
     for name,rows in wallets.items():
         descriptor=name in getattr(core,'DESCRIPTOR_WALLETS',{})
+        if descriptor and any(w['id']==core.DESCRIPTOR_WALLETS[name] and w.get('extinct') for w in core.DESCRIPTOR_SNAPSHOT['wallets']):continue
         source=core.DESCRIPTOR_WALLETS[name] if descriptor else name
         kind='descriptor' if descriptor else 'wallet'
         # This visibility rule does not alter the tax ledger or ownership inventory.
