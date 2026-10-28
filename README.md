@@ -24,6 +24,12 @@ Verify Balances opens Wallet Balances. Cards share Ownership's vault/wallet/watc
 
 Fee Estimates use Core at the lowest request priority, pausing behind foreground jobs. The simplified pending/mined block view adapts Mempool's AGPL component code and includes TXID tracking. BTC/AUD and historical currency/market price services remain external; CPI, when needed, comes from the supplied file. No signing or broadcasting RPC is added.
 
+## Agent compatibility and pending integration
+
+Use an Agent with the corrected wallet RPC routing introduced in V2 Development Build 4. The current Agent is **[V2 Development Build 5](https://github.com/bluesilent9/wallaby-agent/tree/Development)**. Build 5 keeps ordinary public/read-only node queries working but removes direct remote wallet creation and descriptor imports. Preconfigure required watch wallets locally; do not expect Dashboard V1 Build 7 to create or synchronise them through unrestricted RPC.
+
+The Agent now contains its own local Vault Builder and Authorise pages. Dashboard V1 Build 7 has **not** implemented the Agent’s [approval/exchange protocol](https://github.com/bluesilent9/wallaby-agent/blob/Development/APPROVAL_PROTOCOL.md), signing-request submission or immutable Transaction Builder Stage 2 receiver. Agent vault records and signed PSBT handoffs therefore queue locally; they are not yet an end-to-end Dashboard feature. The existing manual Core PSBT signing/upload workflow remains available. Dashboard vault monitoring is still a placeholder.
+
 ## Run from source
 
 Python 3.11 or later. Ubuntu/Kubuntu dependencies:
@@ -84,3 +90,4 @@ After upgrading, run **Load Node Wallets**, load the exchange statements and **V
 ## Licence
 
 This combined distribution is provided under GNU AGPL version 3. [Full licence](LICENSE.txt). Mempool component copyright and original pinned sources are retained in [vendor/mempool](vendor/mempool/UPSTREAM.md); other bundled libraries retain their notices. The running service provides corresponding source through its Source code link (`/source.zip`).
+
