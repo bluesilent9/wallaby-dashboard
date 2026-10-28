@@ -4,8 +4,10 @@ Bitcoin tools, wallet insights, Australian CGT working papers and shared family 
 
 **[Explore the program page](https://bluesilent9.github.io/wallaby-suite/dashboard/)** · **[Browse Development source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development)** · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/)
 
-V1 Build 5 source is on the **Development** branch. The [Development DEB](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/wallaby-dashboard_1.0.0~dev5_all.deb) and [SHA256 checksum](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) are available. See the [fresh server installation guide](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/CLEAN_INSTALL.md). Use the matching [Wallaby Agent V2 Development Build 4 source](https://github.com/bluesilent9/wallaby-agent/tree/Development) for corrected Bitcoin Core wallet loading.
+V1 Build 6 source is on the **Development** branch. The [Development DEB](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/wallaby-dashboard_1.0.0~dev6_all.deb) and [SHA256 checksum](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) are available. See the [fresh server installation guide](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/CLEAN_INSTALL.md). Use the matching [Wallaby Agent V2 Development Build 4 source](https://github.com/bluesilent9/wallaby-agent/tree/Development) for corrected Bitcoin Core wallet loading.
 
 The DEB starts and enables the Dashboard system service on installation. Browser and Agent interfaces bind to loopback for SSH-tunnel access. See the Development README for setup, validation and build instructions.
 
 Please use [GitHub Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) for feedback. Do not include private keys, descriptors or personal financial records in public issues.
+
+Build 6 uses connected nodes for blockchain history and fee/block observations. The adapted Mempool component and combined distribution are AGPL-3.0; see [licence and source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development).
