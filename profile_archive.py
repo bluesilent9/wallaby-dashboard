@@ -97,6 +97,9 @@ def validate(root):
     if (root/'data/nodes.json').exists():
         from nodes import NodeRegistry
         NodeRegistry.validate(json.loads((root/'data/nodes.json').read_text(encoding='utf-8')))
+    if (root/'data/agent-hub.json').exists():
+        from agent_state import validate as validate_agent_state
+        validate_agent_state(json.loads((root/'data/agent-hub.json').read_text(encoding='utf-8')),ids)
     with tempfile.TemporaryDirectory(dir=root,prefix='.verify-') as temp:
         for uid in raw.get('ownership_runs',{}):
             if uid not in ids:raise ValueError('Unknown Ownership profile.')

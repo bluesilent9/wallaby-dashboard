@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 7 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev7_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 8 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev8_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -11,10 +11,10 @@
 - Australian CGT working papers, financial year totals and visual transaction histories for supplied family records.
 - Shared Ownership, Address Book and wallet balances.
 - Node-driven Fee Estimates, pending/mined blocks and transaction tracking, with Bitcoin Core unit conversions.
-- Shared transaction templates, unsigned PSBT preparation and verified partial-signature collection. Private keys remain in Bitcoin Core; the Dashboard does not sign or broadcast.
+- Shared transaction templates, unsigned PSBT preparation and verified partial-signature collection. Private keys remain in Bitcoin Core; private signing remains local to the Agent and broadcast requires local Agent authorisation.
 - Node discovery through Wallaby Agent, querying every connected node and deduplicating wallet replicas by public descriptors.
 
-Vault monitoring remains a placeholder. Reports depend on complete source records, ownership and pricing evidence; review the working papers before relying on them for tax reporting.
+Vault monitoring uses public vault records and connected Core nodes. Reports depend on complete source records, ownership and pricing evidence; review the working papers before relying on them for tax reporting.
 
 ## This development update
 
@@ -22,13 +22,7 @@ All blockchain lookups now use connected Bitcoin Core nodes through Wallaby Agen
 
 Verify Balances opens Wallet Balances. Cards share Ownership's vault/wallet/watch/SMSF icons; the new S-shaped SMSF mark replaces the bank symbol. Shorter balance tooltips show gain/loss, owner, SMSF, retained purchase cost and source records. Wallet Key Explorer has been removed; public descriptor validation remains where needed by node loading and PSBT construction.
 
-Fee Estimates use Core at the lowest request priority, pausing behind foreground jobs. The simplified pending/mined block view adapts Mempool's AGPL component code and includes TXID tracking. BTC/AUD and historical currency/market price services remain external; CPI, when needed, comes from the supplied file. No signing or broadcasting RPC is added.
-
-## Agent compatibility and pending integration
-
-Use an Agent with the corrected wallet RPC routing introduced in V2 Development Build 4. The current Agent is **[V2 Development Build 5](https://github.com/bluesilent9/wallaby-agent/tree/Development)**. Build 5 keeps ordinary public/read-only node queries working but removes direct remote wallet creation and descriptor imports. Preconfigure required watch wallets locally; do not expect Dashboard V1 Build 7 to create or synchronise them through unrestricted RPC.
-
-The Agent now contains its own local Vault Builder and Authorise pages. Dashboard V1 Build 7 has **not** implemented the Agent’s [approval/exchange protocol](https://github.com/bluesilent9/wallaby-agent/blob/Development/APPROVAL_PROTOCOL.md), signing-request submission or immutable Transaction Builder Stage 2 receiver. Agent vault records and signed PSBT handoffs therefore queue locally; they are not yet an end-to-end Dashboard feature. The existing manual Core PSBT signing/upload workflow remains available. Dashboard vault monitoring is still a placeholder.
+Fee Estimates use Core at the lowest request priority, pausing behind foreground jobs. The simplified pending/mined block view adapts Mempool's AGPL component code and includes TXID tracking. BTC/AUD and historical currency/market price services remain external; CPI, when needed, comes from the supplied file. Signing and broadcasting use capability-gated local Agent approvals, not unrestricted remote RPC.
 
 ## Run from source
 
@@ -47,9 +41,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev7`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev8`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev7_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev8_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 
@@ -91,3 +85,8 @@ After upgrading, run **Load Node Wallets**, load the exchange statements and **V
 
 This combined distribution is provided under GNU AGPL version 3. [Full licence](LICENSE.txt). Mempool component copyright and original pinned sources are retained in [vendor/mempool](vendor/mempool/UPSTREAM.md); other bundled libraries retain their notices. The running service provides corresponding source through its Source code link (`/source.zip`).
 
+## Build 8
+
+Nodes now distinguish connection from blockchain readiness. Vault cards use verified public policies and live node balances, with green/amber/red status and short unlock estimates. The Builder accepts fixed unsigned vault proposals, composes other wallets' payments before signing, and uses locally authorised Agent signature requests followed by combined-PSBT broadcast. Single and multiple senders use the same PSBT protocol.
+
+**Agent update required:** partial signing, local broadcast approval and peer wallet transfers are capability gated. Older Agents do not expose those actions; there is no unsafe fallback to their old sign-and-broadcast operation. Only the Dashboard is updated in this build. See [Agent protocol and integration requirements](docs/AGENT_PROTOCOL.md). Missing-wallet orchestration exchanges public manifests and peer IPv6 hints; private wallet transfers never pass through the Dashboard. Public vault records and pending requests are included in profile backups.

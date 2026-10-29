@@ -3,7 +3,7 @@
 from pathlib import Path
 import ast,hashlib,shutil,subprocess,sys
 ROOT=Path(__file__).resolve().parents[1]
-VERSION='1.0.0~dev7'
+VERSION='1.0.0~dev8'
 CONTROL=f'''Package: wallaby-dashboard
 Version: {VERSION}
 Section: utils

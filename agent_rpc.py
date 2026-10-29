@@ -9,8 +9,8 @@ from decimal import Decimal
 import json,re,time,uuid
 
 NODE_METHODS=frozenset('getblockchaininfo getblockcount getbestblockhash getblockhash getblockheader getblock getchaintips getdifficulty getmempoolinfo getrawmempool getmempoolentry getmempoolancestors getmempooldescendants gettxout gettxoutsetinfo getrawtransaction gettxoutproof verifytxoutproof getnetworkinfo getnettotals getpeerinfo getconnectioncount getindexinfo estimatesmartfee deriveaddresses getdescriptorinfo validateaddress decoderawtransaction decodescript decodepsbt analyzepsbt listwallets listwalletdir scantxoutset scanblocks getdescriptoractivity getblockfrompeer'.split())
-WALLET_METHODS=frozenset('getwalletinfo getbalances getbalance listunspent gettransaction listtransactions listsinceblock getaddressinfo getaddressesbylabel listlabels listaddressgroupings listreceivedbyaddress listreceivedbylabel listdescriptors importdescriptors'.split())
-METHODS=NODE_METHODS|WALLET_METHODS|{'createwallet'}
+WALLET_METHODS=frozenset('getwalletinfo getbalances getbalance listunspent gettransaction listtransactions listsinceblock getaddressinfo getaddressesbylabel listlabels listaddressgroupings listreceivedbyaddress listreceivedbylabel listdescriptors'.split())
+METHODS=NODE_METHODS|WALLET_METHODS
 MAX_REQUEST_BYTES=4*1024*1024
 MAX_RESULT_BYTES=16*1024*1024
 MAX_TOTAL_BYTES=64*1024*1024
@@ -47,22 +47,6 @@ def request(method,params,wallet):
     if method in WALLET_METHODS and wallet is None:raise ValueError('Specify the exact Core wallet name for a wallet RPC.')
     if method not in WALLET_METHODS and wallet is not None:raise ValueError('This node RPC does not take a wallet endpoint.')
     if method=='listdescriptors' and params not in ([],[False],{}, {'private':False}):raise ValueError('Only public listdescriptors false exports are permitted.')
-    if method=='createwallet':
-        required={'wallet_name','disable_private_keys','blank','descriptors'}
-        if not isinstance(params,dict) or not required<=set(params) or set(params)-required-{'load_on_startup'}:raise ValueError('Create watch-only wallets using named parameters only.')
-        if any(params[k] is not True for k in ('disable_private_keys','blank','descriptors')):raise ValueError('Only blank, private-key-disabled descriptor wallets can be created.')
-        if not isinstance(params['wallet_name'],str) or not re.fullmatch('[A-Za-z0-9][A-Za-z0-9 _.-]{0,99}',params['wallet_name']) or params['wallet_name'] in ('.','..'):raise ValueError('Use a simple watch-only wallet name, not a filesystem path.')
-        if 'load_on_startup' in params and type(params['load_on_startup']) is not bool:raise ValueError('load_on_startup must be boolean.')
-    if method=='importdescriptors':
-        from descriptor_policy import parse_policy
-        rows=params if isinstance(params,list) else params.get('requests') if set(params)=={'requests'} else None
-        if not isinstance(rows,list) or not 1<=len(rows)<=1000:raise ValueError('Supply a public descriptor request array.')
-        for row in rows:
-            if not isinstance(row,dict) or not isinstance(row.get('desc'),str):raise ValueError('Invalid public descriptor import.')
-            try:
-                descriptor,_,_=parse_policy(row['desc'].split('#')[0])
-                if any(k.is_private for k in descriptor.keys):raise ValueError()
-            except Exception:raise ValueError('Only supported public descriptors may be imported.') from None
     return params,size
 
 class RPCBroker:

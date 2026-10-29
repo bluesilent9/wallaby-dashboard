@@ -120,17 +120,20 @@ class WorkflowStore:
             signing[-1].update(complete=bool(received),uploaded_utc=received.get('uploaded_utc'),input_count=assigned.count(uid))
         all_signed=bool(signing) and all(w['complete'] for w in signing)
         row.pop('signed_uploads',None);combined=bool(row.pop('combined_psbt',None));row['signing_wallets']=signing;row['all_signed']=all_signed;row['combined_ready']=combined
-        row['stage_count']=2 if len(set(assigned))==1 else 3
+        row['stage_count']=2 if row.get('agent_signing') else 2 if len(set(assigned))==1 else 3
         row['completed']=bool(row.get('completed'));row['combined_downloaded']=bool(row.get('combined_downloaded_utc'))
         row['can_combine']=row['stage_count']==3 and user==row['creator_id'] and all_signed and not row['cancelled'] and not row['completed']
         row['can_complete']=user==row['creator_id'] and not row['cancelled'] and not row['completed'] and (row['stage_count']==2 or combined and row['combined_downloaded'])
+        if row.get('agent_signing'):row['can_complete']=user==row['creator_id'] and bool(row.get('broadcast_txid')) and not row['cancelled'] and not row['completed']
         row['stage']=3 if combined and user==row['creator_id'] else 2;row['signing_revision']=row.get('signing_revision',0)
         return row
     def status(self,user,ident):
         row=self.public_job(user,ident)
-        return {k:row[k] for k in ('id','cancelled','creator_id','signing_wallets','all_signed','combined_ready','can_combine','stage','stage_count','completed','combined_downloaded','can_complete','signing_revision')}
+        return {k:row[k] for k in ('id','cancelled','creator_id','signing_wallets','all_signed','combined_ready','can_combine','stage','stage_count','completed','combined_downloaded','can_complete','signing_revision','broadcast_txid') if k in row}
     def upload(self,user,ident,wallet_id,raw,filename=''):
-        row=self.job(user,ident);assigned=self.input_wallets(row);wallet=next((w for w in row['wallets'] if w['id']==wallet_id),None)
+        row=self.job(user,ident)
+        if row.get('agent_signing'):raise ValueError('This transaction accepts signed results only from its selected Agent.')
+        assigned=self.input_wallets(row);wallet=next((w for w in row['wallets'] if w['id']==wallet_id),None)
         if wallet_id not in assigned or not wallet or wallet.get('owner_id')!=user:raise ValueError('Only the owner of this sending wallet can upload its signed PSBT.')
         if row['cancelled'] or row.get('completed') or row.get('combined_psbt'):raise ValueError('This transaction is closed for signed uploads. Reopen it to prepare a replacement.')
         if len(set(assigned))==1:raise ValueError('Single-wallet transactions are signed and broadcast in Bitcoin Core; no upload is required.')
@@ -210,7 +213,7 @@ class WorkflowStore:
             active={tuple(point) for job in data['jobs'].values() if not job.get('cancelled') and not job.get('completed') for point in job.get('outpoints',[])}
             if any(tuple(p) in active for p in result['outpoints']):raise ValueError('An input is already used by another prepared transaction. Reopen that transaction for editing before preparing a replacement.')
             now=datetime.now(timezone.utc).isoformat();ident=uuid.uuid4().hex
-            row={'id':ident,'creator_id':session.user_id,'participants':participants,'created_utc':now,'cancelled':False,**result,'wallets':catalog['wallets'],'diagram':{'nodes':copy.deepcopy(diagram['nodes']),'edges':result['edges']}}
+            row={'id':ident,'creator_id':session.user_id,'participants':participants,'created_utc':now,'cancelled':False,'agent_signing':True,**result,'wallets':catalog['wallets'],'diagram':{'nodes':copy.deepcopy(diagram['nodes']),'edges':result['edges']}}
             data['change_cursors'].update({k:v for k,v in reserved.items() if v!=base_cursors.get(k,0)})
             data['jobs'][ident]=row
             for user in sorted(set(participants+[session.user_id])):

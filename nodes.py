@@ -27,6 +27,11 @@ class NodeRegistry:
     def __init__(self,config,clock=time.monotonic):
         self.config=Path(config);self.path=self.config.with_name('data')/'nodes.json';self.clock=clock
         self.lock=threading.RLock();self.connections={};self.warnings={};self.read_by={};self.rpc=RPCBroker(self)
+        from node_health import Health
+        from agent_hub import AgentHub
+        self.health=Health(self);self.hub=AgentHub(self)
+        from vault_monitor import VaultMonitor
+        self.vaults=VaultMonitor(self)
     @staticmethod
     def validate(data):
         if not isinstance(data,dict) or set(data)!={'version','nodes'} or data['version']!=1 or not isinstance(data['nodes'],list) or len(data['nodes'])>10000:raise ValueError('Invalid node registry.')
@@ -48,7 +53,7 @@ class NodeRegistry:
         temp.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');temp.chmod(0o600);temp.replace(self.path)
     def reset(self):
         # Live connections never survive clearing/loading a profile.
-        with self.lock:self.rpc.reset();self.connections.clear();self.warnings.clear();self.read_by.clear()
+        with self.lock:self.rpc.reset();self.connections.clear();self.warnings.clear();self.read_by.clear();self.health.values.clear();self.hub.reset_live();self.vaults.value={'wallets':[],'loading':True};self.vaults.last=0
     def _expire(self):
         now=self.clock()
         for token in list(self.connections):
@@ -65,7 +70,7 @@ class NodeRegistry:
                 node={'id':uuid.uuid4().hex,'mac':mac,'hostname':hostname,'first_seen_utc':stamp,'last_seen_utc':stamp};data['nodes'].append(node)
             elif not any(c['mac']==mac for c in self.connections.values()):node['hostname']=hostname
             node['last_seen_utc']=stamp;self._write(data)
-            token=secrets.token_urlsafe(32);self.connections[token]={'node_id':node['id'],'mac':mac,'hostname':hostname,'seen':self.clock(),'rpc_methods':methods}
+            token=secrets.token_urlsafe(32);self.connections[token]={'node_id':node['id'],'mac':mac,'hostname':hostname,'seen':self.clock(),'rpc_methods':methods,'token':token}
             self._conflicts()
             return {'protocol':'wallaby-agent','version':1,'connection_token':token,'node_id':node['id'],'heartbeat_seconds':HEARTBEAT_SECONDS,'disconnect_after_seconds':DISCONNECT_SECONDS,'capabilities':['presence']+(['rpc'] if methods else []),'rpc_methods':methods,'commands':[]}
     def heartbeat(self,token,disconnect=False):
@@ -99,7 +104,8 @@ class NodeRegistry:
             self._expire();self._conflicts();data=self._read();rows=[]
             for n in data['nodes']:
                 claims=[c for c in self.connections.values() if c['node_id']==n['id']]
-                rows.append(dict(n,connected=bool(claims),connection_count=len(claims),reported_hostnames=sorted({c['hostname'] for c in claims}),rpc_ready=len(claims)==1 and bool(claims[0].get('rpc_methods')) and self.rpc._unique(claims[0]),rpc_methods=claims[0].get('rpc_methods',[]) if len(claims)==1 and self.rpc._unique(claims[0]) else []))
+                rows.append(dict(n,blockchain=self.health.status(claims[0]) if len(claims)==1 else {},agent=self.hub.node_summary(n['id']),connected=bool(claims),connection_count=len(claims),reported_hostnames=sorted({c['hostname'] for c in claims}),rpc_ready=len(claims)==1 and bool(claims[0].get('rpc_methods')) and self.rpc._unique(claims[0]),rpc_methods=claims[0].get('rpc_methods',[]) if len(claims)==1 and self.rpc._unique(claims[0]) else []))
+            self.health.refresh([c for c in self.connections.values() if c.get('rpc_methods') and self.rpc._unique(c)])
             return {'nodes':sorted(rows,key=lambda r:(r['hostname'],r['mac'])),'warnings':[dict(w) for w in self.warnings.values()]}
     def notifications(self,user,read=False):
         with self.lock:
@@ -128,7 +134,7 @@ def create_agent_server(registry,port=DEFAULT_AGENT_PORT,gate=None,ipv6=True,ipv
                 sizes=self.headers.get_all('Content-Length',[])
                 if len(sizes)!=1:raise ValueError('Provide one Content-Length.')
                 length=int(sizes[0])
-                limit=MAX_RESULT_BYTES+4096 if self.path=='/agent/v1/result' else 4096
+                limit=20*1024*1024 if self.path=='/agent/v2/exchange' else MAX_RESULT_BYTES+4096 if self.path=='/agent/v1/result' else 4096
                 if not 0<length<=limit:raise ValueError('Agent request exceeds its size limit.')
                 raw=self.rfile.read(length)
                 if len(raw)!=length:raise ValueError('Incomplete agent request.')
@@ -138,16 +144,17 @@ def create_agent_server(registry,port=DEFAULT_AGENT_PORT,gate=None,ipv6=True,ipv
                         if k in data:raise ValueError('Duplicate JSON field.')
                         data[k]=v
                     return data
-                data=json.loads(raw,object_pairs_hook=unique,parse_float=Decimal,parse_constant=lambda _:(_ for _ in ()).throw(ValueError('Non-finite JSON number.')))
+                data=json.loads(raw,object_pairs_hook=unique,parse_float=float if self.path=='/agent/v2/exchange' else Decimal,parse_constant=lambda _:(_ for _ in ()).throw(ValueError('Non-finite JSON number.')))
                 if not isinstance(data,dict):raise ValueError('Expected an object.')
                 with gate.access() if gate else nullcontext():
                     if self.path=='/agent/v1/register':
                         if not {'mac','hostname'}<=set(data) or set(data)-{'mac','hostname','rpc'}:raise ValueError('Expected mac, hostname and optional RPC capabilities.')
                         return self.reply(registry.register(data['mac'],data['hostname'],data.get('rpc')))
-                    if self.path not in ('/agent/v1/heartbeat','/agent/v1/disconnect','/agent/v1/poll','/agent/v1/ack','/agent/v1/result'):return self.reply({'error':'Not found'},404)
+                    if self.path not in ('/agent/v1/heartbeat','/agent/v1/disconnect','/agent/v1/poll','/agent/v1/ack','/agent/v1/result','/agent/v2/exchange'):return self.reply({'error':'Not found'},404)
                     auth=self.headers.get('Authorization','')
                     if not auth.startswith('Bearer '):raise PermissionError('Connection token required.')
                     token=auth[7:]
+                    if self.path=='/agent/v2/exchange':return self.reply(registry.hub.exchange(token,data))
                     if self.path=='/agent/v1/poll':
                         if set(data)-{'wait_seconds'}:raise ValueError('Unexpected poll fields.')
                         # Do not hold the profile gate during a long poll: reset

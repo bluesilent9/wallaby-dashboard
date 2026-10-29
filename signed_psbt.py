@@ -108,6 +108,17 @@ def ecdsa(sig,pub,digest):
     s=int.from_bytes(der[offset+2:],'big')
     if s>0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0 or not key.verify(parsed,digest):raise ValueError('Invalid transaction signature.')
 
+def vault_witness_policy(script):
+    if len(script)<38 or script[:1]!=b'\x21' or script[34:35]!=b'\xad' or script[-1:]!=b'\xb1':raise ValueError('Only a single-key mandatory-height vault input is supported.')
+    pub=script[1:34];number=script[35:-1]
+    if len(number)==1 and 0x51<=number[0]<=0x60:height=number[0]-0x50
+    elif number and 1<=number[0]<=5 and len(number)==number[0]+1:height=int.from_bytes(number[1:],'little',signed=True)
+    else:raise ValueError('Invalid vault height encoding.')
+    from vendor.embit.descriptor import Descriptor
+    expected=Descriptor.from_string('wsh(and_v(v:pk('+pub.hex()+'),after('+str(height)+')))').witness_script().data
+    if not 0<height<500000000 or script!=expected:raise ValueError('Unsupported vault height policy.')
+    return pub,height
+
 def verify_input(base,index,fields,spent):
     """Return only validated final script/witness fields, never uploaded metadata."""
     tx=base['tx'];spk=spent[index].script_pubkey;raw=spk.data;kind=spk.script_type()
@@ -125,6 +136,20 @@ def verify_input(base,index,fields,spent):
             digest=tx.sighash_taproot(index,[v.script_pubkey for v in spent],[v.value for v in spent],sighash=sighash)
             if not ec.PublicKey.from_xonly(raw[2:]).schnorr_verify(ec.SchnorrSig(sig[:64]),digest):raise ValueError('Invalid Taproot signature.')
         return {b'\x08':Witness([candidates[0]]).serialize()}
+    if kind=='p2wsh':
+        if final_script:raise ValueError('Native vault inputs must have empty scriptSig.')
+        stack=witness_items(final_witness) if final_witness is not None else None
+        script=fields.get(b'\x05') or (stack[-1] if stack else b'')
+        if stack is not None and len(stack)!=2:raise ValueError('Unsupported vault signature witness.')
+        if hashes.sha256(script)!=raw[2:]:raise ValueError('Vault witness does not match its output.')
+        pub,height=vault_witness_policy(script)
+        if tx.locktime<height or tx.locktime>=500000000 or tx.vin[index].sequence==0xffffffff:raise ValueError('The transaction does not satisfy the vault height lock.')
+        pairs=([(pub,stack[0])] if stack else [])+partial
+        if not pairs:raise ValueError('This vault input is unsigned.')
+        for key,sig in pairs:
+            if key!=pub:raise ValueError('The signing key does not control this vault.')
+            ecdsa(sig,key,tx.sighash_segwit(index,Script(script),spent[index].value))
+        return {b'\x08':Witness([pairs[0][1],script]).serialize()}
     if b'\x13' in fields or b'\x03' in fields and fields[b'\x03']!=b'\x01\x00\x00\x00':raise ValueError('Unexpected signature hash or Taproot data.')
     pairs=list(partial);redeem=None
     if kind in ('p2wpkh','p2sh'):
@@ -195,3 +220,11 @@ def combine(original,uploads,input_wallets):
         if not fields:raise ValueError('Every sending wallet must provide its signed PSBT first.')
         fields={bytes.fromhex(k):bytes.fromhex(v) for k,v in fields.items()};proof=verify_input(base,i,fields,spent);base['inputs'][i].update(proof)
     return base64.b64encode(serialize(base)).decode()
+
+
+def final_transaction(encoded):
+    document=decode(base64.b64decode(encoded,validate=True));spent=utxos(document);tx=document['tx']
+    for index,fields in enumerate(document['inputs']):
+        proof=verify_input(document,index,fields,spent);tx.vin[index].script_sig=Script(proof.get(b'\x07',b''))
+        if b'\x08' in proof:tx.vin[index].witness=Witness.parse(proof[b'\x08'])
+    return tx

@@ -13,6 +13,11 @@ _CACHE={};_LOCK=threading.Lock()
 
 def known_scripts(chain):
     result={w['id']:set() for w in chain['wallets']}
+    if 'wallet_outputs' in chain:
+        for outpoint,uid in chain['wallet_outputs'].items():
+            ident,index=outpoint.rsplit(':',1);tx=chain['transactions'].get(ident)
+            if uid in result and tx:result[uid].add(tx['outputs'][int(index)]['script'])
+        return result
     for w in chain['wallets']:
         for r in w['records']:
             tx=chain['transactions'].get(r['txid'])
@@ -22,7 +27,8 @@ def known_scripts(chain):
         for r in w['records']:groups.setdefault(r['txid'],[]).append(r)
         for ident,rows in groups.items():
             if not any(r['sats']<0 for r in rows):continue
-            tx=chain['transactions'][ident]
+            tx=chain['transactions'].get(ident)
+            if not tx:continue  # Economic C1 records are not Bitcoin transactions.
             result[w['id']].update(i['script'] for i in tx['inputs'])
             sent={r['output_index'] for r in rows if r['sats']<0 and not r['fee_only']}
             result[w['id']].update(o['script'] for n,o in enumerate(tx['outputs']) if n not in sent and o['value']>0)
@@ -70,7 +76,7 @@ def dust_limit(script):
     raw=script.data;spend=67 if script.script_type() in ('p2wpkh','p2wsh','p2tr') else 148
     return 3*(8+compact_size(len(raw))+len(raw)+spend)
 
-def plan(edges,catalog,coins,change_scripts=None,details=False):
+def plan(edges,catalog,coins,change_scripts=None,details=False,fixed=None):
     wallets={w['id']:w for w in catalog['wallets']};payments={};rates={};maxima={};incoming=set();pairs=set()
     edges=[dict(e) for e in edges]
     for index,edge in enumerate(edges):
@@ -118,7 +124,7 @@ def plan(edges,catalog,coins,change_scripts=None,details=False):
                 selected[uid].append(ordered[uid][len(selected[uid])])
         # A conservative change slot stays in the size bound even when an exact-spend
         # normal wallet ends with zero change. Maximum wallets have no change slot.
-        size=estimate_size([c for rows in selected.values() for c in rows],out_scripts+[change[u].data for u in sources if u not in maxima])
+        size=estimate_size([c for rows in selected.values() for c in rows]+(fixed or {}).get('inputs',[]),out_scripts+[change[u].data for u in sources if u not in maxima]+(fixed or {}).get('outputs',[]))
         updated=fee_shares({uid:rates.get(uid,Decimal(0)) for uid in sources},size)
         if not all(sum(c['value'] for c in selected[u])>=payments.get(u,0)+updated.get(u,0)+(1 if u in maxima else 0) for u in sources):
             shares=updated;continue
@@ -141,7 +147,8 @@ def plan(edges,catalog,coins,change_scripts=None,details=False):
     for e in edges:
         if e['to']!='network-fee' and int(e['amount_sats']):
             address=wallets[e['to']]['address'];outputs[address]=outputs.get(address,0)+int(e['amount_sats'])
-    ready,message=continuation_status(outputs,sum(shares.values()))
+    ready,message=continuation_status(outputs or (fixed or {}).get('payments',{}),sum(shares.values())+(fixed or {}).get('fee_sats',0))
+    if sum(outputs.values())+sum((fixed or {}).get('payments',{}).values())>2100000000000000:ready,message=False,'Payment outputs exceed Bitcoin’s maximum supply.'
     if size>100000:ready,message=False,'The transaction exceeds the standard size limit. Reduce its inputs or outputs.'
     result={'can_continue':ready,'validation_message':message,'vbytes':size,'total_fee_sats':str(sum(shares.values())),'wallet_fees_sats':{uid:str(n) for uid,n in shares.items()},'maximum_amounts':maximum_amounts,'confirmed_balances_sats':{u:str(sum(c['value'] for c in ordered[u])) for u in sources},'combined_rate':str(sum(rates.values(),Decimal(0))),'input_count':sum(len(c) for c in selected.values()),'change_outputs':len(changes),'estimated':True,'basis':'Confirmed public UTXOs; conservative signed input sizes. Maximum spends every confirmed spendable input and has no change.'}
     if details:result.update(selected=selected,changes=changes,outputs=outputs,resolved_edges=edges)

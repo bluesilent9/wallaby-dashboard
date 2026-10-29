@@ -125,6 +125,7 @@ class Session:
             if self.status in {'running','waiting'}:raise ValueError('Cancel the active job before switching users.')
             user=FamilyStore(self.preferences_path).user(user_id) if user_id else None
             if user_id and not user:raise ValueError('User no longer exists.')
+            if self.node_registry:self.node_registry.hub.clear_lease(self)
             self.cancel();self.last_job_error=None;self.user_id=user_id;self.presence_seen=time.monotonic();self.presence_activity=self.presence_seen;self.presence_connected=bool(user_id);self.report=None;self.job_result=None;self.events=[];self.pending=None;self.status='idle';self.sequence=0;self.activity_started=False;self.inventory=[];self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
             self.transaction_refresh_context=None;self.transaction_refresh_scanned=False;self.ownership_completed_utc=None;self.descriptor_fingerprint=None;self.bitaroo_as_of_date=None;self.restore_error='';self.uploads={};self.settings={};shutil.rmtree(self.input_dir,ignore_errors=True);self.input_dir.mkdir(parents=True,exist_ok=True)
             self.workspace_dirty=False;self.workspace_stamp=None;self.report_generation=None
@@ -132,6 +133,7 @@ class Session:
     def close(self):
         with self.lock:
             if self.closed:return
+            if self.node_registry:self.node_registry.hub.clear_lease(self)
             self.cancel();self.closed=True
             if self.process:
                 try:self.process.wait(timeout=3)
@@ -460,6 +462,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                             session.rpc_logged.add(state['id']);session.record_activity('Nodes: '+state['method']+' '+state['state']+' ('+state['id']+').',session.user_id)
                         return self.json(state)
                     except ValueError as exc:return self.json({'error':str(exc)},400)
+                if path=='/api/vaults':
+                    if not session.access()['ownership_ready']:return self.json({'error':'Complete Ownership first.'},400)
+                    return self.json(sessions.nodes.vaults.snapshot())
                 if path=='/api/nodes':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     state=sessions.nodes.snapshot();sessions.nodes.notifications(session.user_id,read=True)
@@ -497,6 +502,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                             return self.json(self.notices(session))
                         if path=='/api/transactions':return self.json({'transactions':workflows.active(session.user_id)})
                         ident=parse_qs(urlsplit(self.path).query).get('id',[None])[0];job=workflows.job(session.user_id,ident)
+                        if path in ('/api/transaction','/api/transaction/status') and job.get('agent_signing'):
+                            from agent_transactions import signing_state
+                            return self.json(signing_state(sessions.nodes.hub,session.user_id,ident))
                         if path=='/api/transaction':return self.json(workflows.public_job(session.user_id,ident))
                         if path=='/api/transaction/status':return self.json(workflows.status(session.user_id,ident))
                         if job['cancelled'] or job.get('completed'):raise ValueError('This transaction is closed. Use Transaction Templates to prepare another transaction.')
@@ -580,6 +588,15 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     return self.json(session.upload(slot,name,body))
                 data=json.loads(body or b'{}',parse_float=Decimal) if path=='/api/nodes/rpc' else json.loads(body or b'{}')
                 store=FamilyStore(session.preferences_path)
+                if path in ('/api/builder/agent-lease','/api/builder/agent-leave','/api/builder/vault-prepare','/api/builder/vault-estimate','/api/transaction/sign','/api/transaction/broadcast'):
+                    if not session.user():raise ValueError('Select a family user first.')
+                    hub=sessions.nodes.hub
+                    if path.endswith('/agent-lease'):return self.json(hub.lease(session,data.get('node_id'),data.get('draft_id')))
+                    if path.endswith('/agent-leave'):hub.clear_lease(session);return self.json({'closed':True})
+                    from agent_transactions import prepare_export,queue_sign,queue_broadcast
+                    if path.endswith(('/vault-prepare','/vault-estimate')):return self.json(prepare_export(hub,session,data.get('export_id'),data.get('diagram'),path.endswith('/vault-estimate')))
+                    if path.endswith('/sign'):return self.json(queue_sign(hub,session,data.get('id'),data.get('wallet_id'),data.get('node_id')))
+                    return self.json(queue_broadcast(hub,session,data.get('id'),data.get('node_id')))
                 if path=='/api/nodes/rpc':
                     if not session.user():raise ValueError('Select a family user first.')
                     if not isinstance(data,dict) or not {'node_id','method'}<=set(data) or set(data)-{'node_id','method','params','wallet','timeout_seconds'}:raise ValueError('Invalid node RPC request.')

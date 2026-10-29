@@ -70,7 +70,7 @@ def encode_psbt(result,change):
     return base64.b64encode(payload).decode(),tx
 
 
-def construct(session,catalog,edges,reserved):
+def construct(session,catalog,edges,reserved,fixed=None):
     store=DescriptorStore(session.preferences_path).read();chain=saved_history(session.preferences_path,store)
     ids={resource_id('descriptor',w['id']):w['id'] for w in store['wallets']}
     sources={e['from'] for e in edges if e.get('max') or int(e['amount_sats']) or e['fee_rate'].strip('0.')}
@@ -96,7 +96,7 @@ def construct(session,catalog,edges,reserved):
         if not found:raise ValueError('Connect the funding wallet node before constructing a transaction.')
         choice=public_change_candidate(store,chain,ids[uid],reserved);spk,derived,key,index,origin=choice
         reserved[key]=index+1;change[uid]=choice
-    result=plan(edges,catalog,coins,{u:v[0] for u,v in change.items()},details=True)
+    result=plan(edges,catalog,coins,{u:v[0] for u,v in change.items()},details=True,fixed=fixed)
     if not result['can_continue']:raise ValueError(result['validation_message'])
     psbt,tx=encode_psbt(result,change)
     summary={k:v for k,v in result.items() if k not in ('selected','changes','outputs','resolved_edges')}
