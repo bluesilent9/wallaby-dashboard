@@ -89,6 +89,7 @@ class RPCBroker:
         if type(timeout_seconds) not in (int,float) or not 1<=timeout_seconds<=3600:raise ValueError('RPC timeout must be from 1 to 3600 seconds.')
         with self.condition:
             self.registry._expire();self._maintain();self.reconcile()
+            if getattr(self.registry,'hub',None) and self.registry.hub.transfers.is_busy(node_id):raise ValueError('Wallet synchronisation is active. Retry this read after both Agents finish.')
             matches=[(t,c) for t,c in self.registry.connections.items() if c['node_id']==node_id]
             if len(matches)!=1 or not self._unique(matches[0][1]):raise ValueError('Node is disconnected or has a conflicting identity.')
             token,connection=matches[0]
@@ -98,6 +99,10 @@ class RPCBroker:
             ident=uuid.uuid4().hex;now=self.registry.clock();self.rows[ident]={'id':ident,'node_id':node_id,'method':method,'params':params,'wallet':wallet,'owner':owner,'priority':priority,'token':token,'state':'queued','created_utc':stamp(),'deadline':now+timeout_seconds,'timeout_seconds':timeout_seconds,'size':size};self.total_bytes+=size;self.condition.notify_all();return self.status(ident,owner)
     def _commands(self,token):
         connection=self._connection(token);self._maintain()
+        if getattr(self.registry,'hub',None) and self.registry.hub.transfers.is_busy(connection['node_id']):
+            for row in self.rows.values():
+                if row['token']==token and row['state']=='queued':self._finish(row,'failed',{'code':'synchronisation_busy','message':'Wallet synchronisation is active. Retry after both Agents finish.'})
+            return []
         if not self._unique(connection):return []
         commands=[]
         active=sum(r['token']==token and r['state'] in ('delivered','running') for r in self.rows.values())

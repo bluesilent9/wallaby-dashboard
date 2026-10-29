@@ -150,9 +150,11 @@ def accept_result(hub,state,node,kind,p):
     if not request or request['node_id']!=node or request['kind']!=expected:raise ValueError('Unsolicited Agent transaction result.')
     workflows=WorkflowStore.__new__(WorkflowStore);workflows.config=hub.config;workflows.path=data_directory(hub.config)/'transactions'/'workflows.json'
     data=workflows._read();row=data['jobs'].get(request['job_id'])
-    if not row or row.get('cancelled') or row.get('completed'):raise ValueError('The requested transaction is closed.')
+    # A local denial must still clear an outstanding Agent request after its
+    # Dashboard job was cancelled; it never revives or signs that job.
     if p['status'] in ('denied','error'):
         request.update(state=p['status'],message=str(p.get('message',''))[:1000]);return
+    if not row or row.get('cancelled') or row.get('completed'):raise ValueError('The requested transaction is closed.')
     if kind=='partial_sign_result':
         if p['status']!='signed' or set(p)-{'request_hash','status','psbt'} or not isinstance(p.get('psbt'),str) or len(p['psbt'])>2*1024*1024:raise ValueError('Return a bounded, partially signed PSBT.')
         assigned=row['input_wallets'];uid=request['wallet_id'];indices=[i for i,w in enumerate(assigned) if w==uid]

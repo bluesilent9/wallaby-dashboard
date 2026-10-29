@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 8 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev8_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 9 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev9_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -24,12 +24,18 @@ Verify Balances opens Wallet Balances. Cards share Ownership's vault/wallet/watc
 
 Fee Estimates use Core at the lowest request priority, pausing behind foreground jobs. The simplified pending/mined block view adapts Mempool's AGPL component code and includes TXID tracking. BTC/AUD and historical currency/market price services remain external; CPI, when needed, comes from the supplied file. Signing and broadcasting use capability-gated local Agent approvals, not unrestricted remote RPC.
 
+## Agent compatibility
+
+Use **[Agent V2 Development Build 7](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 9. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
+
+Transfers are queued alphabetically, one shared pair at a time. Ordinary node reads pause during transfer; heartbeats and results continue. Denied/failed operations are not repeated automatically. Close both local requests, reconcile Core and choose **New transfer attempt** on Nodes for a fresh challenge. See [the protocol](docs/AGENT_PROTOCOL.md) and [validation](VALIDATION.md) for scope and remaining physical-machine checks.
+
 ## Run from source
 
 Python 3.11 or later. Ubuntu/Kubuntu dependencies:
 
 ```sh
-sudo apt install python3 python3-pypdf python3-odf tzdata 7zip
+sudo apt install python3 python3-pypdf python3-odf tzdata 7zip openssh-client
 python3 launch_wallaby_bitcoin_dashboard.py --no-browser
 ```
 
@@ -41,9 +47,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev8`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev9`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev8_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev9_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 
@@ -89,4 +95,8 @@ This combined distribution is provided under GNU AGPL version 3. [Full licence](
 
 Nodes now distinguish connection from blockchain readiness. Vault cards use verified public policies and live node balances, with green/amber/red status and short unlock estimates. The Builder accepts fixed unsigned vault proposals, composes other wallets' payments before signing, and uses locally authorised Agent signature requests followed by combined-PSBT broadcast. Single and multiple senders use the same PSBT protocol.
 
-**Agent update required:** partial signing, local broadcast approval and peer wallet transfers are capability gated. Older Agents do not expose those actions; there is no unsafe fallback to their old sign-and-broadcast operation. Only the Dashboard is updated in this build. See [Agent protocol and integration requirements](docs/AGENT_PROTOCOL.md). Missing-wallet orchestration exchanges public manifests and peer IPv6 hints; private wallet transfers never pass through the Dashboard. Public vault records and pending requests are included in profile backups.
+That Build 8 integration boundary is completed in Build 9 with Agent Build 7.
+
+## Build 9
+
+The Dashboard verifies and relays a frozen signed public wallet snapshot bound to both peers, addresses, wallet policy and a fresh challenge. Only one pair is dispatched at a time, alphabetically. Temporary synchronisation busy responses preserve node status and delay inventory refresh. Duplicate delivery is idempotent; expired snapshots are not renewed, and failed/denied operations require an explicit new attempt. Requests, previews and outcomes survive restart/profile backup. Private wallet files travel directly between Agents after local approval, never through the Dashboard. Existing tax and Balance Trace calculations are unchanged.

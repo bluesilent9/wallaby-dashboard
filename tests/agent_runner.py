@@ -1,6 +1,7 @@
 """Run the real Agent in a separate interpreter so its policy modules stay isolated."""
-import sys,threading,time
+import sys,threading,time,os
 from pathlib import Path
+os.environ['XDG_CONFIG_HOME']=str(Path(sys.argv[2]).parent/'isolated-agent-config')
 sys.path.insert(0,sys.argv[1])
 import node_client
 node_client.adapter_mac=lambda:'02:80:00:00:00:01'

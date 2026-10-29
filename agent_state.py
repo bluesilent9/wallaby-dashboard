@@ -5,7 +5,7 @@ from vault_records import public_vault
 from signed_psbt import decode
 from transaction_templates import clean_diagram
 
-def validate(state,users):
+def validate(state,users,config=None):
     if not isinstance(state,dict) or set(state)!={'version','vaults','nodes','requests','exports','receipts'} or type(state['version']) is not int or state['version']!=1:raise ValueError('Invalid saved Agent exchange schema.')
     canonical(state)
     if any(not isinstance(state[k],dict) or len(state[k])>100000 for k in ('vaults','nodes','requests','exports','receipts')):raise ValueError('Invalid saved Agent record bounds.')
@@ -22,4 +22,9 @@ def validate(state,users):
     for row in state['requests'].values():
         if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction') or row.get('state') not in ('pending','complete','denied','error'):raise ValueError('Invalid saved Agent request.')
         if row.get('proposal'):canonical(row['proposal'])
+        if row.get('kind')=='wallet_transfer' and row.get('signed_preview'):
+            from wallet_preview import validate as validate_preview,verify,policies
+            payload=row['signed_preview'];p=row['proposal'];v=payload['preview']
+            proof=verify(config,payload,fresh=False) if config else validate_preview(payload,fresh=False)
+            if row['direction']!='send' or (v['transfer_id'],v['challenge'],v['sender_ipv6'],v['receiver_ipv6'])!=(p['transfer_id'],p['preview_challenge'],p['node_ipv6'],p['peer']['ipv6']) or policies(v['public_wallet'])!=policies(p['public_wallet']):raise ValueError('Saved preview does not match its frozen request.')
     return state

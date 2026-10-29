@@ -597,6 +597,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if path.endswith(('/vault-prepare','/vault-estimate')):return self.json(prepare_export(hub,session,data.get('export_id'),data.get('diagram'),path.endswith('/vault-estimate')))
                     if path.endswith('/sign'):return self.json(queue_sign(hub,session,data.get('id'),data.get('wallet_id'),data.get('node_id')))
                     return self.json(queue_broadcast(hub,session,data.get('id'),data.get('node_id')))
+                if path=='/api/nodes/transfers/retry':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    return self.json(sessions.nodes.hub.transfers.retry(data.get('transfer_id'),data.get('confirmed')))
                 if path=='/api/nodes/rpc':
                     if not session.user():raise ValueError('Select a family user first.')
                     if not isinstance(data,dict) or not {'node_id','method'}<=set(data) or set(data)-{'node_id','method','params','wallet','timeout_seconds'}:raise ValueError('Invalid node RPC request.')
