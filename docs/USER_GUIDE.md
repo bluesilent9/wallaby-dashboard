@@ -1,6 +1,6 @@
-> Build 3 workflow: Ownership Stage 3 ends with Verify Balances. Wallet Balances and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
+> Build 3 workflow: Ownership Stage 3 ends with Verify Balances. Wallets and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
 
-# Wallaby Bitcoin Dashboard — V1 Build 9
+# Wallaby Bitcoin Dashboard — V1 Build 10
 
 Extract the complete ZIP. Start the service with `./Start_Wallaby_Bitcoin_Dashboard.sh`, or:
 
@@ -20,13 +20,13 @@ The `tzdata` Python package in requirements.txt supplies IANA timezone rules on 
 
 Public descriptor derivation and raw transaction parsing are bundled; no Bitcoin Core installation or wallet unlock is needed on the dashboard server.
 
-## V1 Build 9 setup
+## V1 Build 10 setup
 
 1. Open **Administration**, then select or create a family user. The sidebar and header remain visible before login; other pages unlock after a user is selected.
 2. Connect each node's Wallaby Agent, load the desired wallets in Bitcoin Core, then open **Ownership** and select **Load Node Wallets**. Every connected node is queried over read-only RPC. Identical public locking descriptors identify wallet copies, independently of wallet names; matching copies share RPC work. Ownership suggests the first reporting node's name. Different wallets with identical names stay separate. Core wallet history is reconstructed through the same connected nodes; after success Ownership opens at Stage 2. No console exports, private keys or wallet unlock are needed. Unloaded wallets or missing RPC capabilities stop discovery with an actionable error rather than accepting a partial collection.
 3. Open **Ownership**. Provide historical complete-year and current-year statements together in the **Bitaroo PDFs** card for each family profile, plus the shared Exchanges ODS. Any logged-in user can provide the whole family’s data. A missing card is red, a supplied card is green; select **Non Bitaroo user** to disable that profile’s PDF card in grey. All cards must be complete or nonapplicable before loading records. Current-year statements are optional when either your browser's local date or UTC date is 30 June or 1 July. Other inputs remain required. Each Bitaroo period needs matching AUD/BTC statements. Optional price quotes, CPI and tax-context files remain available.
 4. Select **Load records and review ownership**. The dashboard reads the descriptor history already discovered, loads the other records and asks for each wallet's owner and SMSF status. Bitaroo account owners are fixed by their Stage 2 upload cards; exchanges cannot be marked as SMSF accounts. To refresh descriptor history, select Load Node Wallets in Stage 1; the old separate refresh checkbox is removed. Select Verify Balances to save assignments and trace the family’s current holdings.
-5. Address Book and CGT setup unlock. Choose a matching tolerance and build the report. It calculates all supplied family profiles and every financial year from the earliest record through the current year. Financial Year Totals and CGT Event History display **only the logged-in user**. Use their left/right year arrows; future years cannot be selected. The initial year uses the browser’s local year, with the previous-year exception on UTC 30 June / 1 July. Wallet Balances reuses each family owner’s known acquisition costs. Missing basis and SMSF costs can still be unavailable.
+5. Address Book and CGT setup unlock. Choose a matching tolerance and build the report. It calculates all supplied family profiles and every financial year from the earliest record through the current year. Financial Year Totals and CGT Event History display **only the logged-in user**. Use their left/right year arrows; future years cannot be selected. The initial year uses the browser’s local year, with the previous-year exception on UTC 30 June / 1 July. Wallets reuses each family owner’s known acquisition costs. Missing basis and SMSF costs can still be unavailable.
 
 The Bitcoin Core CSV and historical-wallet ODS upload workflows have been replaced by node wallet discovery. Live descriptor wallets retain Bitcoin Core's original source name and stable descriptor-based ID, with an editable display name saved in Ownership. Historical group names come from Core address labels and are read-only; exchange names come from their sheets.
 
@@ -89,7 +89,7 @@ There is **no saved allocation ledger**, and neither saved transaction templates
 
 Optional whole-return tax context now needs explicit user/year scope, so another person's return or a different year is never reused accidentally. The JSON format is `{"users": {"User name or ID": {"2026-27": {"basic_tax": "0", "basic_tax_without_gain": "0"}}}}`, with the existing optional calculation fields inside each year object. Use `{"users": {}}` when no context is supplied. User names are matched without case sensitivity; stable profile IDs are also accepted.
 
-V1 Build 9 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
+V1 Build 10 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
 
 ## Descriptor wallet display names
 
@@ -119,9 +119,9 @@ Enter a TXID and select Track Transaction. A mempool transaction marks the next 
 
 The block component is adapted from Mempool's AGPL code, with Wallaby's local data adapter, simplified controls and colours. Original pinned component sources and attribution are under `vendor/mempool`. The running service offers corresponding application source at `/source.zip`. No Mempool logos or public API connections are included.
 
-## Wallet Balances
+## Wallets
 
-Verify Balances opens Wallet Balances after completing the family Balance Trace. Current holdings use the same joint-payment policies and cost reconstruction as CGT, without publishing a tax report. The card icon row shows vault, wallet/exchange, watch-only and SMSF metadata in the same priority order as Ownership. The tooltip shows only AUD Gain/Loss, Owner, SMSF, Purchase Price and acquisition Sources beneath the wallet name. Purchase Price is the retained AUD cost of the current Bitcoin, not the wallet's lifetime purchases. Missing basis remains unavailable, not zero. SMSFs are excluded from personal cost tracing.
+Verify Balances opens Wallets after completing the family Balance Trace. Current holdings use the same joint-payment policies and cost reconstruction as CGT, without publishing a tax report. The card icon row shows vault, wallet/exchange, watch-only and SMSF metadata in the same priority order as Ownership. The tooltip shows only AUD Gain/Loss, Owner, SMSF, Purchase Price and acquisition Sources beneath the wallet name. Purchase Price is the retained AUD cost of the current Bitcoin, not the wallet's lifetime purchases. Missing basis remains unavailable, not zero. SMSFs are excluded from personal cost tracing.
 
 ## Saved data and freshness
 
@@ -135,7 +135,7 @@ A fresh login restores the profile's last successful Ownership inputs and assign
 
 Run-age warnings refer to completed shared processes, using the viewing browser’s local calendar and timezone. The newest successful Ownership process for any family profile refreshes the family Ownership age; any successful family CGT run refreshes the CGT age. Failed/cancelled runs do not make data fresh. Upgrading a V151 saved report without a completion timestamp requires one new CGT run to establish that timestamp.
 
-On CGT Event History, CGT Report, Financial Year Totals, Wallet Balances, Transaction Builder and Vaults, one read notice is generated on visiting the page. Ownership warnings replace CGT warnings. The same notice appears on Notifications with its X disabled. A new run updates/removes the notice for each viewer; obsolete statement-coverage notices are retired when the new freshness check runs.
+On CGT Event History, CGT Report, Financial Year Totals, Wallets, Transaction Builder and Vaults, one read notice is generated on visiting the page. Ownership warnings replace CGT warnings. The same notice appears on Notifications with its X disabled. A new run updates/removes the notice for each viewer; obsolete statement-coverage notices are retired when the new freshness check runs.
 
 ## Access and packaging
 
@@ -170,7 +170,7 @@ Once every wallet card is green, the profile that started the transaction receiv
 
 Older prepared V143 transactions are checked against saved public descriptor history to establish input ownership. If that cannot be established unambiguously, reopen and prepare the transaction again.
 
-V1 Build 9 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
+V1 Build 10 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
 
 
 ## Cancelling construction
@@ -185,7 +185,7 @@ Receipt validation checks all supplied historical wallet records, including rece
 
 A supplied crypto-to-BTC trade now records the sold asset's CGT as well as the BTC acquisition. AUD disposal proceeds come from the supplied BTC consideration and the existing timestamped BTC/AUD lookup. No additional crypto/crypto or USD conversion is needed. Network fees in the sold asset create separate disposal components; the existing BTC acquisition basis includes the fee's incidental acquisition cost once. Non-BTC amounts keep their own unit, without Bitcoin pipe notation.
 
-The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 9 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
+The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 10 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
 
 Prompt headings now use Exchange Tracer and Wallet Tracer. The wallaby logo retains its shape with a four-tile dashboard emblem.
 
@@ -205,4 +205,12 @@ Vaults lists only detected vault wallets. Hover amber cards for missing funds, i
 
 In a Builder diagram, select the source Agent to receive an unsigned vault intent. Its fixed red arrows cannot be changed; add other wallets' payments alongside it before Next. All wallet owners then review the same final PSBT on their selected local Agents. Signing cards are red until signatures have been checked; each becomes green and disabled when complete. Only the transaction creator can request **Broadcast combined PSBT** after every signature is verified. Broadcast still requires local Agent approval. Private keys and wallet passwords stay on the signing computer.
 
-These features work with Agent V2 Development Build 7 advertising the documented capabilities. An empty node list explains that readiness, private-key wallet matching or Agent support is missing. No private wallet is transferred through the Dashboard. Wallet synchronisation uses Agent Build 7 and Dashboard Build 9 signed previews. Compare the sender fingerprint and snapshot code directly between Agent screens. Nodes displays queued/active/outcome states. Failed attempts require closing both local requests and reconciling Core before choosing New transfer attempt. Private files never pass through Dashboard.
+These features work with Agent V2 Development Build 8 advertising the documented capabilities. An empty node list explains that readiness, private-key wallet matching or Agent support is missing. No private wallet is transferred through the Dashboard. Wallet synchronisation uses Agent Build 8 and Dashboard Build 10 signed metadata previews. Compare the sender fingerprint and snapshot code directly between Agent screens. Nodes displays queued/active/outcome states. Failed attempts require closing both local requests and reconciling Core before choosing New transfer attempt. Private files never pass through Dashboard.
+
+## Build 10 Wallets and synchronisation
+
+Wallets replaces Wallet Balances. All Owners is the initial owner filter. Active Wallets starts selected and Extinct Wallets starts clear; changing filters never leaves both clear. Historical archive cards are grey and show the first/last confirmed activity years (one year when equal), without AUD balance or hypothetical profit/loss. Multiple addresses carrying the same base label form one old wallet. Separate labels in the same Core archive remain separate wallets and owners.
+
+Make Extinct requests local Agent review for a wallet owned by the logged-in user. Its execution needs a later Agent advertising wallet_retirement; current Agent Build 8 will explain that an update is needed. The Agent must confirm an empty wallet and complete history, preserve historical labels, and must not delete the wallet or keys. Refresh Ownership after the approved conversion. Retirement does not mean lost keys or create a tax loss.
+
+Use Agent V2 Development Build 8 or newer. Nodes shows all relevant missing-wallet requests and non-dismissible history-recovery warnings. Review the local Agent Synchronisation page to authorise work. Data received with incomplete history remains incomplete until recovery is locally approved and verified. Final receiver completion clears both paired request lists; it does not resend the wallet. The Dashboard cannot restart Core, disable pruning or authorise a transfer.

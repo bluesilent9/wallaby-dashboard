@@ -465,6 +465,10 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/vaults':
                     if not session.access()['ownership_ready']:return self.json({'error':'Complete Ownership first.'},400)
                     return self.json(sessions.nodes.vaults.snapshot())
+                if path=='/api/wallets/retirement-options':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    from wallet_retirement import candidates
+                    return self.json(candidates(sessions.nodes.hub,session.user_id))
                 if path=='/api/nodes':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     state=sessions.nodes.snapshot();sessions.nodes.notifications(session.user_id,read=True)
@@ -597,6 +601,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if path.endswith(('/vault-prepare','/vault-estimate')):return self.json(prepare_export(hub,session,data.get('export_id'),data.get('diagram'),path.endswith('/vault-estimate')))
                     if path.endswith('/sign'):return self.json(queue_sign(hub,session,data.get('id'),data.get('wallet_id'),data.get('node_id')))
                     return self.json(queue_broadcast(hub,session,data.get('id'),data.get('node_id')))
+                if path=='/api/wallets/retire':
+                    from wallet_retirement import propose
+                    return self.json(propose(sessions.nodes.hub,session,data.get('wallet_id'),data.get('node_id'),data.get('confirmed')))
                 if path=='/api/nodes/transfers/retry':
                     if not session.user():raise ValueError('Select a family user first.')
                     return self.json(sessions.nodes.hub.transfers.retry(data.get('transfer_id'),data.get('confirmed')))

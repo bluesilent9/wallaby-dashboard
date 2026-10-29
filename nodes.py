@@ -59,7 +59,7 @@ class NodeRegistry:
         for token in list(self.connections):
             if now-self.connections[token]['seen']>=DISCONNECT_SECONDS:
                 self.rpc.disconnected(token);del self.connections[token]
-    def register(self,mac,hostname,rpc=None):
+    def register(self,mac,hostname,rpc=None,agent_version=None):
         mac,hostname=identity(mac,hostname);methods=capabilities(rpc)
         with self.lock,storage_lock(self.config):
             self._expire()
@@ -70,7 +70,7 @@ class NodeRegistry:
                 node={'id':uuid.uuid4().hex,'mac':mac,'hostname':hostname,'first_seen_utc':stamp,'last_seen_utc':stamp};data['nodes'].append(node)
             elif not any(c['mac']==mac for c in self.connections.values()):node['hostname']=hostname
             node['last_seen_utc']=stamp;self._write(data)
-            token=secrets.token_urlsafe(32);self.connections[token]={'node_id':node['id'],'mac':mac,'hostname':hostname,'seen':self.clock(),'rpc_methods':methods,'token':token}
+            token=secrets.token_urlsafe(32);self.connections[token]={'node_id':node['id'],'mac':mac,'hostname':hostname,'seen':self.clock(),'rpc_methods':methods,'token':token,'agent_version':agent_version}
             self._conflicts()
             return {'protocol':'wallaby-agent','version':1,'connection_token':token,'node_id':node['id'],'heartbeat_seconds':HEARTBEAT_SECONDS,'disconnect_after_seconds':DISCONNECT_SECONDS,'capabilities':['presence']+(['rpc'] if methods else []),'rpc_methods':methods,'commands':[]}
     def heartbeat(self,token,disconnect=False):
@@ -95,6 +95,8 @@ class NodeRegistry:
             key='node-conflict-'+hashlib.sha256((kind+':'+value).encode()).hexdigest()[:24]
             prior=self.warnings.get(key)
             active[key]=prior or {'id':key,'kind':'node_conflict','severity':'red','dismissible':False,'target':'nodes','created_utc':utc(),'text':'Warning: Conflicting node '+('MAC address' if kind=='mac' else 'hostname')+' ('+value+'). This could either be spoofing or something is misconfigured.'}
+        for warning in self.hub.sync_warnings():
+            active[warning['id']]=self.warnings.get(warning['id'],warning)
         self.warnings=active
         self.rpc.reconcile()
         active_ids=set(active)
@@ -149,12 +151,12 @@ def create_agent_server(registry,port=DEFAULT_AGENT_PORT,gate=None,ipv6=True,ipv
                 with gate.access() if gate else nullcontext():
                     if self.path=='/agent/v1/register':
                         if not {'mac','hostname'}<=set(data) or set(data)-{'mac','hostname','rpc'}:raise ValueError('Expected mac, hostname and optional RPC capabilities.')
-                        return self.reply(registry.register(data['mac'],data['hostname'],data.get('rpc')))
+                        return self.reply(registry.register(data['mac'],data['hostname'],data.get('rpc'),self.headers.get('X-Wallaby-Agent-Version')))
                     if self.path not in ('/agent/v1/heartbeat','/agent/v1/disconnect','/agent/v1/poll','/agent/v1/ack','/agent/v1/result','/agent/v2/exchange'):return self.reply({'error':'Not found'},404)
                     auth=self.headers.get('Authorization','')
                     if not auth.startswith('Bearer '):raise PermissionError('Connection token required.')
                     token=auth[7:]
-                    if self.path=='/agent/v2/exchange':return self.reply(registry.hub.exchange(token,data))
+                    if self.path=='/agent/v2/exchange':return self.reply(registry.hub.exchange(token,data,self.headers.get('X-Wallaby-Agent-Version')))
                     if self.path=='/agent/v1/poll':
                         if set(data)-{'wait_seconds'}:raise ValueError('Unexpected poll fields.')
                         # Do not hold the profile gate during a long poll: reset

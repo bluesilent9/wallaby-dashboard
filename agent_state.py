@@ -14,17 +14,23 @@ def validate(state,users,config=None):
         if ident!=digest(row['public']) or not isinstance(row['sources'],list):raise ValueError('Invalid saved vault identity.')
     for row in state['nodes'].values():
         if row.get('ipv6'):ipv6(row['ipv6'])
+        if 'sync_revision' in row:
+            if type(row['sync_revision']) is not int or row['sync_revision']<0 or not isinstance(row.get('sync_snapshot'),list) or len(row['sync_snapshot'])>128:raise ValueError('Invalid saved synchronization list.')
+            seen=set()
+            for p in row['sync_snapshot']:
+                if p.get('kind')!='wallet_transfer' or p.get('transfer_version')!=2 or p.get('transfer_id') in seen:raise ValueError('Invalid saved synchronization row.')
+                seen.add(p['transfer_id']);canonical(p)
     for row in state['exports'].values():
         if row.get('user_id') not in users:raise ValueError('Saved vault proposal refers to an unknown profile.')
         public_vault(row['vault']);clean_diagram(row['diagram']);doc=decode(base64.b64decode(row['psbt'],validate=True))
         if len(doc['inputs'])!=len(row['input_wallets']):raise ValueError('Invalid saved vault funding assignments.')
         if any(any(k[0] in (2,7,8,19,20) for k in f) for f in doc['inputs']):raise ValueError('A composable vault proposal must remain unsigned.')
     for row in state['requests'].values():
-        if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction') or row.get('state') not in ('pending','complete','denied','error'):raise ValueError('Invalid saved Agent request.')
+        if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction','wallet_retire') or row.get('state') not in ('pending','complete','denied','error','recovery_required'):raise ValueError('Invalid saved Agent request.')
         if row.get('proposal'):canonical(row['proposal'])
         if row.get('kind')=='wallet_transfer' and row.get('signed_preview'):
             from wallet_preview import validate as validate_preview,verify,policies
             payload=row['signed_preview'];p=row['proposal'];v=payload['preview']
             proof=verify(config,payload,fresh=False) if config else validate_preview(payload,fresh=False)
-            if row['direction']!='send' or (v['transfer_id'],v['challenge'],v['sender_ipv6'],v['receiver_ipv6'])!=(p['transfer_id'],p['preview_challenge'],p['node_ipv6'],p['peer']['ipv6']) or policies(v['public_wallet'])!=policies(p['public_wallet']):raise ValueError('Saved preview does not match its frozen request.')
+            if row['direction']!='send' or (v['transfer_id'],v['challenge'],v['sender_ipv6'],v['receiver_ipv6'])!=(p['transfer_id'],p['preview_challenge'],p['node_ipv6'],p['peer']['ipv6']) or policies(v['public_wallet'],True)!=policies(p['public_wallet'],True):raise ValueError('Saved preview does not match its frozen request.')
     return state

@@ -40,7 +40,7 @@ class Setup(unittest.TestCase):
         self.node_wallet={'name':self.wallet['name'],'raw':self.wallet['raw'],'id':self.wallet['id'],'private_keys_enabled':True,'scanning':False}
         self.hub.inventories[self.a['node_id']]={'wallets':[copy.deepcopy(self.node_wallet)],'complete':True};self.hub.inventories[self.b['node_id']]={'wallets':[dict(copy.deepcopy(self.node_wallet),name='different_watch_name',private_keys_enabled=False)],'complete':True}
     def register(self,mac,host):
-        c=self.registry.register(mac,host,{'version':1,'methods':sorted(METHODS)});self.registry.health.values[c['connection_token']]=classify({'chain':'main','blocks':999000,'headers':999000,'initialblockdownload':False});return c
+        c=self.registry.register(mac,host,{'version':1,'methods':sorted(METHODS)},'2.0.0~dev8');self.registry.health.values[c['connection_token']]=classify({'chain':'main','blocks':999000,'headers':999000,'initialblockdownload':False});return c
     def exchange(self,node,items=None,known=None,caps=None,**extra):
         return self.hub.exchange(node['connection_token'],{'version':1,'outbox':items or [],'known_vaults':known or [],'capabilities':caps or [],**extra})
     def item(self,kind,payload):return {'id':digest({'kind':kind,'payload':payload}),'kind':kind,'payload':payload}
@@ -66,7 +66,7 @@ class HealthTests(unittest.TestCase):
 
 class ExchangeTests(Setup):
     def test_legacy_agent_exchange_receives_vault_sync_without_new_unsupported_proposals(self):
-        item=self.item('vault_public',self.vault);out=self.exchange(self.a,[item]);self.assertEqual(set(out),{'version','accepted','proposals'});self.assertEqual(out['accepted'],[item['id']]);other=self.exchange(self.b);self.assertEqual(other['proposals'],[{'kind':'vault_sync','vault':self.vault}]);self.assertEqual(self.exchange(self.a,[item])['accepted'],[item['id']]);self.assertEqual(len(self.hub.read()['vaults']),1)
+        item=self.item('vault_public',self.vault);out=self.exchange(self.a,[item]);self.assertEqual(set(out),{'version','accepted','proposals'});self.assertEqual(out['accepted'],[item['id']]);other=self.exchange(self.b);self.assertIn({'kind':'vault_sync','vault':self.vault},other['proposals']);self.assertEqual(self.exchange(self.a,[item])['accepted'],[item['id']]);self.assertEqual(len(self.hub.read()['vaults']),1)
     def test_content_hash_invalid_policy_and_private_material_fail_without_acknowledgement(self):
         item=self.item('vault_public',self.vault);item['id']='0'*64
         with self.assertRaises(ValueError):self.exchange(self.a,[item])
@@ -75,11 +75,11 @@ class ExchangeTests(Setup):
         self.assertFalse(self.hub.read()['vaults'])
     def test_missing_wallet_pairs_requests_and_never_confuses_private_and_watch_replicas(self):
         self.exchange(self.a,caps=['wallet_transfer','node_identity'],node_info={'ipv6':'fd12::1'});self.exchange(self.b,caps=['wallet_transfer','node_identity'],node_info={'ipv6':'fd12::2'});self.assertFalse(self.hub.read()['requests'])
-        self.hub.inventories[self.b['node_id']]['wallets']=[];out=self.exchange(self.b,caps=['wallet_transfer'],node_info={'ipv6':'fd12::2'});receive=next(p for p in out['proposals'] if p['kind']=='wallet_transfer');send=next(p for p in self.exchange(self.a,caps=['wallet_transfer'],node_info={'ipv6':'fd12::1'})['proposals'] if p['kind']=='wallet_transfer');self.assertEqual(receive['direction'],'receive');self.assertEqual(send['direction'],'send');self.assertEqual(send['peer']['ipv6'],'fd12::2');self.assertEqual(receive['peer']['ipv6'],'fd12::1');self.assertEqual(send['transfer_id'],receive['transfer_id']);self.assertNotIn('xprv',json.dumps(out));self.assertEqual(len(self.hub.read()['requests']),2)
+        self.hub.inventories[self.b['node_id']]['wallets']=[];out=self.exchange(self.b,caps=['wallet_transfer'],node_info={'ipv6':'fd12::2'});receive=next(p for p in out['proposals'] if p['kind']=='wallet_sync_queue')['requests'][0];send=next(p for p in self.exchange(self.a,caps=['wallet_transfer'],node_info={'ipv6':'fd12::1'})['proposals'] if p['kind']=='wallet_sync_queue')['requests'][0];self.assertEqual(receive['direction'],'receive');self.assertEqual(send['direction'],'send');self.assertEqual(send['peer']['ipv6'],'fd12::2');self.assertEqual(receive['peer']['ipv6'],'fd12::1');self.assertEqual(send['transfer_id'],receive['transfer_id']);self.assertNotIn('xprv',json.dumps(out));self.assertEqual(len(self.hub.read()['requests']),2)
     def test_names_do_not_establish_wallet_identity_and_unloaded_inventory_cannot_create_requests(self):
         other=clean_wallet(public_wallet(self.wallet['name'],6));self.assertFalse(equivalent(self.wallet['raw'],other['raw']));self.hub.inventories[self.b['node_id']]={'complete':False,'wallets':[]};self.exchange(self.a);self.assertFalse(self.hub.read()['requests'])
     def test_address_requested_automatically_only_from_capable_agents(self):
-        self.assertEqual(self.exchange(self.a)['proposals'],[]);self.assertIn({'kind':'node_identity'},self.exchange(self.a,caps=['node_identity'])['proposals'])
+        self.assertFalse(any(p['kind']!='wallet_sync_queue' for p in self.exchange(self.a)['proposals']));self.assertIn({'kind':'node_identity'},self.exchange(self.a,caps=['node_identity'])['proposals'])
     def test_pruned_missing_history_flag_uses_retained_chain_time(self):
         self.hub.inventories[self.b['node_id']]['wallets']=[];self.registry.health.values[self.b['connection_token']].update(pruned=True,prune_time=1800000000,pruneheight=990000);self.exchange(self.b);rows=self.hub.read()['requests'].values();self.assertTrue(all(r['requires_blockchain_redownload'] for r in rows))
     def test_unknown_result_cannot_turn_a_signing_card_green(self):

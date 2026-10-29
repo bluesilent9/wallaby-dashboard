@@ -56,4 +56,6 @@ class BalanceStore:
             owned=row.get('owner_name')==user['name'] and not row.get('smsf')
             row['ownership']='personal' if owned else 'external'
             if row['kind']=='exchange':row['name']='Bitaroo Exchange' if owned else 'Bitaroo Exchange · '+row.get('owner_name','Unknown')
+        from wallet_views import extinct_cards
+        balance['extinct_wallets']=extinct_cards(self.config)
         return {'taxpayer':user['name'],'balances':balance}
