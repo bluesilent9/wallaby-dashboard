@@ -14,6 +14,6 @@ Authoritative synchronization queues, signed public previews, labelled historica
 
 The DEB starts and enables the service on installation. Access remains through authorised SSH tunnels. [User guide](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/USER_GUIDE.md) · [Protocol](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/AGENT_PROTOCOL.md) · [Validation](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/VALIDATION.md).
 
-Validation: 120 Python tests, seven interface regression programs, actual Agent setup/completion verification, four policy types independently accepted by isolated Bitcoin Core 31, and packaged IPv4/IPv6 startup checks. Real optical media, production local approvals and physical backup restoration require deployment testing. Tax working papers depend on complete supplied evidence and review.
+Validation: 122 Python tests, seven interface regression programs, actual Agent setup/completion verification, four policy types independently accepted by isolated Bitcoin Core 31, and packaged IPv4/IPv6 startup checks. Real optical media, production local approvals and physical backup restoration require deployment testing. Tax working papers depend on complete supplied evidence and review.
 
 [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Report an issue](https://github.com/bluesilent9/wallaby-dashboard/issues). GNU AGPLv3; bundled components retain their notices. Application source remains on **Development**; this is not a Stable release.
