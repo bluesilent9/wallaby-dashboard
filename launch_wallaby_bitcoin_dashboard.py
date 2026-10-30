@@ -116,7 +116,10 @@ class Session:
         data=FamilyStore(self.preferences_path).snapshot();access=self.access(data);user=next((u for u in data['users'] if u['id']==self.user_id),None)
         active=WorkflowStore(self.preferences_path).active(self.user_id) if user else []
         latest=max(active,key=lambda row:row['created_utc'])['id'] if active else None
-        return {'balance_report':BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user) if user and access['ownership_ready'] else None,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
+        balance_report=BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user) if user and access['ownership_ready'] else None
+        from wallet_views import annotate_signers
+        annotate_signers(balance_report,self.node_registry.hub if self.node_registry else None)
+        return {'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
                 'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':[dict(item,**source_suggestions(item,data['users'])) for item in display_inventory(self.inventory,DescriptorStore(self.preferences_path).read())] if user else [],'inventory_ready':self.inventory_ready if user else False,
                 **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
                 'restore_error':self.restore_error,'settings':self.settings if user else {},'loaded_slots':{slot:([p.name for p in sorted(path.rglob('*')) if p.is_file()] if path.is_dir() else [path.name]) for slot,path in self.uploads.items()} if user else {}}
@@ -469,6 +472,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from wallet_retirement import candidates
                     return self.json(candidates(sessions.nodes.hub,session.user_id))
+                if path=='/api/wallet-builder':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    return self.json(sessions.nodes.hub.wallet_builder.snapshot())
                 if path=='/api/nodes':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     state=sessions.nodes.snapshot();sessions.nodes.notifications(session.user_id,read=True)
@@ -541,7 +547,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/':'index.html','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
@@ -592,6 +598,13 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     return self.json(session.upload(slot,name,body))
                 data=json.loads(body or b'{}',parse_float=Decimal) if path=='/api/nodes/rpc' else json.loads(body or b'{}')
                 store=FamilyStore(session.preferences_path)
+                if path.startswith('/api/wallet-builder/'):
+                    if not session.user():raise ValueError('Select a family user first.')
+                    setup=sessions.nodes.hub.wallet_builder
+                    if path.endswith('/discover'):return self.json(setup.discover())
+                    if path.endswith('/create'):return self.json(setup.start(session.user_id,data))
+                    if path.endswith('/cancel'):return self.json(setup.cancel(data.get('id')))
+                    raise ValueError('Unknown Wallet Builder operation.')
                 if path in ('/api/builder/agent-lease','/api/builder/agent-leave','/api/builder/vault-prepare','/api/builder/vault-estimate','/api/transaction/sign','/api/transaction/broadcast'):
                     if not session.user():raise ValueError('Select a family user first.')
                     hub=sessions.nodes.hub
@@ -599,7 +612,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if path.endswith('/agent-leave'):hub.clear_lease(session);return self.json({'closed':True})
                     from agent_transactions import prepare_export,queue_sign,queue_broadcast
                     if path.endswith(('/vault-prepare','/vault-estimate')):return self.json(prepare_export(hub,session,data.get('export_id'),data.get('diagram'),path.endswith('/vault-estimate')))
-                    if path.endswith('/sign'):return self.json(queue_sign(hub,session,data.get('id'),data.get('wallet_id'),data.get('node_id')))
+                    if path.endswith('/sign'):return self.json(queue_sign(hub,session,data.get('id'),data.get('wallet_id'),data.get('node_id'),data.get('signer_id')))
                     return self.json(queue_broadcast(hub,session,data.get('id'),data.get('node_id')))
                 if path=='/api/wallets/retire':
                     from wallet_retirement import propose

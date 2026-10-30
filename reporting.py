@@ -91,11 +91,12 @@ def render_html(report=None):
     """Use one bundled renderer for the live app and every saved/example report."""
     template=(ROOT/'index.html').read_text()
     template=template.replace('href="/assets/logo.svg"','href="data:image/svg+xml;base64,'+base64.b64encode((ROOT/'assets/logo.svg').read_bytes()).decode()+'"')
-    css=(ROOT/'assets/style.css').read_text()+'\n'+(ROOT/'assets/mempool_blocks.css').read_text();js=(ROOT/'assets/vaults.js').read_text()+'\n'+(ROOT/'assets/builder_values.js').read_text()+'\n'+(ROOT/'assets/builder.js').read_text()+'\n'+(ROOT/'assets/history.js').read_text()+'\n'+(ROOT/'assets/fees.js').read_text()+'\n'+(ROOT/'assets/node_blocks.js').read_text()+'\n'+(ROOT/'assets/family.js').read_text()+'\n'+(ROOT/'assets/descriptors.js').read_text()+'\n'+(ROOT/'assets/app.js').read_text()
+    css=(ROOT/'assets/style.css').read_text()+'\n'+(ROOT/'assets/mempool_blocks.css').read_text();js=(ROOT/'assets/vaults.js').read_text()+'\n'+(ROOT/'assets/builder_values.js').read_text()+'\n'+(ROOT/'assets/builder.js').read_text()+'\n'+(ROOT/'assets/history.js').read_text()+'\n'+(ROOT/'assets/fees.js').read_text()+'\n'+(ROOT/'assets/node_blocks.js').read_text()+'\n'+(ROOT/'assets/family.js').read_text()+'\n'+(ROOT/'assets/descriptors.js').read_text()+'\n'+(ROOT/'assets/wallet_builder.js').read_text()+'\n'+(ROOT/'assets/app.js').read_text()
     build=hashlib.sha256((template+css+js).encode()).hexdigest()[:16]
     template=template.replace('</head>','<meta name="bitaroo-build" content="'+build+'">\n</head>')
     data=json.dumps(report,ensure_ascii=True,separators=(',',':')).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
     template=template.replace('<link rel="stylesheet" href="/assets/style.css">','<style>'+css+'</style>')
+    template=template.replace('<script src="/assets/wallet_builder.js" defer></script>','')
     template=template.replace('<script src="/assets/app.js" defer></script>',('<script id="report-data" type="application/json">'+data+'</script>') if report is not None else '')
     template=template.replace('<script src="/assets/descriptors.js" defer></script>','')
     template=template.replace('</body>','<script>'+js+'</script>\n</body>')

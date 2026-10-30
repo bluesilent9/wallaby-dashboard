@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 10 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev10_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 11 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev11_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -18,6 +18,13 @@ Vault monitoring uses public vault records and connected Core nodes. Reports dep
 
 ## This development update
 
+Build 11 adds **Wallet Builder**: Single Signature, Multi-Signature (M of N, up to 15 roles), Vault and Multi-Signature Vault. Discover Agents, compare full identity fingerprints locally, assign each independent role to a producing Agent and choose encrypted node storage or one verified physical disc per role. Two local approvals cover participation and the exact policy. Dashboard verifies domain-separated signatures, displays the full policy hash and six sample addresses, and relays authenticated completion only after every producer approves and every required disc has a verified backup. A Dashboard restart interrupts unfinished ceremonies for local reconciliation; it never silently generates replacement keys.
+
+Transaction Builder verifies distinct signatures **per input**, combines partial contributions and enables broadcast only after every input reaches its own threshold. Different private cosigner accounts of a shared policy are signing locations, not missing replicas to synchronize. Public watch monitors remain one balance wallet. Wallets hover details show the multisig threshold and distinct signing keys visible on connected Agents; watch-only copies and duplicate copies do not add to the count. Retirement now uses Agent Build 9 and refreshes actual node inventory.
+
+**Physical-disc signing:** Dashboard can route to a restored matching local cosigner account and collect its signature. Agent Build 9 can create/verify disc backups but does not yet include a guided backup restore/signing screen. Restore locally through a reviewed recovery procedure before requesting that signature. Never send a private disc package or passphrase to Dashboard. See [Wallet Builder](docs/WALLET_BUILDER.md).
+
+
 All blockchain lookups now use connected Bitcoin Core nodes through Wallaby Agent. Core wallet history replaces address-range scanning. Builder inputs and change-cursor checks also use RPC. There is no public blockchain fallback. A pruned node must retain the required transactions in a loaded wallet; missing creating/spending evidence stops the trace rather than accepting an incomplete ledger. Load Node Wallets, review Ownership and Verify Balances after upgrading. Saved graph evidence is retained, but old balance snapshots require verification.
 
 Verify Balances opens Wallets. Cards share Ownership's vault/wallet/watch/SMSF icons; the new S-shaped SMSF mark replaces the bank symbol. Shorter balance tooltips show gain/loss, owner, SMSF, retained purchase cost and source records. Wallet Key Explorer has been removed; public descriptor validation remains where needed by node loading and PSBT construction.
@@ -26,11 +33,11 @@ Fee Estimates use Core at the lowest request priority, pausing behind foreground
 
 ## Agent compatibility
 
-Use **[Agent V2 Development Build 8](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 10. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
+Use **[Agent V2 Development Build 9](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 11. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
 
-Agent Build 8 or later is required; older synchronization protocols have been removed. Each Agent receives its complete alphabetically ordered missing-wallet list, including labelled historical address groups. The signed version-2 preview preserves public vault policies, address labels and LOST timestamps. Persistent revisions withdraw outdated lists when peers disconnect. `recovery_required` means received but incomplete; only final receiver completion clears both Agents’ lists. History recovery is locally authorised on the Agent and retains its pruning configuration. No remote restart/reindex command is sent.
+Agent Build 9 is required for Wallet Builder; the existing exchange requires Build 8 or later; older synchronization protocols have been removed. Each Agent receives its complete alphabetically ordered missing-wallet list, including labelled historical address groups. The signed version-2 preview preserves public vault policies, address labels and LOST timestamps. Persistent revisions withdraw outdated lists when peers disconnect. `recovery_required` means received but incomplete; only final receiver completion clears both Agents’ lists. History recovery is locally authorised on the Agent and retains its pruning configuration. No remote restart/reindex command is sent.
 
-**Wallets** now filters by owner and by **Active Wallets / Extinct Wallets** (at least one selected). Extinct cards are grey and show confirmed UTC activity years rather than balances/gains. Addresses sharing a historical label are one logical wallet; different labels remain separate ownership assignments even inside one Core archive. **Make Extinct** prepares a public local-review request; its execution requires a future Agent advertising `wallet_retirement`. Current Agent Build 8 will not receive this unsupported operation. Retirement never deletes a private wallet, infers lost keys or automatically claims a tax loss. See [the protocol](docs/AGENT_PROTOCOL.md) and [validation](VALIDATION.md).
+**Wallets** now filters by owner and by **Active Wallets / Extinct Wallets** (at least one selected). Extinct cards are grey and show confirmed UTC activity years rather than balances/gains. Addresses sharing a historical label are one logical wallet; different labels remain separate ownership assignments even inside one Core archive. **Make Extinct** prepares a public local-review request; its execution requires an Agent advertising `wallet_retirement`. Agent V2 Build 9 implements this operation after local approval. Retirement never deletes a private wallet, infers lost keys or automatically claims a tax loss. See [the protocol](docs/AGENT_PROTOCOL.md) and [validation](VALIDATION.md).
 
 ## Run from source
 
@@ -49,9 +56,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev10`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev11`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev10_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev11_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 

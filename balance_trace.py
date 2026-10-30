@@ -159,7 +159,7 @@ def run(core,calculation,joints,snapshot,user,console,emit,client):
             by_id={w['id']:w for w in core.DESCRIPTOR_SNAPSHOT['wallets']}
             for entry in balance['wallets']:
                 meta=by_id.get(own.descriptor_wallet_ids.get(entry['name']),{})
-                entry.update(has_vault=bool(meta.get('has_vault')),watch_only=bool(meta.get('watch_only')))
+                entry.update(has_vault=bool(meta.get('has_vault')),watch_only=bool(meta.get('watch_only')),multisig=__import__('policy_accounts').multisig_summary(meta.get('raw',{})))
             snapshots[uid]=balance
         finally:current.close_observer()
     merged=snapshots[user['id']]

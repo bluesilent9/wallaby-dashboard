@@ -100,6 +100,9 @@ def validate(root):
     if (root/'data/agent-hub.json').exists():
         from agent_state import validate as validate_agent_state
         validate_agent_state(json.loads((root/'data/agent-hub.json').read_text(encoding='utf-8')),ids,cfg)
+    if (root/'data/wallet-setups.json').exists():
+        from wallet_builder import validate_archive
+        validate_archive(cfg,json.loads((root/'data/wallet-setups.json').read_text()),ids)
     with tempfile.TemporaryDirectory(dir=root,prefix='.verify-') as temp:
         for uid in raw.get('ownership_runs',{}):
             if uid not in ids:raise ValueError('Unknown Ownership profile.')
@@ -114,8 +117,16 @@ def validate(root):
         for wallet,upload in row.get('signed_uploads',{}).items():
             indices=[i for i,w in enumerate(assigned) if w==wallet]
             if not indices:raise ValueError('A saved signature has no sending wallet.')
+            if set(upload['proofs'])-set(map(str,indices)):raise ValueError('Saved signature belongs to another wallet input.')
             for i in indices:
-                proof=upload['proofs'][str(i)];verify_input(base,i,{bytes.fromhex(k):bytes.fromhex(v) for k,v in proof.items()},spent)
+                if str(i) not in upload['proofs']:
+                    if row.get('agent_signing'):continue
+                    raise ValueError('Missing saved input signature.')
+                proof=upload['proofs'][str(i)];fields={bytes.fromhex(k):bytes.fromhex(v) for k,v in proof.items()}
+                if spent[i].script_pubkey.script_type()=='p2wsh':
+                    from multisig_psbt import verified
+                    verified(base,i,fields,spent,False)
+                else:verify_input(base,i,fields,spent)
         if row.get('combined_psbt'):validate_upload(row['psbt'],row['combined_psbt'].encode(),list(range(len(assigned))))
     reports=root/'data/reports'
     if reports.exists():

@@ -23,9 +23,9 @@ def public_change_candidate(store,chain,wallet_id,reserved=None):
         index=max(row.get('next_index',0),used+1,(reserved or {}).get(key,0),row.get('range',[0,0])[0])
         if index>row.get('range',[0,0])[1]:continue
         derived=d.derive(index);spk=derived.script_pubkey();kind=spk.script_type()
-        if kind not in ('p2wpkh','p2tr','p2sh','p2pkh'):continue
-        priority={'p2wpkh':0,'p2tr':1,'p2sh':2,'p2pkh':3}[kind]
-        choices.append((priority,number,spk,derived,key,index,bool(d.key and d.key.origin)))
+        if kind not in ('p2wpkh','p2tr','p2sh','p2pkh','p2wsh'):continue
+        priority={'p2wpkh':0,'p2tr':1,'p2sh':2,'p2pkh':3,'p2wsh':4}[kind]
+        choices.append((priority,number,spk,derived,key,index,any(k.origin for k in d.keys)))
     if not choices:raise ValueError('A current, publicly derivable active change descriptor is needed for '+wallet['name']+'. Refresh listdescriptors false before constructing a PSBT.')
     _,_,spk,derived,key,index,origin=min(choices,key=lambda c:c[:2])
     return spk,derived,key,index,origin
@@ -57,12 +57,13 @@ def encode_psbt(result,change):
             used.add((txid,out));total+=coin['value'];inputs.append(TransactionInput(bytes.fromhex(txid),out,sequence=0xfffffffd))
             fields=record(b'\x00',prev.serialize())
             if coin['witness']:fields+=record(b'\x01',prev.vout[out].serialize())
+            for k,v in sorted(coin.get('psbt_fields',{}).items()):fields+=record(bytes.fromhex(k),bytes.fromhex(v))
             input_maps.append(fields+b'\x00')
     from vendor.embit.script import address_to_scriptpubkey
     outputs=[TransactionOutput(value,address_to_scriptpubkey(address)) for address,value in sorted(result['outputs'].items())];maps=[b'\x00' for _ in outputs]
     for uid,value in sorted(result['changes'].items()):
         spk,derived,key,index,origin=change[uid];outputs.append(TransactionOutput(value,spk));maps.append(output_metadata(derived,origin))
-    tx=Transaction(version=2,vin=inputs,vout=outputs,locktime=0)
+    tx=Transaction(version=2,vin=inputs,vout=outputs,locktime=max((c.get('height',0) for rows in result['selected'].values() for c in rows),default=0))
     if total-sum(o.value for o in outputs)!=int(result['total_fee_sats']):raise ValueError('PSBT input/output values do not match the allocated fee.')
     if tx.is_segwit or any(i.script_sig.data for i in inputs):raise ValueError('PSBT must be completely unsigned.')
     payload=b'psbt\xff'+record(b'\x00',tx.serialize())+b'\x00'+b''.join(input_maps)+b''.join(maps)

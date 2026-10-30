@@ -26,7 +26,15 @@ def eligible(hub,wallet_id,capability='partial_signing'):
         inventory=hub.inventories.get(node['id'],{})
         if not inventory.get('complete'):continue
         replicas=[w for w in inventory['wallets'] if w['private_keys_enabled'] and not w['scanning'] and equivalent(wanted['raw'],w['raw'])]
-        if replicas:result.append({'id':node['id'],'hostname':node['hostname'],'wallet':replicas[0]['name']})
+        from policy_accounts import signing_account
+        monitors=[w for w in inventory['wallets'] if equivalent(wanted['raw'],w['raw'])]
+        if monitors:replicas += [w for w in inventory['wallets'] if w['private_keys_enabled'] and not w['scanning'] and any(signing_account(w,m) for m in monitors)]
+        if capability=='wallet_retirement' and any(signing_account(w,m) for w in inventory['wallets'] for m in monitors):replicas=monitors
+        seen=set()
+        for replica in replicas:
+            if replica['name'] in seen:continue
+            seen.add(replica['name']);signer_id=digest({'node':node['id'],'policies':sorted(__import__('node_wallets').NodeWalletLoader.descriptor_key(r['desc']) for r in replica['raw']['descriptors'])})
+            result.append({'id':node['id'],'signer_id':signer_id,'hostname':node['hostname'],'wallet':replica['name']})
     return result
 
 
@@ -125,20 +133,20 @@ def validate_export(hub,payload,lease):
     return {'psbt':original,'signed_proofs':proofs,'input_wallets':input_wallets,'wallets':list(cards.values()),'diagram':{'nodes':nodes,'edges':edges},'estimate':{'can_continue':True,'total_fee_sats':str(fee),'vbytes':size,'combined_rate':format(rate,'f'),'validation_message':'Unsigned vault proposal verified. Its fixed payments can be combined with other wallets before signing.'},'vault':payload['vault'],'immutable':True,'txid':document['tx'].txid().hex(),'input_sizes':sizes,'unsigned':True,'outpoints':[list(k) for k in sorted(seen)]}
 
 
-def queue_sign(hub,session,job_id,wallet_id,node):
+def queue_sign(hub,session,job_id,wallet_id,node,signer_id=None):
     from transaction_workflows import WorkflowStore
     row=WorkflowStore(hub.config).job(session.user_id,job_id);wallet=next((w for w in row['wallets'] if w['id']==wallet_id),None)
     if not wallet or wallet.get('owner_id')!=session.user_id:raise ValueError('Only this sending wallet’s owner can request its signature.')
-    if row.get('cancelled') or row.get('completed') or wallet_id in row.get('signed_uploads',{}):raise ValueError('This signing card is already complete or the transaction is closed.')
-    destination=next((n for n in eligible(hub,wallet_id) if n['id']==node),None)
+    if row.get('cancelled') or row.get('completed') or __import__('multisig_psbt').progress(row['psbt'],row.get('signed_uploads',{}).get(wallet_id,{}).get('proofs',{}),[i for i,w in enumerate(row['input_wallets']) if w==wallet_id])['complete']:raise ValueError('This signing card is already complete or the transaction is closed.')
+    destination=next((n for n in eligible(hub,wallet_id) if n['id']==node and (signer_id is None or n['signer_id']==signer_id)),None)
     if not destination:raise ValueError('This node is offline, downloading, watch-only, or needs Agent partial-signing support.')
-    proposal={'kind':'sign_psbt_partial','request_id':digest({'job':job_id,'wallet':wallet_id,'node':node}),'chain':'main','wallet':destination['wallet'],'psbt':row['psbt'],**({'vault_intents':row['vault_intents']} if row.get('vault_intents') else {})};ident=digest(proposal)
+    proposal={'kind':'sign_psbt_partial','request_id':digest({'job':job_id,'wallet':wallet_id,'node':node,'signer':destination['signer_id']}),'chain':'main','wallet':destination['wallet'],'psbt':row['psbt'],**({'vault_intents':row['vault_intents']} if row.get('vault_intents') else {})};ident=digest(proposal)
     with hub.edit() as state:
-        prior=next((r for r in state['requests'].values() if r.get('job_id')==job_id and r.get('wallet_id')==wallet_id and r['state']=='pending'),None)
+        prior=next((r for r in state['requests'].values() if r.get('job_id')==job_id and r.get('wallet_id')==wallet_id and r.get('signer_id')==destination['signer_id'] and r['state']=='pending'),None)
         if prior and prior['node_id']!=node:raise ValueError('A signing request is already pending on another Agent. Resolve it there first.')
         old=state['requests'].get(ident)
         if old and old['state'] in ('denied','error'):old['state']='pending'  # Explicit human retry; Agent denial still applies.
-        state['requests'].setdefault(ident,{'kind':proposal['kind'],'node_id':node,'proposal':proposal,'job_id':job_id,'wallet_id':wallet_id,'state':'pending','created_utc':hub.utc()})
+        state['requests'].setdefault(ident,{'kind':proposal['kind'],'node_id':node,'proposal':proposal,'job_id':job_id,'wallet_id':wallet_id,'signer_id':destination['signer_id'],'state':'pending','created_utc':hub.utc()})
     return {'queued':True,'request_hash':ident,'node_id':node}
 
 
@@ -159,10 +167,12 @@ def accept_result(hub,state,node,kind,p):
         if p['status']!='signed' or set(p)-{'request_hash','status','psbt'} or not isinstance(p.get('psbt'),str) or len(p['psbt'])>2*1024*1024:raise ValueError('Return a bounded, partially signed PSBT.')
         assigned=row['input_wallets'];uid=request['wallet_id'];indices=[i for i,w in enumerate(assigned) if w==uid]
         if not indices:raise ValueError('This wallet has no inputs in the transaction.')
-        proofs=validate_upload(row['psbt'],p['psbt'].encode(),indices)
+        from multisig_psbt import validate_partial,progress
+        proofs,new=validate_partial(row['psbt'],p['psbt'].encode(),indices,row.get('signed_uploads',{}).get(uid,{}).get('proofs',{}))
         if row.get('signed_uploads',{}).get(uid,{}).get('request_hash')!=p['request_hash']:
             row.setdefault('signed_uploads',{})[uid]={'proofs':proofs,'uploaded_by':next(w['owner_id'] for w in row['wallets'] if w['id']==uid),'uploaded_utc':hub.utc(),'request_hash':p['request_hash'],'node_id':node};row['signing_revision']=row.get('signing_revision',0)+1
-            if all(w in row['signed_uploads'] for w in set(assigned)):
+            if all(progress(row['psbt'],row['signed_uploads'].get(w,{}).get('proofs',{}),[i for i,u in enumerate(assigned) if u==w])['complete'] for w in set(assigned)) and not row.get('all_signed_notice'):
+                row['all_signed_notice']=True
                 data['notices'].setdefault(row['creator_id'],[]).append({'id':uuid.uuid4().hex,'job_id':row['id'],'text':'All Agent signatures have been verified. Review and broadcast the combined PSBT.','created_utc':hub.utc(),'read':False})
     else:
         if p['status']!='broadcast' or p.get('txid')!=request['txid']:raise ValueError('Broadcast result does not match the approved transaction.')
@@ -205,7 +215,12 @@ def signing_state(hub,user,job_id):
         requests=[dict(r,request_hash=k) for k,r in state['requests'].items() if r.get('job_id')==job_id and r.get('wallet_id')==wallet['id']]
         wallet['request']=requests[-1] if requests else None
         if wallet['request']:
-            wallet['request']={k:wallet['request'].get(k) for k in ('state','node_id','message','request_hash')}
+            wallet['request']={k:wallet['request'].get(k) for k in ('state','node_id','signer_id','message','request_hash')}
+        wallet['requests']=[{k:r.get(k) for k in ('state','node_id','signer_id','message','request_hash')} for r in requests]
+        pending={r.get('signer_id') for r in requests if r['state']=='pending'}
+        completed={r.get('signer_id') for r in requests if r['state']=='complete'}
+        wallet['nodes']=[n for n in wallet['nodes'] if n['signer_id'] not in pending|completed]
+        wallet['disc_help']='For a physical cosigner, restore its encrypted backup locally on the Agent computer, then refresh its wallet inventory. Never upload a private backup or passphrase to Dashboard. Agent V2 Build 9 has no guided disc-restore screen yet.'
     row['broadcast_nodes']=[{'id':n['id'],'hostname':n['hostname']} for n in hub.registry.snapshot()['nodes'] if n['rpc_ready'] and n.get('blockchain',{}).get('state')=='ready' and 'broadcast' in hub.caps.get(n['id'],set())]
     pending=next((dict(r,request_hash=k) for k,r in state['requests'].items() if r.get('job_id')==job_id and r['kind']=='broadcast_transaction'),None)
     row['broadcast_request']={k:pending.get(k) for k in ('state','node_id','message','txid')} if pending else None

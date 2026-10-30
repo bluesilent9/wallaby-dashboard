@@ -182,6 +182,29 @@ class NodeWalletLoader:
             if not node.get('rpc_ready') or missing:raise ValueError(node['hostname']+': resolve node conflicts or enable required Agent RPC methods: '+', '.join(sorted(missing)))
             self.limits[node['id']]=threading.BoundedSemaphore(4)
         replicas=[r for batch in self.parallel([r for batch in self.parallel(nodes,self.discover_node) for r in batch],self.export) for r in batch]
+        # Retirement preserves the original local wallet. Count its history through
+        # the node's verified labelled archive only after all received addresses
+        # are present there; unrelated historical wallets never hide live accounts.
+        retired=[r for r in self.registry.hub.read()['requests'].values() if r.get('kind')=='wallet_retire' and r.get('state')=='complete']
+        kept=[]
+        for replica in replicas:
+            hidden=False
+            if not replica['wallet'].get('extinct'):
+                own=self.keys(replica)
+                for request in retired:
+                    public=request['proposal']['public_wallet'];wanted={self.descriptor_key(r['desc']) for r in public['descriptors']}
+                    if not own or own!=wanted:continue
+                    archives=[r for r in replicas if r['wallet'].get('extinct') and r['wallet']['name']==request['proposal']['archive_label']]
+                    archived={address for r in archives for address in r['wallet'].get('address_labels',{})}
+                    received={r.get('address') for r in replica['history']['transactions'] if r.get('category') in ('receive','generate','immature') and r.get('address')}
+                    if archives and received and received<=archived:hidden=True;break
+            if not hidden:kept.append(replica)
+        replicas=kept
+        # Independent private key accounts for a shared policy are signing roles,
+        # not duplicate balance wallets. Preserve any account with its own funds/history.
+        from policy_accounts import signing_account
+        flat=[{'raw':r['wallet']['raw'],'private_keys_enabled':r['private_keys_enabled']} for r in replicas]
+        replicas=[r for r,account in zip(replicas,flat) if r['history'].get('transactions') or not any(signing_account(account,m) for m in flat if m is not account)]
         if not replicas:raise ValueError('The connected nodes have no loaded descriptor wallets.')
         groups=[]
         for replica in replicas:

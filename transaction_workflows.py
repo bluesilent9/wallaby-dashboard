@@ -117,7 +117,9 @@ class WorkflowStore:
         for uid in sorted(set(assigned)):
             w=wallets[uid];received=uploads.get(uid,{})
             signing.append({k:w.get(k) for k in ('id','name','owner_id','owner','colour')})
-            signing[-1].update(complete=bool(received),uploaded_utc=received.get('uploaded_utc'),input_count=assigned.count(uid))
+            from multisig_psbt import progress
+            counts=progress(row['psbt'],received.get('proofs',{}),[i for i,w in enumerate(assigned) if w==uid])
+            signing[-1].update(complete=counts['complete'],signature_progress=counts,uploaded_utc=received.get('uploaded_utc'),input_count=assigned.count(uid))
         all_signed=bool(signing) and all(w['complete'] for w in signing)
         row.pop('signed_uploads',None);combined=bool(row.pop('combined_psbt',None));row['signing_wallets']=signing;row['all_signed']=all_signed;row['combined_ready']=combined
         row['stage_count']=2 if row.get('agent_signing') else 2 if len(set(assigned))==1 else 3

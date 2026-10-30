@@ -4,15 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Wallaby Bitcoin Dashboard · V1 Build 10</title>
+<title>Wallaby Bitcoin Dashboard · V1 Build 11</title>
 <meta name="bitaroo-version" content="1-build1">
 <link rel="icon" href="/assets/logo.svg">
 <link rel="stylesheet" href="/assets/style.css">
 <script src="/assets/descriptors.js" defer></script>
+<script src="/assets/wallet_builder.js" defer></script>
 <script src="/assets/app.js" defer></script>
 </head>
 <body>
-<div id="app-version" class="app-version" aria-label="Dashboard version" title="Wallaby Bitcoin Dashboard · V1 Build 10">V1 Build 10</div>
+<div id="app-version" class="app-version" aria-label="Dashboard version" title="Wallaby Bitcoin Dashboard · V1 Build 11">V1 Build 11</div>
 <a class="skip-link" href="#main">Skip to content</a>
 <aside class="sidebar" aria-label="Application navigation">
   <a class="brand" href="#/dashboard" aria-label="Wallaby Bitcoin Dashboard home">
@@ -27,6 +28,7 @@
     <button class="nav-item" data-route="ownership"><span class="nav-icon" data-icon="wallet"></span>Ownership</button>
     <button class="nav-item" data-route="builder"><span class="nav-icon" data-icon="route"></span>Transaction Builder<span class="notification-dot" hidden></span></button>
     <button class="nav-item" data-route="vaults"><span class="nav-icon" data-icon="vault"></span>Vaults</button>
+    <button class="nav-item" data-route="walletbuilder"><span class="nav-icon" data-icon="wallet"></span>Wallet Builder</button>
     <div class="nav-divider"></div>
     <div class="nav-label">SYSTEM</div>
     <button class="nav-item" data-route="admin"><span class="nav-icon" data-icon="user"></span>Administration</button>
@@ -40,7 +42,7 @@
     <button class="nav-item" data-route="totals"><span class="nav-icon" data-icon="chart"></span>Financial Year Totals</button>
     <button class="nav-item" data-route="balances"><span class="nav-icon" data-icon="wallet"></span>Wallets</button>
   </nav>
-  <div class="sidebar-bottom"><section id="sidebar-users" aria-label="Users"><div class="nav-label">Users</div><div id="sidebar-user-list"></div></section><div class="sidebar-foot">WALLABY BITCOIN DASHBOARD <span>V1 Build 10</span><a href="/source.zip">Source code · AGPL</a></div></div>
+  <div class="sidebar-bottom"><section id="sidebar-users" aria-label="Users"><div class="nav-label">Users</div><div id="sidebar-user-list"></div></section><div class="sidebar-foot">WALLABY BITCOIN DASHBOARD <span>V1 Build 11</span><a href="/source.zip">Source code · AGPL</a></div></div>
 </aside>
 <div class="workspace">
   <header class="topbar"><div class="breadcrumb"><span>Workspace</span><span class="crumb-divider">/</span><strong id="page-name">Dashboard</strong></div><div class="topbar-actions"><button id="notification-bell" class="notification-bell" aria-label="Notifications" hidden><span data-icon="bell"></span><span class="notification-dot" hidden></span></button><button id="current-profile" type="button" class="profile-chip" aria-label="Your user administration" hidden></button><span id="report-badge" class="year-pill" hidden></span><button id="download-report" class="button small outline" hidden><span data-icon="download"></span>Save HTML report</button></div></header>

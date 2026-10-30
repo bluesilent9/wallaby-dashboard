@@ -189,8 +189,23 @@ def live_coins(session,catalog,source_ids,force=False):
             if Script(bytes.fromhex(raw)).script_type()=='p2tr':
                 from descriptor_policy import parse_policy
                 if any(bool(parse_policy(r['desc'].split('#')[0])[0].taptree) for r in wallet['raw']['descriptors'] if r['desc'].startswith('tr(')):raise ValueError('Taproot script-path inputs need signing-size information before estimating fees.')
-            if Script(bytes.fromhex(raw)).script_type()=='p2wsh':raise ValueError('Vault or multisignature inputs need signing-size information before estimating fees.')
-            weight,witness=input_weight(raw);utxos.append({'txid':txid,'vout':vout,'value':value,'weight':weight,'witness':witness,'script':raw,'raw_tx':tx.serialize().hex()})
+            extra={}
+            if Script(bytes.fromhex(raw)).script_type()=='p2wsh':
+                from vendor.embit.descriptor import Descriptor
+                from multisig_psbt import witness_policy
+                d=Descriptor.from_string(str(row.get('desc','')))
+                if d.is_wildcard or d.script_pubkey().data.hex()!=raw or not d.witness_script():raise ValueError('Core must provide the concrete public descriptor for this input.')
+                ws=d.witness_script().data;p=witness_policy(ws)
+                if p['height']:
+                    tips=[client.rpc.call(r['node_id'],'getblockchaininfo',[]).get('blocks',0) for r in wallet['node_sources'] if r['node_id'] in {n['id'] for n in client.nodes()}]
+                    if not tips or max(tips)<p['height']:continue
+                fields={b'\x05'.hex():ws.hex()}
+                for k in d.keys:
+                    if k.origin:fields[(b'\x06'+k.get_public_key().sec()).hex()]=(k.origin.fingerprint+b''.join(i.to_bytes(4,'little') for i in k.origin.derivation)).hex()
+                extra={'psbt_fields':fields,'height':p['height'] or 0}
+                weight=164+compact_size((1 if p['dummy'] else 0)+p['threshold']+1)+(1 if p['dummy'] else 0)+p['threshold']*74+compact_size(len(ws))+len(ws);witness=True
+            else:weight,witness=input_weight(raw)
+            utxos.append({'txid':txid,'vout':vout,'value':value,'weight':weight,'witness':witness,'script':raw,'raw_tx':tx.serialize().hex(),**extra})
         result[uid]=utxos
     with _LOCK:
         if len(_CACHE)>64:_CACHE.clear()

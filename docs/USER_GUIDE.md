@@ -1,6 +1,6 @@
-> Build 3 workflow: Ownership Stage 3 ends with Verify Balances. Wallets and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
+> Current workflow: Ownership Stage 3 ends with Verify Balances. Wallets and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
 
-# Wallaby Bitcoin Dashboard — V1 Build 10
+# Wallaby Bitcoin Dashboard — V1 Build 11
 
 Extract the complete ZIP. Start the service with `./Start_Wallaby_Bitcoin_Dashboard.sh`, or:
 
@@ -20,7 +20,7 @@ The `tzdata` Python package in requirements.txt supplies IANA timezone rules on 
 
 Public descriptor derivation and raw transaction parsing are bundled; no Bitcoin Core installation or wallet unlock is needed on the dashboard server.
 
-## V1 Build 10 setup
+## V1 Build 11 setup
 
 1. Open **Administration**, then select or create a family user. The sidebar and header remain visible before login; other pages unlock after a user is selected.
 2. Connect each node's Wallaby Agent, load the desired wallets in Bitcoin Core, then open **Ownership** and select **Load Node Wallets**. Every connected node is queried over read-only RPC. Identical public locking descriptors identify wallet copies, independently of wallet names; matching copies share RPC work. Ownership suggests the first reporting node's name. Different wallets with identical names stay separate. Core wallet history is reconstructed through the same connected nodes; after success Ownership opens at Stage 2. No console exports, private keys or wallet unlock are needed. Unloaded wallets or missing RPC capabilities stop discovery with an actionable error rather than accepting a partial collection.
@@ -89,7 +89,7 @@ There is **no saved allocation ledger**, and neither saved transaction templates
 
 Optional whole-return tax context now needs explicit user/year scope, so another person's return or a different year is never reused accidentally. The JSON format is `{"users": {"User name or ID": {"2026-27": {"basic_tax": "0", "basic_tax_without_gain": "0"}}}}`, with the existing optional calculation fields inside each year object. Use `{"users": {}}` when no context is supplied. User names are matched without case sensitivity; stable profile IDs are also accepted.
 
-V1 Build 10 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
+V1 Build 11 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
 
 ## Descriptor wallet display names
 
@@ -147,7 +147,7 @@ This ZIP contains runtime files and bundled-library notices only: no user config
 
 The builder uses the familiar separation of draggable nodes and connection handles described in the [React Flow handle documentation](https://reactflow.dev/learn/customization/handles). Its implementation uses the dashboard’s bundled JavaScript and SVG; no external UI library or online script is required.
 
-The builder’s **Next** button becomes available only with at least one positive payment, a positive Network Fee contribution and a successful confirmed-UTXO funding estimate. Missing destinations, insufficient funds and payment outputs below standard dust policy keep it disabled. Next now prepares the complete unsigned transaction, rechecking confirmed inputs and deriving change from each funding wallet’s public internal descriptor. It opens Stage 3 below the diagram; the prepared diagram is fixed until its creator selects Reopen for editing. For multiple sending wallets, every sender, including a fee-only sender, receives the same PSBT for signing. Stage 3 accepts signed PSBTs from each wallet owner; Stage 4 combines verified signatures for the transaction creator to download. A single sending wallet instead uses three stages, including the template selector, with signing and broadcasting entirely in Bitcoin Core. The dashboard does not broadcast.
+The builder’s **Next** button requires a positive payment, positive Network Fee contribution and a successful confirmed-UTXO estimate. It prepares one unsigned transaction with verified previous outputs, fresh change cursors and public signing metadata. Stage 3 of 3 collects signatures through local Agent approvals, then the creator requests separately authorised broadcast on a healthy Agent. Each input, including multisig/vault inputs, must reach its own signature threshold before broadcasting is enabled.
 
 ## Maximum spend and signing notifications
 
@@ -157,25 +157,29 @@ Prepared PSBTs contain one complete transaction, verified previous transactions 
 
 Stage 3 opens after preparation for the creator or sending owner. **Notifications** is also available through the bell beside the profile name. New signing requests mark the bell, Notifications and builder links with red dots for other sending owners. The transaction creator receives a read notification without a red dot. Opening Notifications marks requests as viewed without deleting them. Selecting a request in Notifications opens its prepared transaction at Stage 3. Sending participants can follow that request to sign even while their template-construction pages are locked. The X deletes only that user’s notification. Opening Transaction Builder resumes the latest accessible prepared transaction at that user’s permitted signing/combination stage, including after closing the browser or restarting the service. Unprepared diagram edits are discarded when leaving the builder; save a template to retain them.
 
-The same binary `.psbt` file is served to every participant. Open it with Bitcoin Core’s **File → Load PSBT from file**, review its details, sign using the selected wallet and save the signed PSBT. For a multi-wallet transaction, repeat for each sending wallet you control. Upload the saved file using that wallet’s Stage 3 card. Only its owner can upload; other wallets remain visible but read-only. Cards turn green after all inputs for that wallet have valid signatures, and update live across connected browsers. Private keys remain in Bitcoin Core.
+Every selected Agent receives the same final transaction. Select a connected signing account on its wallet card and request local review. The Agent displays the transaction using its own Core information, asks for local approval/unlocking and returns only a partially signed PSBT. Dashboard verifies and accumulates distinct controlling-key signatures per input. Cards show progress and become green only when complete. A restored physical cosigner follows this same route; private backups and passwords must stay on the Agent computer. Agent Build 9 does not yet provide a guided disc-restore screen.
 
 Prepared transactions, unsigned PSBTs, verified signature proofs, combined PSBTs, notification state and change reservations persist in **data/transactions/workflows.json**. Include the existing data directory in backups. Reopening a transaction supersedes its dashboard PSBT and releases its input reservation; files already downloaded are not cryptographically revoked and must not be used after replacement. Removing a profile cancels orphaned prepared plans. No notification or wallet/transaction identity is hardcoded.
 
 
 ## Verified signing and completion
 
-The multi-wallet workflow has **Stage 1 — Transaction Templates**, **Stage 2 of 4**, **Stage 3 of 4** and **Stage 4 of 4**. Upload binary or Base64 PSBT files saved by Bitcoin Core. The dashboard verifies signatures against the original transaction and previous outputs, rejects changed transactions, and requires every selected input for that wallet to be signed. Bitcoin Core finalized inputs are accepted. Uploaded unrelated metadata is discarded; only verified signature proofs are retained.
+The current Agent workflow is **Stage 1 of 3 — Transaction Templates**, **Stage 2 of 3 — Diagram**, and **Stage 3 of 3 — Agent signing and broadcast**. Different private accounts belonging to one shared policy are independent signing choices, not independent balance wallets to synchronize. Returned partial signatures are checked against the original transaction and previous outputs. Repeated copies of one key's signature count once. Inputs with insufficient signatures stay incomplete.
 
-Once every wallet card is green, the profile that started the transaction receives one completion notification linking to **Stage 3**. Repeated uploads do not duplicate it. Only that creator can click Next to combine signatures and download the combined PSBT from Stage 4. Other participants can see completion without advancing or receiving completion notifications. Reopening the prepared transaction invalidates its dashboard workflow. Previously downloaded files remain usable outside the dashboard and must be discarded after replacement.
+Once every sending wallet card is green, the transaction creator receives one completion notice. Only that creator can request broadcast; the selected Agent performs its own final local review and Core acceptance. After the node confirms the exact broadcast transaction, Complete returns to Dashboard. Reopening/cancelling closes only the Dashboard workflow; it cannot revoke signed material already held elsewhere.
 
-Older prepared V143 transactions are checked against saved public descriptor history to establish input ownership. If that cannot be established unambiguously, reopen and prepare the transaction again.
+## Wallet Builder
 
-V1 Build 10 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
+Wallet Builder is available after login. Choose single signature, multisig, vault or multisig vault, assign each independent role to an Agent and select encrypted node or physical-disc storage. Compare full fingerprints locally before requesting participation. Compare the full policy hash and six example addresses on every producing Agent before the second local approval. Every required disc needs a verified backup proof. See [the complete Wallet Builder guide](WALLET_BUILDER.md).
+
+Wallets hover details display the multisig threshold and distinct matching signing keys visible on connected Agents. Watch-only copies and duplicate copies of the same key are excluded; visibility does not guarantee a key can be unlocked or signing authorised.
+
+V1 Build 11 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
 
 
 ## Cancelling construction
 
-A red **Cancel** button appears from Stage 3 onward in both workflows, including Stage 4 of a multi-wallet transaction. The transaction creator can cancel; other participants see the control disabled. The confirmation offers Yes and No with: “Are you sure you want to cancel construction of the current transaction?” No preserves the current process. Yes closes the prepared workflow, releases dashboard reservations, marks its requests read and returns the creator to Dashboard. Transaction Builder remains available and opens at Stage 1 for a new template selection. Cancelling does not broadcast or revoke any file previously downloaded from Bitcoin Core or Wallaby.
+A red **Cancel** button appears at Stage 3 after transaction preparation. The transaction creator can cancel; other participants see the control disabled. The confirmation offers Yes and No with: “Are you sure you want to cancel construction of the current transaction?” No preserves the current process. Yes closes the prepared workflow, releases dashboard reservations, marks its requests read and returns the creator to Dashboard. Transaction Builder remains available and opens at Stage 1 for a new template selection. Cancelling does not broadcast or revoke any file previously downloaded from Bitcoin Core or Wallaby.
 
 ## Combined pages and complete exchange disposals
 
@@ -185,7 +189,7 @@ Receipt validation checks all supplied historical wallet records, including rece
 
 A supplied crypto-to-BTC trade now records the sold asset's CGT as well as the BTC acquisition. AUD disposal proceeds come from the supplied BTC consideration and the existing timestamped BTC/AUD lookup. No additional crypto/crypto or USD conversion is needed. Network fees in the sold asset create separate disposal components; the existing BTC acquisition basis includes the fee's incidental acquisition cost once. Non-BTC amounts keep their own unit, without Bitcoin pipe notation.
 
-The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 10 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
+The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 11 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
 
 Prompt headings now use Exchange Tracer and Wallet Tracer. The wallaby logo retains its shape with a four-tile dashboard emblem.
 

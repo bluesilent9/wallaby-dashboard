@@ -52,7 +52,11 @@ class BalanceStore:
         saved=self.load(key)
         if not saved or not saved['result'].get('balances') or saved['result'].get('basis_algorithm')!=BALANCE_ALGORITHM:return None
         balance=deepcopy(saved['result']['balances'])
+        from descriptor_store import DescriptorStore
+        from policy_accounts import multisig_summary
+        policies={w['id']:multisig_summary(w['raw']) for w in DescriptorStore(self.config).read()['wallets']}
         for row in balance['wallets']:
+            row['multisig']=policies.get(row.get('descriptor_id'),[])
             owned=row.get('owner_name')==user['name'] and not row.get('smsf')
             row['ownership']='personal' if owned else 'external'
             if row['kind']=='exchange':row['name']='Bitaroo Exchange' if owned else 'Bitaroo Exchange · '+row.get('owner_name','Unknown')

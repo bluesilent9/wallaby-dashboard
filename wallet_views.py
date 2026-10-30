@@ -42,3 +42,28 @@ def extinct_cards(config):
         if not wallet.get('extinct'):continue
         owner=owners.get(wallet['id'],{});result.append({'id':wallet['id'],'name':owner.get('name') or wallet['name'],'owner_name':users.get(owner.get('owner_id'),'Someone else / external'),'extinct':True,'activity_years':spans.get(wallet['id'],'History unavailable')})
     return sorted(result,key=lambda w:w['name'].casefold())
+
+
+def annotate_signers(report,hub):
+    """Visibility is public-account evidence, not proof a locked signer can sign."""
+    if not report or hub is None:return report
+    from policy_accounts import signing_account,keys as public_keys
+    from vendor.embit.descriptor import Descriptor
+    from vendor.embit.descriptor.miniscript import Multi
+    active={n['id'] for n in hub.registry.snapshot()['nodes'] if n.get('connected') and n.get('rpc_ready')}
+    accounts=[w for node,inv in list(hub.inventories.items()) if node in active and inv.get('complete') for w in inv.get('wallets',[]) if w.get('private_keys_enabled')]
+    catalog={w['id']:w for w in DescriptorStore(hub.config).read()['wallets']}
+    for card in report['balances']['wallets']:
+        wallet=catalog.get(card.get('descriptor_id'))
+        if not wallet or not card.get('multisig'):continue
+        monitor={'raw':wallet['raw']};visible=set().union(*(public_keys(a['raw']) for a in accounts if signing_account(a,monitor))) if accounts else set()
+        counts={}
+        def walk(node):
+            if isinstance(node,Multi):
+                values=[k.to_string().split(']')[-1].replace("'",'h') for k in node.args[1:]];key=(node.args[0].num,len(values));counts[key]=max(counts.get(key,0),sum(v in visible for v in values))
+            for child in getattr(node,'args',[]):walk(child)
+        for row in wallet['raw']['descriptors']:
+            try:walk(Descriptor.from_string(row['desc'].split('#')[0]).miniscript)
+            except (ValueError,AttributeError):continue
+        for item in card['multisig']:item['visible']=counts.get((item['required'],item['total']),0)
+    return report

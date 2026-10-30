@@ -54,7 +54,28 @@ class VaultMonitor:
             for row in wallet['raw']['descriptors']:
                 if 'after(' not in row['desc'] or NodeWalletLoader.descriptor_key(row['desc']) in known:continue
                 uid=wallet['id'];g=groups.setdefault(uid,{'id':uid,'name':owners.get(uid,{}).get('name') or wallet['name'],'policies':[],'issues':[],'source_wallet':wallet,'vault_sats':0,'outside_sats':0,'outpoints':set()})
-                g['issues'].append('Vault-like policy detected, but a validated Agent public vault record is missing. Its mandatory lock and key ownership have not been established.')
+                try:
+                    from vendor.embit.descriptor import Descriptor
+                    from multisig_psbt import witness_policy
+                    desc=Descriptor.from_string(row['desc']);probe=desc.derive(0) if desc.is_wildcard else desc
+                    checked=witness_policy(probe.witness_script().data)
+                    if not checked['height']:raise ValueError('No mandatory height lock.')
+                    g['policies'].append({'id':digest(row['desc']),'public':{'descriptor':row['desc'],'height':checked['height']},'valid':True,'funds':0,'ranged':True})
+                    for n in active:
+                        inv=hub.inventories.get(n['id'],{})
+                        if not any(equivalent(wallet['raw'],w['raw']) for w in inv.get('wallets',[])):g['issues'].append(n['hostname']+': public vault policy is awaiting local Agent synchronisation.')
+                    ceremonies=getattr(hub,'wallet_builder',None)
+                    if ceremonies:
+                        for setup in ceremonies.read()['sessions'].values():
+                            if row['desc'] in setup.get('descriptors',[]) and setup['state']!='ready':g['issues'].append('Wallet setup policy approvals or physical backup proofs are incomplete.')
+                            if row['desc'] in setup.get('descriptors',[]):
+                                for n in healthy:
+                                    for w in hub.inventories.get(n['id'],{}).get('wallets',[]):
+                                        if not equivalent(wallet['raw'],w['raw']):continue
+                                        recv=Descriptor.from_string(setup['descriptors'][0]).derive(0).address(__import__('vendor.embit.networks',fromlist=['NETWORKS']).NETWORKS['main'])
+                                        labels=hub.rpc(n['id'],'getaddressinfo',[recv],w['name']).get('labels',[])
+                                        if 'Wallaby setup ready:'+setup['policy_hash'] not in [a if isinstance(a,str) else a.get('name') for a in labels]:g['issues'].append(n['hostname']+': final setup completion has not been confirmed by Core.')
+                except (ValueError,AttributeError,TypeError) as exc:g['issues'].append('Vault policy could not be independently verified: '+str(exc))
         for group in groups.values():
             policies=group['policies'];addresses={p['public'].get('address'):p for p in policies};source=group['source_wallet'];seen_wallets=set();successful=False
             for n in healthy:
@@ -72,7 +93,16 @@ class VaultMonitor:
                         if key in group['outpoints']:continue
                         group['outpoints'].add(key);value=Decimal(str(coin['amount']))*100000000
                         if not value.is_finite() or value!=value.to_integral_value() or value<0:raise ValueError('Invalid vault balance amount.')
-                        if coin.get('address') in addresses:addresses[coin['address']]['funds']+=int(value);group['vault_sats']+=int(value)
+                        matched=addresses.get(coin.get('address'))
+                        if not matched and any(p.get('ranged') for p in policies):
+                            try:
+                                from vendor.embit.descriptor import Descriptor
+                                from multisig_psbt import witness_policy
+                                concrete=Descriptor.from_string(coin.get('desc',''));ws=concrete.witness_script();checked=witness_policy(ws.data)
+                                if concrete.script_pubkey().data.hex()!=coin['scriptPubKey']:raise ValueError('Coin differs from the concrete public policy.')
+                                matched=next((p for p in policies if p.get('ranged') and p['public']['height']==checked['height']),None)
+                            except (ValueError,AttributeError,TypeError):matched=None
+                        if matched:matched['funds']+=int(value);group['vault_sats']+=int(value)
                         elif contains_source:group['outside_sats']+=int(value)
             if tip is None:group['issues'].append('No connected, synchronised Bitcoin node is available.')
             if not successful:group['issues'].append('The node could not establish the current vault balance.')

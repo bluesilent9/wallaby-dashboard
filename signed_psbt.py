@@ -96,7 +96,7 @@ def push(value):
     return bytes([len(value)])+value
 
 def witness_items(raw):
-    r=Reader(raw);items=[r.field() for _ in range(r.number(4))];r.end();return items
+    r=Reader(raw);items=[r.field() for _ in range(r.number(18))];r.end();return items
 
 def ecdsa(sig,pub,digest):
     if not 9<=len(sig)<=73 or sig[-1]!=1:raise ValueError('Sign every input with SIGHASH_ALL (Bitcoin Core’s default).')
@@ -137,19 +137,8 @@ def verify_input(base,index,fields,spent):
             if not ec.PublicKey.from_xonly(raw[2:]).schnorr_verify(ec.SchnorrSig(sig[:64]),digest):raise ValueError('Invalid Taproot signature.')
         return {b'\x08':Witness([candidates[0]]).serialize()}
     if kind=='p2wsh':
-        if final_script:raise ValueError('Native vault inputs must have empty scriptSig.')
-        stack=witness_items(final_witness) if final_witness is not None else None
-        script=fields.get(b'\x05') or (stack[-1] if stack else b'')
-        if stack is not None and len(stack)!=2:raise ValueError('Unsupported vault signature witness.')
-        if hashes.sha256(script)!=raw[2:]:raise ValueError('Vault witness does not match its output.')
-        pub,height=vault_witness_policy(script)
-        if tx.locktime<height or tx.locktime>=500000000 or tx.vin[index].sequence==0xffffffff:raise ValueError('The transaction does not satisfy the vault height lock.')
-        pairs=([(pub,stack[0])] if stack else [])+partial
-        if not pairs:raise ValueError('This vault input is unsigned.')
-        for key,sig in pairs:
-            if key!=pub:raise ValueError('The signing key does not control this vault.')
-            ecdsa(sig,key,tx.sighash_segwit(index,Script(script),spent[index].value))
-        return {b'\x08':Witness([pairs[0][1],script]).serialize()}
+        from multisig_psbt import verified
+        return verified(base,index,fields,spent)
     if b'\x13' in fields or b'\x03' in fields and fields[b'\x03']!=b'\x01\x00\x00\x00':raise ValueError('Unexpected signature hash or Taproot data.')
     pairs=list(partial);redeem=None
     if kind in ('p2wpkh','p2sh'):
