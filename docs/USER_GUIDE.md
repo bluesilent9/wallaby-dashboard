@@ -245,3 +245,12 @@ Open Fee Estimates to request a current refresh. The four priorities appear befo
 Wallet Builder uses fixed-width, individually coloured signer cards; an incomplete final row keeps the same card size.
 
 Administration → Logs downloads UTF-8 `.log` activity from today and the six preceding UTC days. Server files persist across restarts, at up to 1 MiB per day / 7 MiB total. Expired days are removed automatically; if a day fills up, the oldest entries are discarded. Report activity, fee stages/failures and Agent protocol errors are included. Poll requests, RPC credentials, passphrases and private wallet material are not logged. Diagnostic logs live in `logs/` next to `config.cfg` and are separate from profile archives and tax evidence. The retained log is shared between trusted family profiles.
+
+
+## Build 15: builder availability and node diagnostics
+
+Wallet Builder unlocks once at least one connected Agent has a fresh, successful, synchronized Core status and no live identity conflict. Presence by itself is insufficient. Transaction Builder also needs completed Ownership, even if a prior transaction is waiting. A node downloading blocks or synchronizing wallets does not qualify; another healthy connected node can keep the pages available.
+
+Locked builder links show an explanation in the sidebar and are omitted from Dashboard cards. Direct URLs also show the requirement. Pending work and saved templates remain intact during a dropout and become available after the prerequisites return.
+
+Nodes shows the Agent-reported version and any automatic Core RPC health error. Administration → Logs includes registration metadata, rejected request information and source locations for handler errors; it does not include connection tokens or private keys. All diagnostics keep the existing seven-UTC-day / 7 MiB cap.

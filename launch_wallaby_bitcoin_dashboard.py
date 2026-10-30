@@ -107,7 +107,7 @@ class Session:
             elif saved is None:self.report=None;self.report_context=None
             self.report_generation=generation
         report_ready=ready and self.report is not None and self.report_context==context
-        return {'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
+        return {'node_ready':bool(self.node_registry and self.node_registry.ready_for_builders()),'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
     def invalidate_transaction_refresh(self):
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False
     def confirm_transaction_refresh(self):
@@ -475,6 +475,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     return self.json(candidates(sessions.nodes.hub,session.user_id))
                 if path=='/api/wallet-builder':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
                     return self.json(sessions.nodes.hub.wallet_builder.snapshot())
                 if path=='/api/nodes':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
@@ -525,6 +526,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.send_header('Content-Disposition','attachment; filename="Wallaby_'+('combined_' if combined else 'unsigned_')+ident+'.psbt"');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                     except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/templates':
+                    if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
                     if not session.access()['templates_ready']:return self.json({'error':'Complete Ownership and save all assignments first.'},400)
                     templates=TemplateStore(session.preferences_path)
                     ident=parse_qs(urlsplit(self.path).query).get('id',[None])[0]
@@ -533,6 +535,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         return self.json(templates.read(ident) if ident else {'templates':templates.listing()})
                     except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/builder':
+                    if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
                     if not session.access()['templates_ready']:return self.json({'error':'Complete Ownership and save all assignments first.'},400)
                     try:price=fee_service.snapshot().get('price')
                     except FeeUnavailable:price=None
@@ -556,6 +559,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
             self.send_header('Content-Length',str(len(body)));self.send_header('X-Content-Type-Options','nosniff')
             self.send_header('Referrer-Policy','no-referrer');self.send_header('X-Frame-Options','DENY')
             self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
+        def require_builder_node(self,session,ownership=False):
+            if ownership and not session.access()['ownership_ready']:raise ValueError('Complete Ownership and save all assignments first.')
+            if not sessions.nodes.ready_for_builders():raise ValueError('Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.')
         def do_POST(self):
             exclusive=urlsplit(self.path).path in ('/api/profile/load','/api/profile/clear')
             with sessions.profile_gate.access(exclusive):
@@ -602,6 +608,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path.startswith('/api/wallet-builder/'):
                     if not session.user():raise ValueError('Select a family user first.')
                     setup=sessions.nodes.hub.wallet_builder
+                    if not path.endswith('/cancel'):self.require_builder_node(session)
                     if path.endswith('/discover'):return self.json(setup.discover())
                     if path.endswith('/create'):return self.json(setup.start(session.user_id,data))
                     if path.endswith('/cancel'):return self.json(setup.cancel(data.get('id')))
@@ -609,6 +616,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path in ('/api/builder/agent-lease','/api/builder/agent-leave','/api/builder/vault-prepare','/api/builder/vault-estimate','/api/transaction/sign','/api/transaction/broadcast'):
                     if not session.user():raise ValueError('Select a family user first.')
                     hub=sessions.nodes.hub
+                    if not path.endswith('/agent-leave'):self.require_builder_node(session,ownership=True)
                     if path.endswith('/agent-lease'):return self.json(hub.lease(session,data.get('node_id'),data.get('draft_id')))
                     if path.endswith('/agent-leave'):hub.clear_lease(session);return self.json({'closed':True})
                     from agent_transactions import prepare_export,queue_sign,queue_broadcast
@@ -686,6 +694,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     WorkflowStore(session.preferences_path).complete(session.user_id,data.get('id'))
                     return self.json(session.family())
                 if path in ('/api/templates/save','/api/templates/delete'):
+                    self.require_builder_node(session,ownership=True)
                     if not session.access()['templates_ready']:raise ValueError('Complete Ownership and save all assignments before using transaction templates.')
                     templates=TemplateStore(session.preferences_path)
                     if path.endswith('/save'):return self.json(templates.save(data))
@@ -709,6 +718,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     workflows.update_notifications(session.user_id,data.get('id') if path.endswith('/delete') else None)
                     return self.json(self.notices(session))
                 if path in ('/api/builder/estimate','/api/builder/prepare'):
+                    self.require_builder_node(session,ownership=True)
                     if not session.access()['templates_ready']:raise ValueError('Complete Ownership and save all assignments first.')
                     import re
                     diagram=clean_diagram(data.get('diagram')) if path.endswith('/prepare') else None

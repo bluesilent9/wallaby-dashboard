@@ -5,6 +5,7 @@ import hashlib,json,re,secrets,threading,time,uuid
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlsplit
 import socket
+import traceback
 from diagnostic_log import DiagnosticLog
 from storage import storage_lock
 from agent_rpc import RPCBroker,capabilities,METHODS,MAX_RESULT_BYTES
@@ -34,7 +35,8 @@ class NodeRegistry:
         from vault_monitor import VaultMonitor
         self.vaults=VaultMonitor(self)
     def protocol_error(self,path,exc):
-        self.diagnostic_log.append('Agent protocol',path.split('?')[0][:80]+' · '+type(exc).__name__+': '+str(exc)[:400])
+        frames=traceback.extract_tb(exc.__traceback__)[-2:];location=' → '.join(Path(f.filename).name+':'+str(f.lineno)+' '+f.name for f in frames)
+        self.diagnostic_log.append('Agent protocol',path.split('?')[0][:80]+' · '+type(exc).__name__+': '+str(exc)[:400]+(' · '+location if location else ''))
     def log_text(self):
         return self.diagnostic_log.text()
     @staticmethod
@@ -66,6 +68,7 @@ class NodeRegistry:
                 self.rpc.disconnected(token);del self.connections[token]
     def register(self,mac,hostname,rpc=None,agent_version=None):
         mac,hostname=identity(mac,hostname);methods=capabilities(rpc)
+        if agent_version is not None and (not isinstance(agent_version,str) or not re.fullmatch(r'[0-9A-Za-z.+~_-]{1,64}',agent_version)):raise ValueError('Invalid Agent version header.')
         with self.lock,storage_lock(self.config):
             self._expire()
             if len(self.connections)>=MAX_CONNECTIONS:raise ValueError('Agent connection limit reached.')
@@ -77,6 +80,7 @@ class NodeRegistry:
             node['last_seen_utc']=stamp;self._write(data)
             token=secrets.token_urlsafe(32);self.connections[token]={'node_id':node['id'],'mac':mac,'hostname':hostname,'seen':self.clock(),'rpc_methods':methods,'token':token,'agent_version':agent_version}
             self._conflicts()
+            self.diagnostic_log.append('Agent protocol','Registration accepted · node '+node['id'][:12]+' · Agent '+(agent_version or 'version not supplied')+' · '+str(len(methods))+' read-only RPC methods.')
             return {'protocol':'wallaby-agent','version':1,'connection_token':token,'node_id':node['id'],'heartbeat_seconds':HEARTBEAT_SECONDS,'disconnect_after_seconds':DISCONNECT_SECONDS,'capabilities':['presence']+(['rpc'] if methods else []),'rpc_methods':methods,'commands':[]}
     def heartbeat(self,token,disconnect=False):
         with self.lock,storage_lock(self.config):
@@ -106,6 +110,14 @@ class NodeRegistry:
         self.rpc.reconcile()
         active_ids=set(active)
         for user in self.read_by:self.read_by[user].intersection_update(active_ids)
+    def ready_for_builders(self):
+        """Presence alone is insufficient; require fresh, synced Core health."""
+        with self.lock:
+            self._expire()
+            claims=[c for c in self.connections.values() if 'getblockchaininfo' in c.get('rpc_methods',[]) and self.rpc._unique(c)]
+            ready=any(self.health.status(c).get('state')=='ready' for c in claims)
+            self.health.refresh(claims)
+            return ready
     def snapshot(self):
         with self.lock,storage_lock(self.config):
             self._expire();self._conflicts();data=self._read();rows=[]
@@ -135,8 +147,10 @@ def create_agent_server(registry,port=DEFAULT_AGENT_PORT,gate=None,ipv6=True,ipv
             if self.path!='/agent/v1/health':return self.reply({'error':'Not found'},404)
             return self.reply({'protocol':'wallaby-agent','version':1,'capabilities':['presence','rpc'],'rpc_methods':sorted(METHODS)})
         def do_POST(self):
-            if not self.safe() or self.headers.get('X-Wallaby-Agent')!='1':return self.reply({'error':'An agent protocol request is required.'},403)
-            if self.headers.get_content_type()!='application/json' or self.headers.get('Transfer-Encoding'):return self.reply({'error':'Send a length-delimited JSON request.'},400)
+            if not self.safe() or self.headers.get('X-Wallaby-Agent')!='1':
+                registry.protocol_error(self.path,ValueError('Request rejected: loopback Host, no browser Origin and X-Wallaby-Agent: 1 are required.'));return self.reply({'error':'An agent protocol request is required.'},403)
+            if self.headers.get_content_type()!='application/json' or self.headers.get('Transfer-Encoding'):
+                registry.protocol_error(self.path,ValueError('Request rejected: length-delimited application/json is required.'));return self.reply({'error':'Send a length-delimited JSON request.'},400)
             try:
                 sizes=self.headers.get_all('Content-Length',[])
                 if len(sizes)!=1:raise ValueError('Provide one Content-Length.')
@@ -182,6 +196,8 @@ def create_agent_server(registry,port=DEFAULT_AGENT_PORT,gate=None,ipv6=True,ipv
                 registry.protocol_error(self.path,exc);self.reply({'error':str(exc)},401)
             except (ValueError,TypeError,RecursionError,UnicodeError) as exc:
                 registry.protocol_error(self.path,exc);self.reply({'error':str(exc)},400)
+            except Exception as exc:
+                registry.protocol_error(self.path,exc);self.reply({'error':'Dashboard Agent request failed. See Administration → Logs.'},500)
     class Server(ThreadingHTTPServer):daemon_threads=True;allow_reuse_address=True
     class IPv6Server(Server):
         address_family=socket.AF_INET6
