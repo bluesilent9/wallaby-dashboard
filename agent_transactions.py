@@ -29,7 +29,8 @@ def eligible(hub,wallet_id,capability='partial_signing'):
         from policy_accounts import signing_account
         monitors=[w for w in inventory['wallets'] if equivalent(wanted['raw'],w['raw'])]
         if monitors:replicas += [w for w in inventory['wallets'] if w['private_keys_enabled'] and not w['scanning'] and any(signing_account(w,m) for m in monitors)]
-        if capability=='wallet_retirement' and any(signing_account(w,m) for w in inventory['wallets'] for m in monitors):replicas=monitors
+        if capability=='wallet_retirement':replicas=[w for w in replicas if not w.get('signing_only')]
+        if capability=='wallet_retirement' and any(signing_account(w,m) for w in inventory['wallets'] for m in monitors):replicas=[m for m in monitors if not m.get('signing_only')]
         seen=set()
         for replica in replicas:
             if replica['name'] in seen:continue
@@ -220,7 +221,7 @@ def signing_state(hub,user,job_id):
         pending={r.get('signer_id') for r in requests if r['state']=='pending'}
         completed={r.get('signer_id') for r in requests if r['state']=='complete'}
         wallet['nodes']=[n for n in wallet['nodes'] if n['signer_id'] not in pending|completed]
-        wallet['disc_help']='For a physical cosigner, restore its encrypted backup locally on the Agent computer, then refresh its wallet inventory. Never upload a private backup or passphrase to Dashboard. Agent V2 Build 9 has no guided disc-restore screen yet.'
+        wallet['disc_help']='Load the required discs using the Agent’s Disc Operations page, refresh signing accounts, then approve each signing request on Authorise. Private backups and passwords stay in the Agent’s protected workspace.'
     row['broadcast_nodes']=[{'id':n['id'],'hostname':n['hostname']} for n in hub.registry.snapshot()['nodes'] if n['rpc_ready'] and n.get('blockchain',{}).get('state')=='ready' and 'broadcast' in hub.caps.get(n['id'],set())]
     pending=next((dict(r,request_hash=k) for k,r in state['requests'].items() if r.get('job_id')==job_id and r['kind']=='broadcast_transaction'),None)
     row['broadcast_request']={k:pending.get(k) for k in ('state','node_id','message','txid')} if pending else None

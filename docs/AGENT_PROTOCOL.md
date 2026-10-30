@@ -1,6 +1,6 @@
-# Dashboard Build 11 — Agent integration contract
+# Dashboard Build 12 — Agent integration contract
 
-Dashboard Build 11 Wallet Builder requires Agent V2 Development Build 9. The existing exchange requires Build 8 or later. There is one synchronization queue/preview protocol; older Agents must be upgraded. No old signing or transfer fallback is used.
+Dashboard Build 12 uses Agent V2 Development Build 11 for persistent local sync choices and disc signing. Wallet Builder was introduced with Agent Build 9. The existing exchange requires Build 8 or later. There is one synchronization queue/preview protocol; older Agents must be upgraded. No old signing or transfer fallback is used.
 
 All operations below use the existing token-authenticated, loopback-only Agent listener (default port **56443**, reached through SSH). The browser listener remains **38951**. Neither port should be publicly exposed. Only public wallet information and PSBTs enter the Dashboard. Private keys, encrypted wallet files, wallet passwords and RPC cookies must never be sent through it. Local Agent authorisation is mandatory for signing, broadcasting, receiving descriptor updates and either end of wallet transfer.
 
@@ -97,3 +97,16 @@ Phase 1 contains exactly `{kind,version:1,session_id:64HEX,chain:"main",name,thr
 `policy_approved` binds version/session/proposal/policy and backup status; `backup_verified` additionally identifies SHA256(UTF-8 role ID) and the readback image SHA256. Dashboard requires every distinct producer's final approval and every distinct disc role's verified backup. It relays those exact envelopes in `{kind:"wallet_setup_complete",version:1,proposal_hash,policy_hash,acknowledgements}`; no readiness boolean can substitute for evidence. Agents mark their local monitor ready only after independently validating those proofs. The Dashboard separately checks Core's ready label during vault monitoring.
 
 `wallet_setup_inventory` supplies signed public monitor and signing-role routing names and the exact two descriptors. Names do not prove key control. Current inventory, complete shared policies and actual public key/branch relationships establish signing eligibility. Signing results can cover only some inputs; proof accumulation is per input and distinct controlling key, with original transaction and UTXO data authoritative. Private signing accounts are intentionally not synchronized as missing independent wallets.
+
+
+## Current Agent-owned synchronization permissions — Build 12
+
+Agent Build 10 or later receives `wallet_sync_preferences` proposals with exactly `{kind,version:1,challenge:64HEX,previous:null}`. A separate `wallet_setup_identity` challenge binds the Agent's public Ed25519 identity to the current registered connection; previously observed setup identities must agree. Reply kind is `wallet_sync_preferences`, payload `{version:1,challenge,snapshot}`. Verify the exact signed envelope using namespace `wallaby-sync-preferences-v1`. Its message is `{version:1,purpose:"wallet_sync_preferences",agent_key,revision:NONNEGATIVE_INT,policies:[64HEX...]}`. At most 128 distinct policy IDs are accepted. Policy ID is the canonical JSON SHA256 of the sorted normalized public descriptor set: remove checksums and origin annotations, normalize apostrophe hardened notation to `h`, preserve fixed-address descriptor bodies.
+
+Only an outstanding challenge on the current connection is accepted. Foreign signatures, wrong signature namespaces, rollback and same-revision conflicts within that connection are rejected. Current observations are volatile; no Dashboard denial list or preference-restore snapshot is written to profile data. Agent owns permanent storage. Dashboard always sends `previous:null`, so enabling/deleting a local denial can never be undone by restoring an older Dashboard copy. Reconnection waits for a new signed current-state response before creating missing-wallet offers. Poll approximately every ten seconds, treating observations older than 45 seconds as unknown.
+
+An excluded exact receiving policy withdraws both live peer rows and suppresses its non-actionable missing-wallet notice. Audit records remain; nothing marks the wallet deleted or the transfer completed. Other receivers, signing approvals, inventory collection and genuine incomplete-history recovery remain independent. Nodes shows the Agent decision read-only.
+
+## Disc signing aliases
+
+Agent Build 10 exposes protected-RAM archive accounts through public wallet routing aliases. `getwalletinfo.walletname` and `listdescriptors.wallet_name` must agree with each other; they can differ from the public routing alias. Public descriptors, never names, determine signing identity. Preserve the alias for the signing request, mark it signing-only, and exclude it from persistent history loading, retirement and automatic synchronization. A temporary policy monitor cannot satisfy a missing persistent replica or final persistent Core setup confirmation. Refresh signing accounts performs only bounded public inventory reads.

@@ -614,6 +614,14 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if path.endswith(('/vault-prepare','/vault-estimate')):return self.json(prepare_export(hub,session,data.get('export_id'),data.get('diagram'),path.endswith('/vault-estimate')))
                     if path.endswith('/sign'):return self.json(queue_sign(hub,session,data.get('id'),data.get('wallet_id'),data.get('node_id'),data.get('signer_id')))
                     return self.json(queue_broadcast(hub,session,data.get('id'),data.get('node_id')))
+                if path=='/api/nodes/inventory-refresh':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    hub=sessions.nodes.hub
+                    for connection in list(sessions.nodes.connections.values()):
+                        if not sessions.nodes.rpc._unique(connection):continue
+                        hub.inventory_times[connection['node_id']]=0
+                        threading.Thread(target=hub.refresh_inventory,args=(connection['node_id'],connection['token']),daemon=True).start()
+                    return self.json({'queued':True})
                 if path=='/api/wallets/retire':
                     from wallet_retirement import propose
                     return self.json(propose(sessions.nodes.hub,session,data.get('wallet_id'),data.get('node_id'),data.get('confirmed')))

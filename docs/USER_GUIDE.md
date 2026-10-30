@@ -1,6 +1,6 @@
 > Current workflow: Ownership Stage 3 ends with Verify Balances. Wallets and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
 
-# Wallaby Bitcoin Dashboard — V1 Build 11
+# Wallaby Bitcoin Dashboard — V1 Build 12
 
 Extract the complete ZIP. Start the service with `./Start_Wallaby_Bitcoin_Dashboard.sh`, or:
 
@@ -20,7 +20,7 @@ The `tzdata` Python package in requirements.txt supplies IANA timezone rules on 
 
 Public descriptor derivation and raw transaction parsing are bundled; no Bitcoin Core installation or wallet unlock is needed on the dashboard server.
 
-## V1 Build 11 setup
+## V1 Build 12 setup
 
 1. Open **Administration**, then select or create a family user. The sidebar and header remain visible before login; other pages unlock after a user is selected.
 2. Connect each node's Wallaby Agent, load the desired wallets in Bitcoin Core, then open **Ownership** and select **Load Node Wallets**. Every connected node is queried over read-only RPC. Identical public locking descriptors identify wallet copies, independently of wallet names; matching copies share RPC work. Ownership suggests the first reporting node's name. Different wallets with identical names stay separate. Core wallet history is reconstructed through the same connected nodes; after success Ownership opens at Stage 2. No console exports, private keys or wallet unlock are needed. Unloaded wallets or missing RPC capabilities stop discovery with an actionable error rather than accepting a partial collection.
@@ -89,7 +89,7 @@ There is **no saved allocation ledger**, and neither saved transaction templates
 
 Optional whole-return tax context now needs explicit user/year scope, so another person's return or a different year is never reused accidentally. The JSON format is `{"users": {"User name or ID": {"2026-27": {"basic_tax": "0", "basic_tax_without_gain": "0"}}}}`, with the existing optional calculation fields inside each year object. Use `{"users": {}}` when no context is supplied. User names are matched without case sensitivity; stable profile IDs are also accepted.
 
-V1 Build 11 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
+V1 Build 12 does not establish that this accounting convention has ATO approval. The report identifies it as an assumption for review rather than representing it as a recovered fact.
 
 ## Descriptor wallet display names
 
@@ -157,7 +157,7 @@ Prepared PSBTs contain one complete transaction, verified previous transactions 
 
 Stage 3 opens after preparation for the creator or sending owner. **Notifications** is also available through the bell beside the profile name. New signing requests mark the bell, Notifications and builder links with red dots for other sending owners. The transaction creator receives a read notification without a red dot. Opening Notifications marks requests as viewed without deleting them. Selecting a request in Notifications opens its prepared transaction at Stage 3. Sending participants can follow that request to sign even while their template-construction pages are locked. The X deletes only that user’s notification. Opening Transaction Builder resumes the latest accessible prepared transaction at that user’s permitted signing/combination stage, including after closing the browser or restarting the service. Unprepared diagram edits are discarded when leaving the builder; save a template to retain them.
 
-Every selected Agent receives the same final transaction. Select a connected signing account on its wallet card and request local review. The Agent displays the transaction using its own Core information, asks for local approval/unlocking and returns only a partially signed PSBT. Dashboard verifies and accumulates distinct controlling-key signatures per input. Cards show progress and become green only when complete. A restored physical cosigner follows this same route; private backups and passwords must stay on the Agent computer. Agent Build 9 does not yet provide a guided disc-restore screen.
+Every selected Agent receives the same final transaction. Select a connected signing account on its wallet card and request local review. The Agent displays the transaction using its own Core information, asks for local approval/unlocking and returns only a partially signed PSBT. Dashboard verifies and accumulates distinct controlling-key signatures per input. Cards show progress and become green only when complete. A restored physical cosigner follows this same route; private backups and passwords must stay on the Agent computer. Use Agent Build 10's Disc Operations to load the archive into protected RAM, then Refresh signing accounts in Transaction Builder.
 
 Prepared transactions, unsigned PSBTs, verified signature proofs, combined PSBTs, notification state and change reservations persist in **data/transactions/workflows.json**. Include the existing data directory in backups. Reopening a transaction supersedes its dashboard PSBT and releases its input reservation; files already downloaded are not cryptographically revoked and must not be used after replacement. Removing a profile cancels orphaned prepared plans. No notification or wallet/transaction identity is hardcoded.
 
@@ -174,7 +174,7 @@ Wallet Builder is available after login. Choose single signature, multisig, vaul
 
 Wallets hover details display the multisig threshold and distinct matching signing keys visible on connected Agents. Watch-only copies and duplicate copies of the same key are excluded; visibility does not guarantee a key can be unlocked or signing authorised.
 
-V1 Build 11 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
+V1 Build 12 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
 
 
 ## Cancelling construction
@@ -189,7 +189,7 @@ Receipt validation checks all supplied historical wallet records, including rece
 
 A supplied crypto-to-BTC trade now records the sold asset's CGT as well as the BTC acquisition. AUD disposal proceeds come from the supplied BTC consideration and the existing timestamped BTC/AUD lookup. No additional crypto/crypto or USD conversion is needed. Network fees in the sold asset create separate disposal components; the existing BTC acquisition basis includes the fee's incidental acquisition cost once. Non-BTC amounts keep their own unit, without Bitcoin pipe notation.
 
-The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 11 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
+The exchange's quantities establish consideration, not the disposed asset's acquisition cost or holding period. Earlier supplied purchases establish those automatically. If they are absent, Terminal Activity asks for acquisition parcels (date, quantity, AUD cost). For otherwise untraced BCH, V1 Build 12 assumes investment acquisition at the 1 August 2017 Bitcoin Cash fork with zero AUD cost, including BCH spent on network fees. It does not ask for BCH acquisition details. Known supplied purchases retain their actual cost and date. Other non-fiat assets still require acquisition facts when missing. USD, RUB and all other fiat conversions are unchanged. Different holding periods remain separate CGT components. These answers belong to the current calculation and its saved working paper; they are not wallet ownership settings or transaction templates. See [ATO crypto chain splits](https://www.ato.gov.au/individuals-and-families/investments-and-assets/crypto-asset-investments/transactions-acquiring-and-disposing-of-crypto-assets/crypto-chain-splits).
 
 Prompt headings now use Exchange Tracer and Wallet Tracer. The wallaby logo retains its shape with a four-tile dashboard emblem.
 
@@ -215,6 +215,13 @@ These features work with Agent V2 Development Build 8 advertising the documented
 
 Wallets replaces Wallet Balances. All Owners is the initial owner filter. Active Wallets starts selected and Extinct Wallets starts clear; changing filters never leaves both clear. Historical archive cards are grey and show the first/last confirmed activity years (one year when equal), without AUD balance or hypothetical profit/loss. Multiple addresses carrying the same base label form one old wallet. Separate labels in the same Core archive remain separate wallets and owners.
 
-Make Extinct requests local Agent review for a wallet owned by the logged-in user. Its execution needs a later Agent advertising wallet_retirement; current Agent Build 8 will explain that an update is needed. The Agent must confirm an empty wallet and complete history, preserve historical labels, and must not delete the wallet or keys. Refresh Ownership after the approved conversion. Retirement does not mean lost keys or create a tax loss.
+Make Extinct requests local Agent review for a wallet owned by the logged-in user. Its execution requires an Agent advertising wallet_retirement; Agent Build 9 and later implement it locally. The Agent must confirm an empty wallet and complete history, preserve historical labels, and must not delete the wallet or keys. Refresh Ownership after the approved conversion. Retirement does not mean lost keys or create a tax loss.
 
 Use Agent V2 Development Build 8 or newer. Nodes shows all relevant missing-wallet requests and non-dismissible history-recovery warnings. Review the local Agent Synchronisation page to authorise work. Data received with incomplete history remains incomplete until recovery is locally approved and verified. Final receiver completion clears both paired request lists; it does not resend the wallet. The Dashboard cannot restart Core, disable pruning or authorise a transfer.
+
+
+## Agent-owned synchronization choices
+
+Nodes displays each connected Agent's current synchronization permissions. Disable a particular incoming wallet policy on that Agent's Authorise page to remove its offers and missing-wallet notifications. Re-enable it or remove its local denial entry to allow synchronization again. Dashboard has no duplicate enable/disable setting. It queries current signed state after connection and approximately every ten seconds; until a fresh response arrives it waits rather than assuming a wallet is unwanted or raising an actionable missing-wallet warning. The Agent owns persistence across reboots.
+
+A genuinely incomplete history recovery remains a real task and is not hidden by unrelated preferences. Existing failed or expired private-transfer attempts still require local reconciliation and an explicit fresh attempt; permission changes do not silently repeat a previously attempted private-file operation.

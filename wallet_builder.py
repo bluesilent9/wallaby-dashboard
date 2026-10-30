@@ -148,7 +148,7 @@ class WalletBuilder:
         for h,row in self.read()['sessions'].items():
             if row['state']!='ready' or node not in row['routes'].values() or node in row.get('completion_confirmed',{}):continue
             expected={NodeWalletLoader.descriptor_key(d) for d in row['descriptors']}
-            matches=[w for w in wallets if {NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors']}==expected]
+            matches=[w for w in wallets if not w.get('signing_only') and {NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors']}==expected]
             if not matches:continue
             address=Descriptor.from_string(row['descriptors'][0]).derive(0).address(NETWORKS['main'])
             labels=self.hub.rpc(node,'getaddressinfo',[address],matches[0]['name']).get('labels',[])

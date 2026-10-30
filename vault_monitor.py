@@ -41,6 +41,7 @@ class VaultMonitor:
             g['policies'].append({'id':ident,'public':v,'valid':valid,'funds':0})
             if reason:g['issues'].append(reason)
             for n in active:
+                if source and hub.permissions.permits(n['id'],source['raw']) is False:continue
                 known=state['nodes'].get(n['id'],{}).get('known_vaults',[])
                 inventory=hub.inventories.get(n['id'],{})
                 has=any(any(NodeWalletLoader.descriptor_key(r['desc'])==NodeWalletLoader.descriptor_key(v.get('descriptor','')) for r in w['raw']['descriptors']) for w in inventory.get('wallets',[]))
@@ -62,6 +63,7 @@ class VaultMonitor:
                     if not checked['height']:raise ValueError('No mandatory height lock.')
                     g['policies'].append({'id':digest(row['desc']),'public':{'descriptor':row['desc'],'height':checked['height']},'valid':True,'funds':0,'ranged':True})
                     for n in active:
+                        if hub.permissions.permits(n['id'],wallet['raw']) is False:continue
                         inv=hub.inventories.get(n['id'],{})
                         if not any(equivalent(wallet['raw'],w['raw']) for w in inv.get('wallets',[])):g['issues'].append(n['hostname']+': public vault policy is awaiting local Agent synchronisation.')
                     ceremonies=getattr(hub,'wallet_builder',None)

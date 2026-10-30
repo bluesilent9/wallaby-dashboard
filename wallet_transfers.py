@@ -59,10 +59,10 @@ class Transfers:
             if not rows or len(rows)!=2 or any(r['state']=='recovery_required' for r in rows) or (not expired and any(r['state'] not in TERMINAL for r in rows)) or all(r['state']=='complete' for r in rows):raise ValueError('Resolve or cancel this attempt on both Agents before retrying.')
             old=next(r for r in rows if r['direction']=='receive');inv=self.hub.inventories.get(old['node_id'],{})
             if not inv.get('complete') or time.monotonic()-self.hub.inventory_times.get(old['node_id'],0)>60:raise ValueError('Wait for the destination wallet inventory to refresh before retrying.')
-            if any(equivalent(old['public_wallet'],w['raw']) for w in inv['wallets']):raise ValueError('The destination already has this wallet. No retry is needed.')
+            if any(equivalent(old['public_wallet'],w['raw']) for w in inv['wallets'] if not w.get('signing_only')):raise ValueError('The destination already has this wallet. No retry is needed.')
             sender=next(r for r in rows if r['direction']=='send');source=self.hub.inventories.get(sender['node_id'],{})
             if not source.get('complete') or time.monotonic()-self.hub.inventory_times.get(sender['node_id'],0)>60:raise ValueError('Wait for the source wallet inventory to refresh before retrying.')
-            wallet=next((w for w in source['wallets'] if equivalent(w['raw'],sender['public_wallet'])),None)
+            wallet=next((w for w in source['wallets'] if not w.get('signing_only') and equivalent(w['raw'],sender['public_wallet'])),None)
             if not wallet:raise ValueError('The source wallet is no longer present. Reload node wallets.')
             if any(r.get('retry_of')==transfer for r in state['requests'].values()):raise ValueError('A new attempt already exists.')
             for previous in rows:previous.update(state='error',queue_visible=False,message='Superseded by a deliberate fresh attempt after local reconciliation.')
@@ -76,6 +76,9 @@ class Transfers:
         for ident,rows in self.pairs(state).items():
             for r in rows:
                 if r['node_id']!=node:continue
+                receiver=next((x for x in rows if x['direction']=='receive'),None)
+                permission=self.hub.permissions.permits(receiver['node_id'],receiver['public_wallet']) if receiver else True
+                if permission is not True and r['state']=='pending':continue
                 terminal=all(x['state'] in TERMINAL for x in rows)
                 complete=any(x['direction']=='receive' and x['state']=='complete' for x in rows)
                 result.append({'transfer_id':ident,'wallet_name':r['public_wallet']['wallet_name'],'direction':r['direction'],'state':'complete' if complete else r['state'],'message':'Receiver verified wallet data and history.' if complete else r.get('message',''),'active':bool(r.get('active_pair')),'preview_ready':any(x.get('signed_preview') for x in rows),'retryable':(terminal or all(x.get('message','').startswith('Signed preview expired.') for x in rows)) and not any(x['state']=='recovery_required' for x in rows) and not any(x['direction']=='receive' and x['state']=='complete' for x in rows) and not any(x.get('retry_of')==ident for x in state['requests'].values())})

@@ -48,11 +48,14 @@ class NodeWalletLoader:
     def export(self,replica):
         node,name=replica
         info=self.rpc(node,'getwalletinfo',wallet=name)
-        if not isinstance(info,dict) or info.get('walletname')!=name:raise ValueError('Wallet identity response did not match '+node['hostname']+' / '+name)
+        if not isinstance(info,dict) or not isinstance(info.get('walletname'),str):raise ValueError('Wallet identity response did not match '+node['hostname']+' / '+name)
         if info.get('scanning'):raise ValueError(node['hostname']+' / '+name+': wait for the Core wallet rescan to finish.')
         raw=self.rpc(node,'listdescriptors',[False],wallet=name)
-        if not isinstance(raw,dict) or raw.get('wallet_name')!=name:raise ValueError('Invalid public descriptor export from '+node['hostname']+' / '+name)
+        if not isinstance(raw,dict) or raw.get('wallet_name')!=info['walletname']:raise ValueError('Invalid public descriptor export from '+node['hostname']+' / '+name)
         wallet=clean_wallet(raw)
+        if info['walletname']!=name:
+            self.progress(node['hostname']+' / '+name+': local signing alias; excluded from persistent wallet history.')
+            return []
         history=self.rpc(node,'listsinceblock',['',1,True,False,True],wallet=name)
         if not isinstance(history,dict) or not isinstance(history.get('transactions'),list) or not re.fullmatch('[0-9a-f]{64}',str(history.get('lastblock'))):raise ValueError('Invalid Core public history for '+name)
         self.progress(node['hostname']+' / '+(name or 'Default Core Wallet')+': public descriptors and wallet history received.')

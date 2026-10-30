@@ -32,7 +32,8 @@ def schedule(transfers,state):
             challenge=secrets.token_hex(32)
             for row in rows:
                 row.update(queue_v2=True,challenge=challenge,base_sent=0,active_pair=False)
-        active=nodes<=ready.keys() and all(modern(hub,n) and 'wallet_transfer' in hub.caps.get(n,set()) and state['nodes'].get(n,{}).get('ipv6') for n in nodes)
+        permission=hub.permissions.permits(receiver['node_id'],receiver['public_wallet'])
+        active=permission is True and nodes<=ready.keys() and all(modern(hub,n) and 'wallet_transfer' in hub.caps.get(n,set()) and state['nodes'].get(n,{}).get('ipv6') for n in nodes)
         active=active and receiver['state']!='complete' and not any(r['state'] in ('denied','error') for r in rows)
         if active and not source.get('proposal'):
             active=all(hub.registry.health.status(ready[n]).get('state')=='ready' for n in nodes)
@@ -89,6 +90,8 @@ def warnings(hub):
         if any(r['direction']=='receive' and r['state']=='complete' for r in rows):continue
         recovery=any(r['state']=='recovery_required' for r in rows)
         if not recovery and not any(r['state']=='pending' for r in rows):continue
+        receiver=next((r for r in rows if r['direction']=='receive'),None)
+        if receiver and hub.permissions.permits(receiver['node_id'],receiver['public_wallet']) is not True and not recovery:continue
         name=rows[0]['public_wallet']['wallet_name'];peers=', '.join(names.get(r['node_id'],'node') for r in rows)
         text=('Wallet data received, but history recovery is incomplete for ' if recovery else 'Wallet synchronisation needs local review for ')+name+' ('+peers+'). Open the local Agent’s Synchronisation page.'
         result.append({'id':'wallet-sync-'+ident,'kind':'wallet_sync','severity':'yellow','dismissible':False,'target':'nodes','created_utc':rows[0]['created_utc'],'text':text})

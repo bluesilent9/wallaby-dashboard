@@ -14,7 +14,7 @@ def fingerprint(value):
     except ValueError:raw=b''
     if len(raw)!=51 or raw[:19]!=b'\x00\x00\x00\x0bssh-ed25519\x00\x00\x00\x20':raise ValueError('Invalid Agent Ed25519 identity.')
     return 'SHA256:'+base64.b64encode(hashlib.sha256(raw).digest()).decode().rstrip('=')
-def verify(store,envelope,expected):
+def verify(store,envelope,expected,namespace=NAMESPACE):
     if not isinstance(envelope,dict) or set(envelope)!={'message','public_key','signature'} or envelope['public_key']!=expected:raise ValueError('Contribution comes from a different Agent identity.')
     fingerprint(expected)
     root=data_directory(store);root.mkdir(parents=True,exist_ok=True)
@@ -23,6 +23,6 @@ def verify(store,envelope,expected):
         allow=Path(path)/'allowed';sig=Path(path)/'signature';allow.write_text('wallaby '+expected+'\n')
         try:sig.write_bytes(base64.b64decode(envelope['signature'],validate=True))
         except Exception:raise ValueError('Invalid contribution signature encoding.') from None
-        r=subprocess.run(['/usr/bin/ssh-keygen','-Y','verify','-f',str(allow),'-I','wallaby','-n',NAMESPACE,'-s',str(sig)],input=canonical(envelope['message']),capture_output=True,timeout=10)
+        r=subprocess.run(['/usr/bin/ssh-keygen','-Y','verify','-f',str(allow),'-I','wallaby','-n',namespace,'-s',str(sig)],input=canonical(envelope['message']),capture_output=True,timeout=10)
         if r.returncode:raise ValueError('Authenticated contribution verification failed.')
     return envelope['message']

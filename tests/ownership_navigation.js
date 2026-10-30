@@ -5,7 +5,7 @@ function deferred(){let resolve;const promise=new Promise(r=>resolve=r);return {
 async function main(){
  const stale=deferred(),upload=deferred();let calls=0;
  const c={console,Intl,setTimeout,clearTimeout,queueMicrotask,performance:{now:()=>0},location:{hash:'#/ownership'},history:{},document:{querySelectorAll:()=>[]},WallabyDescriptors:{canContinue:()=>true},WallabyBuilder:{},offline:false,token:'test',applicationClosed:false,pollBusy:false,jobEpoch:0,lastSequence:0,status:'complete',pending:null,stage:'loading',stageLabel:'',report:null,jobMode:'descriptors',jobLoaded:true,followJob:false,logs:[],activityStarted:true,serverBusy:false,settings:{},family:{loaded:true,user:{id:'example'},descriptors:{ready:true},inventory_ready:false,report_generation:null,ownership_context:null},familyUploadReady:()=>true,uploadInputs:()=>upload.promise,post:async()=>({}),api:async()=>({json:()=>++calls===1?stale.promise:Promise.resolve({status:'complete',events:[],mode:'inventory',user:{id:'example'},job_ready:true,report_generation:null,inventory_ready:true})}),render:()=>{},go:name=>{c.location.hash='#/'+name;},route:()=>c.location.hash.slice(2),toast:()=>{},appendLog:x=>c.logs.push(x),jobActive:()=>['uploading','running','waiting'].includes(c.status),scrollOwnership:id=>c.scrolled=id,loadFamily:async()=>{c.family.inventory_ready=true;c.family.inventory=[{id:'wallet'}];},updateHeader:()=>{}};
- vm.createContext(c);vm.runInContext(take('async function startJob(','function auxiliaryActivityView')+take('async function poll()','function enterView'),c);
+ c.setInterval=()=>1;vm.createContext(c);vm.runInContext(take('async function startJob(','function auxiliaryActivityView')+take('async function poll()','function enterView'),c);
  const oldPoll=c.poll();await Promise.resolve();const run=c.startJob('inventory');
  assert.equal(c.route(),'activity','must switch immediately, before uploads finish');assert.equal(c.status,'uploading');
  stale.resolve({status:'complete',events:[],mode:'descriptors',user:{id:'example'},job_ready:true,report_generation:null});await oldPoll;
@@ -21,7 +21,7 @@ main().catch(e=>{console.error(e);process.exit(1);});
 // Restoring a server-verified descriptor snapshot must not depend on this tab
 // having witnessed the original load operation.
 {
- const c={window:{}};vm.createContext(c);vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[2]),'descriptors.js'),'utf8'),c);
+ const c={window:{}};c.setInterval=()=>1;vm.createContext(c);vm.runInContext(fs.readFileSync(require('path').join(require('path').dirname(process.argv[2]),'descriptors.js'),'utf8'),c);
  assert.equal(c.window.WallabyDescriptors.canContinue({ready:true}),true);
  assert.equal(c.window.WallabyDescriptors.canContinue({ready:false}),false);
 }
