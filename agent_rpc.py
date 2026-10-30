@@ -6,7 +6,7 @@ and enforces its own permissions. Signing/unlocking/private exports are excluded
 from copy import deepcopy
 from datetime import datetime,timezone
 from decimal import Decimal
-import hashlib,json,re,time,uuid
+import json,re,time,uuid
 
 NODE_METHODS=frozenset('getblockchaininfo getblockcount getbestblockhash getblockhash getblockheader getblock getchaintips getdifficulty getmempoolinfo getrawmempool getmempoolentry getmempoolancestors getmempooldescendants gettxout gettxoutsetinfo getrawtransaction gettxoutproof verifytxoutproof getnetworkinfo getnettotals getpeerinfo getconnectioncount getindexinfo estimatesmartfee deriveaddresses getdescriptorinfo validateaddress decoderawtransaction decodescript decodepsbt analyzepsbt listwallets listwalletdir scantxoutset scanblocks getdescriptoractivity getblockfrompeer'.split())
 WALLET_METHODS=frozenset('getwalletinfo getbalances getbalance listunspent gettransaction listtransactions listsinceblock getaddressinfo getaddressesbylabel listlabels listaddressgroupings listreceivedbyaddress listreceivedbylabel listdescriptors'.split())
@@ -23,15 +23,15 @@ class PrivateMaterial:
     extended=re.compile(r'(?i:[xtyzuv]prv)[1-9A-HJ-NP-Za-km-z]{20,}')
     wif=re.compile(r'(?<![A-Za-z0-9])(?:[KL][1-9A-HJ-NP-Za-km-z]{51}|5[1-9A-HJ-NP-Za-km-z]{50}|[c9][1-9A-HJ-NP-Za-km-z]{50,51})(?![A-Za-z0-9])')
     def search(self,text):
-        match=self.extended.search(text)
-        if match:return match
-        alphabet='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-        for match in self.wif.finditer(text):
-            number=0
-            for char in match.group():number=number*58+alphabet.index(char)
-            raw=number.to_bytes((number.bit_length()+7)//8,'big');body=raw[:-4]
-            if len(body) in (33,34) and body[0] in (0x80,0xef) and (len(body)==33 or body[-1]==1) and hashlib.sha256(hashlib.sha256(body).digest()).digest()[:4]==raw[-4:]:return match
+        from itertools import chain
+        from vendor.embit.base58 import decode_check
+        for match in chain(self.extended.finditer(text),self.wif.finditer(text)):
+            try:raw=decode_check(match.group())
+            except Exception:continue
+            if len(raw)==78 and raw[45]==0:return match
+            if len(raw) in (33,34) and raw[0] in (0x80,0xef) and (len(raw)==33 or raw[-1]==1):return match
         return None
+
 PRIVATE=PrivateMaterial()
 
 def stamp():return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z')

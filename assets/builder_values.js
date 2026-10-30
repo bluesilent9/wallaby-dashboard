@@ -17,5 +17,10 @@ function btcValue(value){const n=BigInt(value||'0'),sats=n<0n?-n:n;return (n<0n?
 function balanceSats(value){const m=String(value).match(/^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);if(!m)throw Error('Balance unavailable');let digits=m[2]+(m[3]||''),shift=8+Number(m[4]||0)-(m[3]||'').length;if(Math.abs(shift)>100)throw Error('Balance unavailable');if(shift<0){const cut=-shift;if(/[^0]/.test(digits.slice(-cut)))throw Error('Balance below satoshi precision');digits=digits.slice(0,-cut)||'0';shift=0;}return BigInt(digits)*10n**BigInt(shift)*(m[1]==='-'?-1n:1n);}
 
 function projection(id,balance,edges,fees){let n=balanceSats(balance);for(const e of edges){const amount=BigInt(e.amount_sats||'0');if(e.from===id)n-=amount;if(e.to===id)n+=amount;}if(fees)n-=BigInt(fees[id]||'0');return n.toString();}
-const api={balanceSats,projection,parseAmount,parseFee,positiveFee,hasData,amountParts,btcValue};root.WallabyBuilderValues=api;if(typeof module!=='undefined')module.exports=api;
+function feeReview(estimate,edges){
+ const total=BigInt(estimate?.total_fee_sats||'0'),payments=(edges||[]).reduce((sum,e)=>sum+(e.to==='network-fee'?0n:BigInt(e.amount_sats||'0')),0n),rate=Number(estimate?.combined_rate||0),largeShare=payments>0n&&total*10n>=payments,highRate=Number.isFinite(rate)&&rate>=100;
+ const units=payments>0n?(total*10000n+payments-1n)/payments:null,percent=units===null?null:String(units/100n)+'.'+String(units%100n).padStart(2,'0');
+ return {required:largeShare||highRate,total_sats:total.toString(),payment_sats:payments.toString(),percent,rate,reason:largeShare&&highRate?'The fee is at least 10% of the payments and the rate is at least 100 sats/vB.':largeShare?'The fee is at least 10% of the payments.':highRate?'The fee rate is at least 100 sats/vB.':''};
+}
+const api={feeReview,balanceSats,projection,parseAmount,parseFee,positiveFee,hasData,amountParts,btcValue};root.WallabyBuilderValues=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window==='undefined'?globalThis:window);

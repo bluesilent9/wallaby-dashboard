@@ -110,3 +110,8 @@ An excluded exact receiving policy withdraws both live peer rows and suppresses 
 ## Disc signing aliases
 
 Agent Build 10 exposes protected-RAM archive accounts through public wallet routing aliases. `getwalletinfo.walletname` and `listdescriptors.wallet_name` must agree with each other; they can differ from the public routing alias. Public descriptors, never names, determine signing identity. Preserve the alias for the signing request, mark it signing-only, and exclude it from persistent history loading, retirement and automatic synchronization. A temporary policy monitor cannot satisfy a missing persistent replica or final persistent Core setup confirmation. Refresh signing accounts performs only bounded public inventory reads.
+
+
+## Dashboard Build 13 presentation update
+
+No wire protocol, remote RPC permission, partial-signature or broadcast behaviour changes. Vault status responses now include verification timestamps, stale flags, funding status and public policy thresholds; these are Dashboard browser fields, not Agent authority. Dashboard never converts its browser fee acknowledgement into local Agent consent. Remaining Agent-only presentation work is listed in AGENT_FOLLOW_UP.md.

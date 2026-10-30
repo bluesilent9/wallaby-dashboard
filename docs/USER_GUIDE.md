@@ -225,3 +225,14 @@ Use Agent V2 Development Build 8 or newer. Nodes shows all relevant missing-wall
 Nodes displays each connected Agent's current synchronization permissions. Disable a particular incoming wallet policy on that Agent's Authorise page to remove its offers and missing-wallet notifications. Re-enable it or remove its local denial entry to allow synchronization again. Dashboard has no duplicate enable/disable setting. It queries current signed state after connection and approximately every ten seconds; until a fresh response arrives it waits rather than assuming a wallet is unwanted or raising an actionable missing-wallet warning. The Agent owns persistence across reboots.
 
 A genuinely incomplete history recovery remains a real task and is not hidden by unrelated preferences. Existing failed or expired private-transfer attempts still require local reconciliation and an explicit fresh attempt; permission changes do not silently repeat a previously attempted private-file operation.
+
+
+## Build 13 — vault status and fee review
+
+Creating a wallet or vault does not transfer Bitcoin. Complete its Agent approvals and any physical backups first, then wait for every producing Core node to confirm its monitor. Reload Node Wallets and Ownership before funding the wallet through Transaction Builder. Wallet Builder labels this progression explicitly.
+
+Vaults shows only wallets with vault policies, including single-signature and multisignature vaults. Green means confirmed funds are locked with no reported verification issue; red means the height has been reached; amber means the wallet needs attention or is ready but unfunded. Hover for signature requirements, height, balance evidence and the last verified UTC time. Failed or overdue refreshes turn retained cards amber and label old values as last-known. A countdown is an estimate based on ten-minute blocks.
+
+Transaction Builder gives an extra fee review when the total is at least 10% of planned payments or the combined rate is at least 100 sats/vB. There is no hard fee cap. Review and acknowledge the actual fee before requesting signatures, then independently review the transaction on the Agent. Each browser/profile reviews its own requests. The acknowledgement is a user-interface aid, not remote authorisation or an Agent security control.
+
+For errors or uncertain results, inspect the selected Agent and Core before explicitly retrying. Do not interpret a lost response as proof that a private operation did not happen. A local denial must be cleared on that Agent. Existing Agent approval, signature and broadcast rules remain unchanged.

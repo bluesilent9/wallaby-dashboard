@@ -158,6 +158,7 @@ class WalletBuilder:
                 current=state['sessions'][h];current.setdefault('completion_confirmed',{})[node]=self.hub.utc()
                 if set(current['routes'].values())<=set(current['completion_confirmed']):current['message']='Every producing Core node confirms the exact public monitor is ready. Reload Node Wallets in Ownership to use it.'
     def snapshot(self):
+        from node_wallets import NodeWalletLoader
         state=self.read();nodes=[]
         for n in self.available():
             identity=state['identities'].get(n['id']);nodes.append({'id':n['id'],'hostname':n['hostname'],'fingerprint':identity['message']['fingerprint'] if identity else None,'fresh':bool(identity and identity['message']['challenge']==state['challenges'].get(n['id']))})
@@ -167,6 +168,27 @@ class WalletBuilder:
             if r.get('descriptors'):
                 for branch,desc in zip(('Receive','Change'),r['descriptors']):
                     for index in (0,1,10):row['samples'].append({'branch':branch,'index':index,'address':Descriptor.from_string(desc).derive(index).address(NETWORKS['main'])})
+            required=set(r['routes'].values());confirmed=set(r.get('completion_confirmed',{}))
+            status='awaiting_approvals';label='Waiting for local Agent approvals and required backups'
+            if r['state'] in ('cancelled','interrupted'):status=r['state'];label='Stopped — reconcile the existing setup on the Agents before starting again'
+            elif r['state']=='ready':
+                status='awaiting_confirmation';label='Wallet created — waiting for Core confirmation'
+                if required<=confirmed:
+                    status='ready_to_fund';label='Ready to fund — use Transaction Builder'
+                    monitor=getattr(self.hub.registry,'vaults',None)
+                    for vault in (monitor.value.get('wallets',[]) if monitor else []):
+                        bodies={NodeWalletLoader.descriptor_key(p['public'].get('descriptor','')) for p in vault.get('policies',[])}
+                        if not bodies & {NodeWalletLoader.descriptor_key(d) for d in r.get('descriptors',[])}:continue
+                        # A historical green card cannot establish current funding status.
+                        from datetime import datetime,timezone
+                        try:age=(datetime.now(timezone.utc)-datetime.fromisoformat(vault.get('checked_utc','').replace('Z','+00:00'))).total_seconds()
+                        except (ValueError,TypeError):age=10**9
+                        if vault.get('stale') or age>45:status='stale';label='Funding status unavailable — check Vaults'
+                        elif vault.get('funding_status')=='locked':status='locked';label='Funded and locked'
+                        elif vault.get('funding_status')=='unlocked':status='unlocked';label='Unlocked — vault height reached'
+                        elif vault.get('funding_status')=='needs_attention':status='needs_attention';label='Vault needs attention — check Vaults'
+                        break
+            row.update(setup_status=status,setup_label=label)
             sessions.append(row)
         return {'nodes':nodes,'sessions':sessions}
 

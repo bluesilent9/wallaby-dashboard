@@ -101,4 +101,10 @@ class PrivateKeyFilter(unittest.TestCase):
                 with self.assertRaises(ValueError):clean_json({'key':encoded},1000)
         self.assertIsNone(PRIVATE.search('L'+'a'*51))
         self.assertIsNone(PRIVATE.search('l'+'a'*51))
-        self.assertIsNotNone(PRIVATE.search('xprv'+'a'*100))
+        self.assertIsNone(PRIVATE.search('xprv'+'a'*100))
+        from vendor.embit import bip32
+        from vendor.embit.networks import NETWORKS
+        for version in (NETWORKS['main']['xprv'],NETWORKS['test']['xprv']):
+            actual=bip32.HDKey.from_seed(b'fictional private filter fixture',version=version).to_base58()
+            self.assertIsNotNone(PRIVATE.search(actual))
+            with self.assertRaises(ValueError):clean_json({'key':actual},1000)
