@@ -236,3 +236,12 @@ Vaults shows only wallets with vault policies, including single-signature and mu
 Transaction Builder gives an extra fee review when the total is at least 10% of planned payments or the combined rate is at least 100 sats/vB. There is no hard fee cap. Review and acknowledge the actual fee before requesting signatures, then independently review the transaction on the Agent. Each browser/profile reviews its own requests. The acknowledgement is a user-interface aid, not remote authorisation or an Agent security control.
 
 For errors or uncertain results, inspect the selected Agent and Core before explicitly retrying. Do not interpret a lost response as proof that a private operation did not happen. A local denial must be cleared on that Agent. Existing Agent approval, signature and broadcast rules remain unchanged.
+
+
+## Build 14: fees, signer cards and retained diagnostics
+
+Open Fee Estimates to request a current refresh. The four priorities appear before optional block views finish. Rates refresh every two minutes while the page stays open; opening it again or choosing Refresh estimates requests a refresh immediately, with a five-second shared debounce. A failed/disconnected node produces an explanation rather than an endless estimation message. Recent-block details and the AUD quote can fail independently. Terminal Activity shows the current fee phase while it is running.
+
+Wallet Builder uses fixed-width, individually coloured signer cards; an incomplete final row keeps the same card size.
+
+Administration → Logs downloads UTF-8 `.log` activity from today and the six preceding UTC days. Server files persist across restarts, at up to 1 MiB per day / 7 MiB total. Expired days are removed automatically; if a day fills up, the oldest entries are discarded. Report activity, fee stages/failures and Agent protocol errors are included. Poll requests, RPC credentials, passphrases and private wallet material are not logged. Diagnostic logs live in `logs/` next to `config.cfg` and are separate from profile archives and tax evidence. The retained log is shared between trusted family profiles.

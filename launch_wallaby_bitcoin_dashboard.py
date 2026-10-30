@@ -30,6 +30,8 @@ from nodes import NodeRegistry,create_agent_server,DEFAULT_AGENT_PORT
 from preferences import FamilyStore,MISSING_OWNERSHIP,MissingOwnership,resolve_ownership
 from address_book import shared_address_book
 from fees import FeeService,FeeUnavailable
+from diagnostic_log import DiagnosticLog
+from version import LABEL
 from node_bridge import NodeBridge
 from node_chain import RegistryRPC,configure as configure_nodes
 from descriptor_store import DescriptorStore
@@ -60,7 +62,7 @@ class Session:
         self.workspace_dirty=False;self.workspace_stamp=None;self.report_generation=None
         self.session_dir=self.root/('session-'+secrets.token_hex(8));self.session_dir.mkdir(mode=0o700)
         self.input_dir=self.session_dir/'inputs';self.input_dir.mkdir(mode=0o700)
-        self.log_path=self.session_dir/'activity.log';self.log_path.touch(mode=0o600);self.active_operations=0;self.rpc_broker=None;self.node_bridge=None;self.rpc_logged=set();self.node_load_cancel=threading.Event();self.node_registry=None;self.node_load_lock=threading.Lock();self.profile_gate=ProfileGate()
+        self.diagnostic_log=DiagnosticLog(self.preferences_path.parent/'logs');self.active_operations=0;self.rpc_broker=None;self.node_bridge=None;self.rpc_logged=set();self.node_load_cancel=threading.Event();self.node_registry=None;self.node_load_lock=threading.Lock();self.profile_gate=ProfileGate()
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False;self.ownership_completed_utc=None;self.descriptor_fingerprint=None;self.bitaroo_as_of_date=None;self.restore_error='';self.sequence=0;self.activity_started=False;self.closed=False;self.user_id=None;self.mode='cgt';self.job_result=None;self.inventory=[];self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
     def user(self):
         return FamilyStore(self.preferences_path).user(self.user_id) if self.user_id else None
@@ -153,8 +155,7 @@ class Session:
     def write_log(self,data):
         text=data.get('text') or data.get('message') or data.get('label') or data.get('prompt') or data['type']
         if data.get('context'):text=data['context']+'\n'+text
-        user=self.user();stamp=datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M:%S UTC')
-        with self.log_path.open('a',encoding='utf-8') as log:log.write(stamp+' · '+(user['name'] if user else 'Dashboard')+' · '+str(text)+'\n')
+        user=self.user();self.diagnostic_log.append(user['name'] if user else 'Dashboard',text)
     def record_activity(self,message,user_id=None):
         with self.lock:
             if self.closed or user_id is not None and self.user_id!=user_id:return
@@ -373,7 +374,7 @@ class Sessions:
         self.expire()
         with self.lock:
             if len(self.sessions)>=self.max_sessions:raise ValueError('All browser workspaces are in use. Close an unused workspace and try again.')
-            session=Session(self.root,self.preferences_path);session.rpc_broker=self.nodes.rpc;session.node_registry=self.nodes;session.node_load_lock=self.node_load_lock;session.profile_gate=self.profile_gate;session.last_seen=time.monotonic();self.sessions[session.token]=session;return session
+            session=Session(self.root,self.preferences_path);session.diagnostic_log=self.nodes.diagnostic_log;session.rpc_broker=self.nodes.rpc;session.node_registry=self.nodes;session.node_load_lock=self.node_load_lock;session.profile_gate=self.profile_gate;session.last_seen=time.monotonic();self.sessions[session.token]=session;return session
     def get(self,token):
         with self.lock:
             session=self.sessions.get(token or '')
@@ -448,14 +449,14 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                             if source.is_file() and '__pycache__' not in source.parts and source.suffix not in ('.pyc','.deb'):archive.write(source,source.relative_to(ROOT))
                 body=buffer.getvalue();self.send_response(200);self.send_header('Content-Type','application/zip');self.send_header('Content-Disposition','attachment; filename="Wallaby_Dashboard_Source.zip"');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body);return
             if path.startswith('/api/'):
-                if path=='/api/fees':return self.json(fee_service.snapshot())
+                if path=='/api/fees':return self.json(fee_service.snapshot(force=parse_qs(urlsplit(self.path).query).get('refresh')==['1']))
                 if path=='/api/fees/track':
                     try:return self.json(fee_service.track(parse_qs(urlsplit(self.path).query).get('txid',[''])[0]))
                     except (ValueError,FeeUnavailable) as exc:return self.json({'error':str(exc)},400)
                 session=self.authorized()
                 if not session:return self.json({'error':'This browser workspace is not authorised'},403)
                 if path=='/api/logs':
-                    with session.lock:body=session.log_path.read_bytes()
+                    with session.lock:body=sessions.nodes.log_text().encode('utf-8')
                     self.send_response(200);self.send_header('Content-Type','text/plain; charset=utf-8');self.send_header('Content-Disposition','attachment; filename="Wallaby_Dashboard.log"');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.end_headers();self.wfile.write(body);return
                 if path=='/api/nodes/rpc/result':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
@@ -499,7 +500,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/state':
                     try:after=int(parse_qs(urlsplit(self.path).query).get('after',['0'])[0])
                     except ValueError:return self.json({'error':'Invalid event cursor'},400)
-                    with session.lock:return self.json({'last_job_error':session.last_job_error,'status':session.status,'events':[e for e in session.events if e['sequence']>after],
+                    with session.lock:return self.json({'fee_activity':fee_service.activity(),'last_job_error':session.last_job_error,'status':session.status,'events':[e for e in session.events if e['sequence']>after],
                                                         'pending':session.pending,**session.access(),'user':session.user(),'mode':session.mode,'job_ready':session.job_result is not None and (session.mode!='cgt' or session.access()['report_ready'])})
                 if path in ('/api/notifications','/api/transactions','/api/transaction','/api/transaction/psbt','/api/transaction/status','/api/transaction/combined'):
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
@@ -790,7 +791,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
             fee_service.close();sessions.close_all()
     server=ServerGroup()
     def reap():
-        while not server.reaper_stop.wait(60):sessions.expire()
+        while not server.reaper_stop.wait(60):
+            sessions.expire()
+            with sessions.nodes.diagnostic_log.lock:sessions.nodes.diagnostic_log.prune()
     threading.Thread(target=reap,daemon=True).start()
     return server,sessions
 
@@ -817,7 +820,7 @@ def main():
     agent.start()
     host='[::1]' if server.has_ipv6 else '127.0.0.1'
     url=f'http://{host}:{server.server_port}/'
-    print('Wallaby Bitcoin Dashboard V1 Build 6 · '+str(ROOT),flush=True)
+    print('Wallaby Bitcoin Dashboard '+LABEL+' · '+str(ROOT),flush=True)
     print('Wallaby Bitcoin Dashboard: '+url,flush=True)
     print(f'Wallaby Agent listener: loopback port {agent.server_port} (wallaby-agent JSON/HTTP v1 over SSH)',flush=True)
     print(f'Fee estimates (bookmark): http://{host}:{server.server_port}/#/fees',flush=True)

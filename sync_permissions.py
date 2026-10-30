@@ -15,7 +15,7 @@ class Permissions:
     def supported(self,node):
         v=next((c.get('agent_version','') for c in self.hub.registry.connections.values() if c['node_id']==node),'')
         if not v and node in self.live:return True
-        m=re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(?:~dev(\d+))?',v)
+        m=re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(?:~dev(\d+))?',v or '')
         return bool(m and (*map(int,m.groups()[:3]),int(m[4]) if m[4] else 10**9)>=(2,0,0,10))
     def current(self,node):
         tokens=[k for k,c in list(self.hub.registry.connections.items()) if c['node_id']==node]

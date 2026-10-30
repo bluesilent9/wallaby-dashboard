@@ -5,6 +5,7 @@ import hashlib,json,re,secrets,threading,time,uuid
 from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
 from urllib.parse import urlsplit
 import socket
+from diagnostic_log import DiagnosticLog
 from storage import storage_lock
 from agent_rpc import RPCBroker,capabilities,METHODS,MAX_RESULT_BYTES
 from decimal import Decimal
@@ -26,12 +27,16 @@ def identity(mac,hostname):
 class NodeRegistry:
     def __init__(self,config,clock=time.monotonic):
         self.config=Path(config);self.path=self.config.with_name('data')/'nodes.json';self.clock=clock
-        self.lock=threading.RLock();self.connections={};self.warnings={};self.read_by={};self.rpc=RPCBroker(self)
+        self.lock=threading.RLock();self.connections={};self.warnings={};self.read_by={};self.diagnostic_log=DiagnosticLog(self.config.parent/'logs');self.rpc=RPCBroker(self)
         from node_health import Health
         from agent_hub import AgentHub
         self.health=Health(self);self.hub=AgentHub(self)
         from vault_monitor import VaultMonitor
         self.vaults=VaultMonitor(self)
+    def protocol_error(self,path,exc):
+        self.diagnostic_log.append('Agent protocol',path.split('?')[0][:80]+' · '+type(exc).__name__+': '+str(exc)[:400])
+    def log_text(self):
+        return self.diagnostic_log.text()
     @staticmethod
     def validate(data):
         if not isinstance(data,dict) or set(data)!={'version','nodes'} or data['version']!=1 or not isinstance(data['nodes'],list) or len(data['nodes'])>10000:raise ValueError('Invalid node registry.')
@@ -173,8 +178,10 @@ def create_agent_server(registry,port=DEFAULT_AGENT_PORT,gate=None,ipv6=True,ipv
                         if data:raise ValueError('Heartbeat/disconnect body must be {}.')
                         return self.reply(registry.heartbeat(token,self.path.endswith('/disconnect')))
                 return self.reply(registry.rpc.poll(token,data.get('wait_seconds',20)))
-            except PermissionError as exc:self.reply({'error':str(exc)},401)
-            except (ValueError,TypeError,RecursionError,UnicodeError) as exc:self.reply({'error':str(exc)},400)
+            except PermissionError as exc:
+                registry.protocol_error(self.path,exc);self.reply({'error':str(exc)},401)
+            except (ValueError,TypeError,RecursionError,UnicodeError) as exc:
+                registry.protocol_error(self.path,exc);self.reply({'error':str(exc)},400)
     class Server(ThreadingHTTPServer):daemon_threads=True;allow_reuse_address=True
     class IPv6Server(Server):
         address_family=socket.AF_INET6

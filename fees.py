@@ -3,6 +3,7 @@ from copy import deepcopy
 from datetime import datetime,timezone
 from decimal import Decimal
 import heapq,json,threading,time,urllib.request,re
+from collections import deque
 from node_chain import RegistryRPC,NodeChain,satoshis,NodeDataUnavailable
 
 class FeeUnavailable(RuntimeError):pass
@@ -65,10 +66,21 @@ def project(entries,limit=4,capacity=999000):
     return blocks
 
 class FeeService:
+    REFRESH_SECONDS=120
+    RETRY_SECONDS=30
+    RPC_SECONDS=15
     def __init__(self,registry,busy=lambda:False,clock=time.time):
-        self.registry=registry;self.busy=busy;self.clock=clock;self.lock=threading.RLock();self.data=None;self.refreshing=False;self.last_attempt=0;self.error=None;self.headers={};self.price=None;self.closed=False
+        self.registry=registry;self.busy=busy;self.clock=clock;self.lock=threading.RLock();self.data=None;self.refreshing=False;self.last_attempt=None;self.error=None;self.headers={};self.price=None;self.closed=False;self.phase='';self.diagnostics=deque(maxlen=100)
+    def log(self,text):
+        with self.lock:self.diagnostics.append(stamp(self.clock())+' · Fee Estimates · '+str(text)+'\n')
+        if getattr(self.registry,'diagnostic_log',None):self.registry.diagnostic_log.append('Fee Estimates',text)
+    def log_text(self):
+        with self.lock:return ''.join(self.diagnostics)
+    def activity(self):
+        with self.lock:return {'active':self.refreshing,'phase':self.phase,'lines':list(self.diagnostics)[-20:]}
     def call(self,chain,method,params=None):
         if self.closed or self.busy():raise Deferred()
+        with self.lock:self.phase='Requesting '+method+' from the connected node…'
         return chain.call(method,params)
     def fx(self):
         if self.price and self.clock()-self.price['unix_time']<120:return self.price
@@ -78,63 +90,90 @@ class FeeService:
         aud=number(next(iter(reply['result'].values()))['c'][0]);observed=self.clock()
         if Decimal(aud)<=0:raise ValueError('Invalid BTC/AUD quote')
         self.price={'aud_per_btc':aud,'unix_time':observed,'observed_utc':stamp(observed),'source':'Kraken BTC/AUD ticker; retrieved time'};return self.price
+    def publish(self,**fields):
+        with self.lock:
+            if self.data is not None:self.data.update(deepcopy(fields))
     def refresh(self):
+        self.log('Refresh started.')
         try:
             if self.busy():raise Deferred()
-            # Observe one node's coherent mempool. Do not add duplicate
-            # transactions seen by different replicas.
             nodes=[n for n in RegistryRPC(self.registry).nodes() if n.get('rpc_ready')]
             if not nodes:raise FeeUnavailable('Connect a Bitcoin Core node through Wallaby Agent for fee estimates.')
-            node=nodes[0]
+            node=next((n for n in nodes if n.get('blockchain',{}).get('state')=='ready'),nodes[0]);service=self
             class SelectedRPC(RegistryRPC):
                 def nodes(inner):return [node]
+                def call(inner,node_id,method,params=None,wallet=None):
+                    state=inner.registry.rpc.call(node_id,method,params or [],wallet,timeout_seconds=service.RPC_SECONDS,consume=True,priority=100)
+                    if state['state']!='succeeded':raise NodeDataUnavailable(str((state.get('error') or {}).get('message',state['state'])))
+                    return state['result']
             chain=NodeChain(SelectedRPC(self.registry,priority=100),{'wallets':[]})
             info=self.call(chain,'getblockchaininfo')
-            if info.get('chain')!='main' or info.get('initialblockdownload'):raise FeeUnavailable('Wait for the connected mainnet node to synchronise.')
-            mempool=self.call(chain,'getmempoolinfo');floor=max(Decimal(str(mempool.get('mempoolminfee',0))),Decimal(str(mempool.get('minrelaytxfee',0))))*100000
-            projection=[];projection_error=None
-            try:projection=project(self.call(chain,'getrawmempool',[True]))
-            except (ValueError,NodeDataUnavailable) as exc:projection_error=str(exc)
-            rates=[]
+            if info.get('chain')!='main' or info.get('initialblockdownload') or info.get('blocks',0)<info.get('headers',0):raise FeeUnavailable('Wait for the connected mainnet node to synchronise.')
+            self.log('Mainnet tip verified at height '+str(info['blocks'])+'. Reading mempool minimum and four confirmation targets.')
+            mempool=self.call(chain,'getmempoolinfo');floor=max(Decimal(number(mempool.get('mempoolminfee',0))),Decimal(number(mempool.get('minrelaytxfee',0))))*100000
+            rates=[];fallback=[]
             for label,target,mode in [('No Priority',144,'ECONOMICAL'),('Low Priority',6,'ECONOMICAL'),('Medium Priority',3,'CONSERVATIVE'),('High Priority',1,'CONSERVATIVE')]:
                 estimate=self.call(chain,'estimatesmartfee',[target,mode]);rate=estimate.get('feerate')
                 if rate is None:
-                    value=max(floor,Decimal(projection[0]['minimum_rate']) if projection else floor);basis='Local mempool package estimate; insufficient Core fee history'
-                else:value=max(floor,Decimal(str(rate))*100000);basis='Core estimatesmartfee · target '+str(estimate.get('blocks',target))+' blocks'
+                    value=floor;basis='Local mempool minimum; insufficient Core fee history';fallback.append(len(rates))
+                else:value=max(floor,Decimal(number(rate))*100000);basis='Core estimatesmartfee · target '+str(estimate.get('blocks',target))+' blocks'
                 rates.append({'label':label,'sat_per_vbyte':number(value),'basis':basis})
-            # High priority must not be lower than the less urgent estimate.
             for i in range(1,len(rates)):rates[i]['sat_per_vbyte']=number(max(Decimal(rates[i]['sat_per_vbyte']),Decimal(rates[i-1]['sat_per_vbyte'])))
-            recent=[];h=info['bestblockhash']
-            for _ in range(8):
-                if h in self.headers:block=self.headers[h]
-                else:
-                    header=self.call(chain,'getblockheader',[h,True]);block=dict(header)
-                    try:
-                        full=self.call(chain,'getblock',[h,1]);block.update(size=full.get('size'),weight=full.get('weight'),tx_count=len(full.get('tx',[])))
-                    except (NodeDataUnavailable,ValueError):block.update(size=None,weight=None,tx_count=header.get('nTx'))
-                    self.headers[h]=block
-                recent.append({'hash':h,'height':block['height'],'timestamp':block['time'],'size':block.get('size'),'weight':block.get('weight'),'tx_count':block.get('tx_count')});h=block.get('previousblockhash')
-                if not h:break
-            if len(self.headers)>32:self.headers={b['hash']:self.headers[b['hash']] for b in recent}
-            price=None;price_error=None
+            now=self.clock()
+            # Publish the useful rates before optional, potentially expensive data.
+            with self.lock:
+                self.data={'rates':deepcopy(rates),'retrieved_utc':stamp(now),'source':node['hostname']+' · Bitcoin Core RPC','price':None,'price_error':None,'projected_blocks':[],'projection_error':None,'recent_blocks':[],'tip_height':info['blocks'],'mempool_transactions':mempool['size'],'cache_seconds':self.REFRESH_SECONDS,'_retrieved':now};self.error=None
+            self.log('Four fee priorities ready from '+node['hostname']+'.')
             try:
-                if self.busy():raise Deferred()
-                price=self.fx()
-            except (ValueError,OSError,KeyError) as exc:price_error='BTC/AUD valuation unavailable. '+str(exc)
-            now=self.clock();result={'rates':rates,'retrieved_utc':stamp(now),'source':node['hostname']+' · Bitcoin Core RPC','price':price,'price_error':price_error,'projected_blocks':projection,'projection_error':projection_error,'recent_blocks':recent,'tip_height':info['blocks'],'mempool_transactions':mempool['size'],'cache_seconds':5,'_retrieved':now}
-            with self.lock:self.data=result;self.error=None
-        except Deferred:pass
+                self.phase='Retrieving BTC/AUD market quote…';price=self.fx();self.publish(price=price);self.log('BTC/AUD quote ready.')
+            except (ValueError,OSError,KeyError,StopIteration) as exc:
+                self.publish(price_error='BTC/AUD valuation unavailable. '+str(exc));self.log('AUD quote unavailable: '+str(exc))
+            try:
+                projection=project(self.call(chain,'getrawmempool',[True]));self.publish(projected_blocks=projection);self.log('Mempool projection ready: '+str(len(projection))+' estimated blocks.')
+                if projection and fallback:
+                    for index in fallback:rates[index].update(sat_per_vbyte=number(max(floor,Decimal(projection[0]['minimum_rate']))),basis='Local mempool package estimate; insufficient Core fee history')
+                    for i in range(1,len(rates)):rates[i]['sat_per_vbyte']=number(max(Decimal(rates[i]['sat_per_vbyte']),Decimal(rates[i-1]['sat_per_vbyte'])))
+                    self.publish(rates=rates)
+            except (ValueError,NodeDataUnavailable) as exc:
+                self.publish(projection_error=str(exc));self.log('Block projection unavailable: '+str(exc))
+            recent=[];h=info['bestblockhash']
+            try:
+                for _ in range(8):
+                    if h in self.headers:block=self.headers[h]
+                    else:
+                        header=self.call(chain,'getblockheader',[h,True]);block=dict(header)
+                        # Headers already include transaction count. Size/weight
+                        # metadata is collected separately after all headers.
+                        block.update(size=None,weight=None,tx_count=header.get('nTx'));self.headers[h]=block
+                    recent.append({'hash':h,'height':block['height'],'timestamp':block['time'],'size':block.get('size'),'weight':block.get('weight'),'tx_count':block.get('tx_count')});self.publish(recent_blocks=list(recent));h=block.get('previousblockhash')
+                    if not h:break
+                # Size/weight are optional display metadata. Keep this separate
+                # from rates and headers, and stop at the first unavailable block.
+                for row in recent:
+                    cached=self.headers[row['hash']]
+                    if cached.get('size') is None:
+                        full=self.call(chain,'getblock',[row['hash'],1]);cached.update(size=full.get('size'),weight=full.get('weight'))
+                    row.update(size=cached.get('size'),weight=cached.get('weight'));self.publish(recent_blocks=recent)
+                if len(self.headers)>32:self.headers={b['hash']:self.headers[b['hash']] for b in recent}
+            except (ValueError,NodeDataUnavailable,KeyError) as exc:
+                self.publish(block_error='Recent block data unavailable. '+str(exc));self.log('Recent blocks unavailable: '+str(exc))
+            self.log('Refresh completed; '+str(len(recent))+' recent block headers loaded. Next automatic refresh in 2 minutes.')
+        except Deferred:
+            self.log('Refresh paused for higher-priority node work.')
         except Exception as exc:
-            with self.lock:self.error=str(exc)
+            with self.lock:self.error='Fee refresh failed: '+str(exc)
+            self.log(self.error)
         finally:
-            with self.lock:self.refreshing=False
+            with self.lock:self.refreshing=False;self.phase=''
     def snapshot(self,force=False):
         with self.lock:
-            now=self.clock();waiting=self.busy()
-            if not self.closed and not waiting and not self.refreshing and now-self.last_attempt>=5:
-                self.last_attempt=now;self.refreshing=True;threading.Thread(target=self.refresh,daemon=True).start()
-            if not self.data:return {'rates':[],'recent_blocks':[],'projected_blocks':[],'loading':self.refreshing,'waiting':waiting,'warning':self.error or ('Waiting for the node to finish higher-priority work.' if waiting else 'Collecting node fee estimates…')}
-            result=deepcopy(self.data);result.pop('_retrieved',None);result.update(cached=True,stale=now-self.data['_retrieved']>20,waiting=waiting,warning='Waiting for higher-priority node work.' if waiting else self.error)
+            now=self.clock();waiting=self.busy();elapsed=float('inf') if self.last_attempt is None else now-self.last_attempt
+            due=self.data is None and elapsed>=self.RETRY_SECONDS or self.data is not None and elapsed>=self.REFRESH_SECONDS or force and elapsed>=5
+            if not self.closed and not waiting and not self.refreshing and due:
+                self.last_attempt=now;self.refreshing=True;self.phase='Collecting node fee estimates…';threading.Thread(target=self.refresh,daemon=True).start()
+            progress='Waiting for the node to finish higher-priority work.' if waiting else self.phase if self.refreshing else self.error
+            if not self.data:return {'rates':[],'recent_blocks':[],'projected_blocks':[],'loading':self.refreshing,'waiting':waiting,'warning':self.error or progress or 'Fee estimates unavailable. Select Refresh estimates to try again.'}
+            result=deepcopy(self.data);result.pop('_retrieved',None);result.update(cached=True,stale=now-self.data['_retrieved']>self.REFRESH_SECONDS+30,loading=self.refreshing,waiting=waiting,warning=progress)
             if result.get('price') and now-result['price']['unix_time']>1800:result.update(price=None,price_error='BTC/AUD quote is stale.')
             return result
     def track(self,txid):

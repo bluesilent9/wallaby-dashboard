@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 13 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev13_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 14 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev14_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -18,17 +18,19 @@ Vault monitoring uses public vault records and connected Core nodes. Reports dep
 
 ## This development update
 
-Build 13 fixes stale green vault cards after failed or overdue verification. Retained cards become amber, stop claiming a current countdown/height, and label balances as last-known. The page shows the last verified UTC time and actual single-signature or M-of-N policy requirements. Verified empty vaults say **Ready to fund — no confirmed Bitcoin**.
+Build 14 displays the four fee priorities before optional mempool projections, recent-block metadata or market-price failures can delay them. Read requests use a short bounded timeout; failures show an actionable message. Fee Estimates refreshes on entry/manual refresh and every two minutes while open. Fast polling only collects an active refresh's progress; transaction tracking no longer blocks fee rendering. All blockchain fee/block information still comes from connected nodes. BTC/AUD pricing remains external.
 
-Wallet Builder separates local approvals/backups, Core confirmation, readiness to fund and fresh funded/locked/unlocked status. It displays each producing Agent identity once per ceremony and states explicitly that creating a wallet moves no Bitcoin. Funding remains a separate Transaction Builder action.
+Signer setup uses consistent-width cards, including an incomplete final row. Each signer has its own pastel colour. Single-signature and multi-signature Vault policies use the same cards.
 
-Transaction Builder shows the total network fee, its percentage of planned payments and the combined rate. Fees at least 10% of payments or rates at least 100 sats/vB trigger an explicit browser acknowledgement before signing requests. These are review thresholds, not hard limits; local Agent review remains required. Request status text distinguishes unsent, pending, declined, failed/uncertain and returned signatures. Obsolete manual-signing stage renderers have been removed from the current UI. The broadcast workflow is unchanged.
+The missing Agent version case no longer crashes node listing/permission checks. This reproduces the exact `NoneType` exception in the supplied node log. Registration and fee RPC delivery pass with real Agent transport, but the reported live disconnect has not been reproduced: its precise cause is still unconfirmed. Agent Build 14 supplies more specific local protocol diagnostics.
 
-The signed-public-data filter now verifies Base58Check private-key payloads, avoiding false positives on public SSH signature text while rejecting real WIF and extended private keys. No Agent code or protocol is changed. The Agent-side fee caption, native wallet-name prompts, per-Agent fingerprint entry and authoritative local fee acknowledgement are documented in [Agent follow-up](docs/AGENT_FOLLOW_UP.md) for a separate update.
+Operational activity, fee refresh stages/failures and Agent protocol errors persist in private UTF-8 files under `logs/`, separate from saved profiles and tax evidence. Administration → Logs downloads the retained history. Keep at most **seven UTC calendar days** (today and six preceding days), capped at **1 MiB per day / 7 MiB overall**; the oldest entries are overwritten if a day reaches its cap. Expiry runs on reads/writes, startup and the minute maintenance cycle. Repetitive polling is not logged. Terminal Activity shows live fee progress only while a refresh is active.
+
+Build 13's stale-vault handling, setup/funding states, high-fee review and signing retry messages remain. The broadcast workflow is unchanged.
 
 ## Agent compatibility
 
-Use **[Agent V2 Development Build 11](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 13. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
+Use **[Agent V2 Development Build 14](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 14. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
 
 Agent Build 10 or later is required for the current synchronization-permission and disc workflow; Wallet Builder requires Build 9 or later; the existing exchange requires Build 8 or later; older synchronization protocols have been removed. Each Agent receives its complete alphabetically ordered missing-wallet list, including labelled historical address groups. The signed version-2 preview preserves public vault policies, address labels and LOST timestamps. Persistent revisions withdraw outdated lists when peers disconnect. `recovery_required` means received but incomplete; only final receiver completion clears both Agents’ lists. History recovery is locally authorised on the Agent and retains its pruning configuration. No remote restart/reindex command is sent.
 
@@ -51,9 +53,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev13`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev14`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev13_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev14_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 

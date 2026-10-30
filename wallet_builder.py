@@ -33,7 +33,7 @@ class WalletBuilder:
         result=[]
         for node in self.hub.registry.snapshot()['nodes']:
             version=(node.get('agent') or {}).get('version') or next((c.get('agent_version','') for c in self.hub.registry.connections.values() if c['node_id']==node['id']),'')
-            if node.get('rpc_ready') and node.get('blockchain',{}).get('state')=='ready' and re.fullmatch(r'2\.0\.0~dev(?:9|[1-9][0-9]+)',version):result.append(node)
+            if node.get('rpc_ready') and node.get('blockchain',{}).get('state')=='ready' and re.fullmatch(r'2\.0\.0~dev(?:9|[1-9][0-9]+)',version or ''):result.append(node)
         return result
     def discover(self):
         nodes=self.available()
