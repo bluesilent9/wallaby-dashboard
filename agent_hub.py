@@ -117,6 +117,9 @@ class AgentHub:
             if prior:self.retired.add((key,prior['draft_id']))
     def pair_transfers(self,state):
         ready={c['node_id']:c for c in list(self.registry.connections.values()) if self.registry.rpc._unique(c)}
+        from policy_accounts import cosigner_accounts,keys as account_keys
+        setups=list(self.wallet_builder.read()['sessions'].values())
+        intentional=cosigner_accounts([w for inv in self.inventories.values() for w in inv.get('wallets',[])])
         for target in sorted(ready):
             dest=self.inventories.get(target,{})
             if not dest.get('complete'):continue
@@ -130,8 +133,14 @@ class AgentHub:
                         policies(wallet['raw'],allow_addresses=True)
                     except ValueError:continue
                     if any(NodeWalletLoader.descriptor_key(r['desc']) in {NodeWalletLoader.descriptor_key(v['public']['descriptor']) for v in state['vaults'].values()} for r in wallet['raw']['descriptors']):continue
-                    from policy_accounts import cosigner_accounts
-                    if wallet in cosigner_accounts(origin['wallets']):continue
+                    if wallet in intentional:continue
+                    own=account_keys(wallet['raw'])
+                    # A producing Agent installs a private role before its public
+                    # monitor. Public signed contributions already identify that
+                    # intentional key account during this short inventory window.
+                    if wallet.get('private_keys_enabled') and own and any(own<={e['message'][f].split(']')[-1].replace("'",'h') for f in ('receive_key','change_key')} for setup in setups for e in setup['contributions'].values()):continue
+                    policy_keys={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet['raw']['descriptors']}
+                    if any(policy_keys=={NodeWalletLoader.descriptor_key(d) for d in setup.get('descriptors',[])} and (setup['state']!='ready' or not set(setup['routes'].values())<=set(setup.get('completion_confirmed',{}))) for setup in setups):continue
                     if self.transfers.contains(dest['wallets'],wallet['raw']):continue
                     # One canonical source per missing public wallet, independent of names/private-key flags.
                     if any(r.get('kind')=='wallet_transfer' and r.get('direction')=='receive' and r['node_id']==target and equivalent(r['public_wallet'],wallet['raw']) for r in state['requests'].values()):continue

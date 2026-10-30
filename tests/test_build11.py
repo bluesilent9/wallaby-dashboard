@@ -139,3 +139,16 @@ class Visibility(Signing):
         self.hub.inventories[self.a['node_id']]['wallets'].append(copy.deepcopy(self.hub.inventories[self.a['node_id']]['wallets'][1]));annotate_signers(report,self.hub);self.assertEqual(report['balances']['wallets'][0]['multisig'][0]['visible'],2)
         self.registry.connections.pop(self.b['connection_token']);annotate_signers(report,self.hub);self.assertEqual(report['balances']['wallets'][0]['multisig'][0]['visible'],1)
         self.hub.inventories[self.a['node_id']]['wallets']=[w for w in self.hub.inventories[self.a['node_id']]['wallets'] if not w['private_keys_enabled']];annotate_signers(report,self.hub);self.assertEqual(report['balances']['wallets'][0]['multisig'][0]['visible'],0)
+
+class SetupInventoryWindow(Ceremony):
+    def test_new_account_before_monitor_is_not_synchronized(self):
+        h,row=self.start();row=self.contribute(h,row);m=row['contributions']['signer-1']['message'];rows=[]
+        for f in ('receive_key','change_key'):
+            body='wpkh('+m[f]+')';rows.append({'desc':body+'#'+checksum(body),'range':[0,99],'next_index':1})
+        self.hub.inventories[self.a['node_id']]={'complete':True,'wallets':[{'name':'First private account before monitor','id':'example-key','raw':{'wallet_name':'Private account','descriptors':rows},'private_keys_enabled':True}]};self.hub.inventories[self.b['node_id']]={'complete':True,'wallets':[]};self.exchange(self.a);self.assertFalse(self.hub.read()['requests'])
+    def test_public_monitor_waits_until_every_producer_core_is_ready(self):
+        h,row=self.start();row=self.contribute(h,row);raw={'wallet_name':'Pending policy','descriptors':[{'desc':d,'range':[0,99],'next_index':1} for d in row['descriptors']]};self.hub.inventories[self.a['node_id']]={'complete':True,'wallets':[{'name':'Pending monitor','id':'example','raw':raw,'private_keys_enabled':False}]};self.hub.inventories[self.b['node_id']]={'complete':True,'wallets':[]};self.exchange(self.a);self.assertFalse(self.hub.read()['requests'])
+
+# Reuse ceremony helpers without discovering the parent test methods twice.
+for _name in vars(Ceremony):
+    if _name.startswith('test_'):setattr(SetupInventoryWindow,_name,None)
