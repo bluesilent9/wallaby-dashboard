@@ -2,7 +2,11 @@
 
 Bitcoin tools, wallet insights, Australian CGT working papers and shared family workflows.
 
-**V1 Build 20 — Development.** [Download the DEB](https://github.com/bluesilent9/wallaby-dashboard/raw/refs/heads/Development/dist/wallaby-dashboard_1.0.0~dev20_all.deb) · [Checksums](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) · [Development source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development) · [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/)
+**V1 Build 21 — Development.** [Download the DEB](https://github.com/bluesilent9/wallaby-dashboard/raw/refs/heads/Development/dist/wallaby-dashboard_1.0.0~dev21_all.deb) · [Checksums](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) · [Development source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development) · [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/)
+
+Build 21 fixes the Dashboard half of missing pending-block estimates with Agent V2 Build 20. A complete immutable mempool is collected in validated 1,000-entry pages on one node connection before projection; the ordinary 16 MiB remote limit stays unchanged. Incomplete captures are discarded while fee rates and mined blocks remain available. Bounded logs now correlate refreshes, RPC IDs, page offsets/counts, elapsed time and response boundaries, including lower-bound byte measurements. Exports include Dashboard/Agent versions and UTC context. Retention remains seven UTC days and 1 MiB per day; payloads and credentials are excluded. Dashboard-only change; install the matching Agent build.
+
+[Paging and diagnostic protocol](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/PAGED_MEMPOOL.md).
 
 Build 20 saves single-creator Wallet Builder and Transaction Builder workspaces, restores drafts and stages after browser closure, and lets the creator coordinate every funding wallet’s Agent approvals. Cancelling stops Dashboard coordination and tracks durable cancellation receipts per Agent, including offline delivery. Agents must independently offer locally authorised Delete and Cancel or Backup and Cancel; receipt never means deletion. The new builder_cancellation_v1 Agent capability is required. Dashboard-only update; no Agent code changed.
 
