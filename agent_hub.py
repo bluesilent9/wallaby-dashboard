@@ -13,7 +13,7 @@ from node_wallets import NodeWalletLoader
 from preferences import FamilyStore,resource_id
 from agent_rpc import PRIVATE
 
-CAPS={'node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement'}
+CAPS={'node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2'}
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
 def canonical(value):
     raw=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
@@ -93,6 +93,13 @@ class AgentHub:
             with self.lock:
                 if token in self.registry.connections:self.inventories[node]={'wallets':wallets,'complete':True}
             self.wallet_builder.confirm_installed(node,token,[w for w in wallets if not w.get('signing_only')])
+            with self.edit() as saved:
+                holder=saved['nodes'].setdefault(node,{})
+                known=holder.setdefault('known_wallets',{})
+                for w in wallets:
+                    if not w.get('signing_only') and not w.get('extinct'):known[digest(sorted(NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors']))]={'raw':w['raw'],'name':w['name']}
+            from wallet_retirement import advance
+            advance(self)
         except __import__('wallet_transfers').SynchronisationBusy:
             with self.lock:self.inventory_times[node]=0
         except (ValueError,OSError,KeyError,TypeError) as exc:
@@ -133,6 +140,8 @@ class AgentHub:
                 if not origin.get('complete'):continue
                 for wallet in origin['wallets']:
                     if wallet.get('signing_only') or self.permissions.permits(target,wallet['raw']) is not True:continue
+                    from wallet_retirement import suppress_sync
+                    if suppress_sync(state,wallet['raw']):continue
                     try:
                         from wallet_preview import policies
                         policies(wallet['raw'],allow_addresses=True)
@@ -274,7 +283,7 @@ class AgentHub:
                     if ident not in known and node not in row['sources'] and not has:proposals.append({'kind':'vault_sync','vault':row['public']})
                 for key,row in sorted(state['requests'].items()):
                     if row['node_id']!=node or row['state']!='pending' or row['kind']=='wallet_transfer':continue
-                    if row['kind']=='wallet_retire' and 'wallet_retirement' in caps:
+                    if row['kind']=='wallet_retire' and row['proposal'].get('version')==2 and 'wallet_retirement_v2' in caps:
                         row['delivered']=True;proposals.append(row['proposal']);continue
                     if row['kind']=='sign_psbt_partial' and 'partial_signing' in caps or row['kind']=='broadcast_transaction' and 'broadcast' in caps:
                         row['delivered']=True;proposals.append(row['proposal'])
@@ -295,7 +304,8 @@ class AgentHub:
         return proposal
     def sync_warnings(self):
         from wallet_sync_queue import warnings
-        return warnings(self)
+        from wallet_retirement import warnings as retirement_warnings
+        return warnings(self)+retirement_warnings(self)
     def accept_result(self,state,node,kind,p):
         from agent_transactions import accept_result
         return accept_result(self,state,node,kind,p)

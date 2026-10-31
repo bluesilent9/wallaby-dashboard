@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 17 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev17_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 18 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev18_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -17,6 +17,14 @@
 Vault monitoring uses public vault records and connected Core nodes. Reports depend on complete source records, ownership and pricing evidence; review the working papers before relying on them for tax reporting.
 
 ## This development update
+
+Build 18 changes Make Extinct into a zero-funds archival-and-deletion request. Dashboard checks fresh Core balances on connected replicas, including known related vault monitors and multisig signing accounts. Pending, immature, watch-only or locked funds block retirement; unavailable balances and scans also block it. The Agent must independently repeat the checks and obtain approval on its local Authorise page before changing anything.
+
+Dashboard requires the new `wallet_retirement_v2` Agent capability. Agent Build 18 implements the matching local operation. Earlier archive-only Agents cannot execute this request; upgrade each holder before it can confirm retirement. Dashboard never deletes wallet files, unlocks wallets or invokes mutating Core RPCs.
+
+Agent completion must explicitly confirm verified historical archival, complete history, zero funds and deletion of every listed local wallet account. Cancelled, denied and failed requests remain flagged. After every known holder confirms archival and deletion, the initiating user confirms that archival discs were destroyed or that none existed; this is a recorded user statement, not a physical-media verification. Requests cover every known private and watch-only holder. Each Agent needs separate local approval. Offline or unsupported holders remain pending, with durable per-holder completion tracking; one node's success cannot complete the group. Retirement records survive profile backup/restore, and normal sync is suppressed for policies being retired or already retired.
+
+## Earlier Build 17 fixes
 
 Build 17 repairs Fee Estimates after clearing or loading a profile: the old background service is closed and replaced with a fresh service, so node-backed estimates can refresh without restarting Dashboard. Deferred updates are polled promptly; an empty mempool and an unavailable projection have explicit messages instead of an indefinite waiting label.
 
@@ -36,11 +44,11 @@ Build 15's live-node builder gating and bounded diagnostic logs remain. This bui
 
 ## Agent compatibility
 
-Use **[Agent V2 Development Build 16](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 17. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
+Use **[Agent V2 Development Build 16](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 18. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
 
 Agent Build 10 or later is required for the current synchronization-permission and disc workflow; Wallet Builder requires Build 9 or later; the existing exchange requires Build 8 or later; older synchronization protocols have been removed. Each Agent receives its complete alphabetically ordered missing-wallet list, including labelled historical address groups. The signed version-2 preview preserves public vault policies, address labels and LOST timestamps. Persistent revisions withdraw outdated lists when peers disconnect. `recovery_required` means received but incomplete; only final receiver completion clears both Agents’ lists. History recovery is locally authorised on the Agent and retains its pruning configuration. No remote restart/reindex command is sent.
 
-**Wallets** now filters by owner and by **Active Wallets / Extinct Wallets** (at least one selected). Extinct cards are grey and show confirmed UTC activity years rather than balances/gains. Addresses sharing a historical label are one logical wallet; different labels remain separate ownership assignments even inside one Core archive. **Make Extinct** prepares a public local-review request; its execution requires an Agent advertising `wallet_retirement`. Agent V2 Build 9 implements this operation after local approval. Retirement never deletes a private wallet, infers lost keys or automatically claims a tax loss. See [the protocol](docs/AGENT_PROTOCOL.md) and [validation](VALIDATION.md).
+**Wallets** now filters by owner and by **Active Wallets / Extinct Wallets** (at least one selected). Extinct cards are grey and show confirmed UTC activity years rather than balances/gains. Addresses sharing a historical label are one logical wallet; different labels remain separate ownership assignments even inside one Core archive. **Make Extinct** now uses the Build 18 zero-funds, locally approved archival-and-deletion protocol described above. Retirement itself does not declare lost keys or create a tax loss. See [the protocol](docs/AGENT_PROTOCOL.md) and [validation](VALIDATION.md).
 
 ## Run from source
 
@@ -59,9 +67,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev17`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev18`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev17_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev18_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 

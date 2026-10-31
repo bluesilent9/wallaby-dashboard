@@ -1,6 +1,6 @@
 > Current workflow: Ownership Stage 3 ends with Verify Balances. Wallets and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
 
-# Wallaby Bitcoin Dashboard — V1 Build 17
+# Wallaby Bitcoin Dashboard — V1 Build 18
 
 Extract the complete ZIP. Start the service with `./Start_Wallaby_Bitcoin_Dashboard.sh`, or:
 
@@ -215,7 +215,7 @@ These features work with Agent V2 Development Build 8 advertising the documented
 
 Wallets replaces Wallet Balances. All Owners is the initial owner filter. Active Wallets starts selected and Extinct Wallets starts clear; changing filters never leaves both clear. Historical archive cards are grey and show the first/last confirmed activity years (one year when equal), without AUD balance or hypothetical profit/loss. Multiple addresses carrying the same base label form one old wallet. Separate labels in the same Core archive remain separate wallets and owners.
 
-Make Extinct requests local Agent review for a wallet owned by the logged-in user. Its execution requires an Agent advertising wallet_retirement; Agent Build 9 and later implement it locally. The Agent must confirm an empty wallet and complete history, preserve historical labels, and must not delete the wallet or keys. Refresh Ownership after the approved conversion. Retirement does not mean lost keys or create a tax loss.
+Make Extinct requires zero funds and the new wallet_retirement_v2 Agent capability. On local Authorise approval the Agent must verify historical archival before deleting the listed original local wallet copies. Dashboard waits for explicit confirmation; cancelled or failed attempts remain flagged. See the Build 18 section below.
 
 Use Agent V2 Development Build 8 or newer. Nodes shows all relevant missing-wallet requests and non-dismissible history-recovery warnings. Review the local Agent Synchronisation page to authorise work. Data received with incomplete history remains incomplete until recovery is locally approved and verified. Final receiver completion clears both paired request lists; it does not resend the wallet. The Dashboard cannot restart Core, disable pruning or authorise a transfer.
 
@@ -271,4 +271,13 @@ Build 17 repairs Fee Estimates after clearing or loading a profile: the old back
 There is no separate Dashboard page. Use the sidebar to open tools; login, transaction completion/cancellation and finished activity return to Ownership. Historical ownership rows display **Extinct Wallet** as their source. The SMSF icon depicts a person leaning on a cane.
 
 Wallet Builder shows Role name only for multisignature policies. Single Signature and plain Vault still select a producing Agent and storage; their single signing role is assigned automatically. No Agent code or protocol change is needed.
+
+
+## Build 18 — making a zero-balance wallet extinct
+
+Build 18 changes Make Extinct into a zero-funds archival-and-deletion request. Dashboard checks fresh Core balances on connected replicas, including known related vault monitors and multisig signing accounts. Pending, immature, watch-only or locked funds block retirement; unavailable balances and scans also block it. The Agent must independently repeat the checks and obtain approval on its local Authorise page before changing anything.
+
+Dashboard requires the new `wallet_retirement_v2` Agent capability. Agent Build 18 implements the matching local operation. Earlier archive-only Agents cannot execute this request; upgrade each holder before it can confirm retirement. Dashboard never deletes wallet files, unlocks wallets or invokes mutating Core RPCs.
+
+Agent completion must explicitly confirm verified historical archival, complete history, zero funds and deletion of every listed local wallet account. Cancelled, denied and failed requests remain flagged. After every known holder confirms archival and deletion, the initiating user confirms that archival discs were destroyed or that none existed; this is a recorded user statement, not a physical-media verification. Requests cover every known private and watch-only holder. Each Agent needs separate local approval. Offline or unsupported holders remain pending, with durable per-holder completion tracking; one node's success cannot complete the group. Retirement records survive profile backup/restore, and normal sync is suppressed for policies being retired or already retired.
 

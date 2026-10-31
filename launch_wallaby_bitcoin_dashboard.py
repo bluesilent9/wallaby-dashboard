@@ -469,6 +469,10 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/vaults':
                     if not session.access()['ownership_ready']:return self.json({'error':'Complete Ownership first.'},400)
                     return self.json(sessions.nodes.vaults.snapshot())
+                if path=='/api/wallets/retirements':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    from wallet_retirement import snapshot
+                    return self.json(snapshot(sessions.nodes.hub,session.user_id))
                 if path=='/api/wallets/retirement-options':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from wallet_retirement import candidates
@@ -634,6 +638,10 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         hub.inventory_times[connection['node_id']]=0
                         threading.Thread(target=hub.refresh_inventory,args=(connection['node_id'],connection['token']),daemon=True).start()
                     return self.json({'queued':True})
+                if path=='/api/wallets/retirement-discs':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    from wallet_retirement import confirm_discs
+                    return self.json(confirm_discs(sessions.nodes.hub,session.user_id,data.get('request_hash'),data.get('status')))
                 if path=='/api/wallets/retire':
                     from wallet_retirement import propose
                     return self.json(propose(sessions.nodes.hub,session,data.get('wallet_id'),data.get('node_id'),data.get('confirmed')))

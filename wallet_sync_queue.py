@@ -22,6 +22,10 @@ def schedule(transfers,state):
         if len(rows)!=2:continue
         source=next(r for r in rows if r['direction']=='send');receiver=next(r for r in rows if r['direction']=='receive')
         nodes={r['node_id'] for r in rows}
+        from wallet_retirement import suppress_sync
+        if suppress_sync(state,source['public_wallet']):
+            for row in rows:row['queue_visible']=False
+            continue
         if not all(modern(hub,n) for n in nodes):
             for row in rows:row['queue_visible']=False
             continue
@@ -92,6 +96,8 @@ def warnings(hub):
         if not recovery and not any(r['state']=='pending' for r in rows):continue
         receiver=next((r for r in rows if r['direction']=='receive'),None)
         if receiver and hub.permissions.permits(receiver['node_id'],receiver['public_wallet']) is not True and not recovery:continue
+        from wallet_retirement import suppress_sync
+        if suppress_sync(state,rows[0]['public_wallet']):continue
         name=rows[0]['public_wallet']['wallet_name'];peers=', '.join(names.get(r['node_id'],'node') for r in rows)
         text=('Wallet data received, but history recovery is incomplete for ' if recovery else 'Wallet synchronisation needs local review for ')+name+' ('+peers+'). Open the local Agent’s Synchronisation page.'
         result.append({'id':'wallet-sync-'+ident,'kind':'wallet_sync','severity':'yellow','dismissible':False,'target':'nodes','created_utc':rows[0]['created_utc'],'text':text})

@@ -1,3 +1,13 @@
+# Required retirement update for Dashboard Build 18
+
+Build 18 changes Make Extinct into a zero-funds archival-and-deletion request. Dashboard checks fresh Core balances on connected replicas, including known related vault monitors and multisig signing accounts. Pending, immature, watch-only or locked funds block retirement; unavailable balances and scans also block it. The Agent must independently repeat the checks and obtain approval on its local Authorise page before changing anything.
+
+Dashboard requires the new `wallet_retirement_v2` Agent capability. Agent Build 18 implements the matching local operation. Earlier archive-only Agents cannot execute this request; upgrade each holder before it can confirm retirement. Dashboard never deletes wallet files, unlocks wallets or invokes mutating Core RPCs.
+
+Agent completion must explicitly confirm verified historical archival, complete history, zero funds and deletion of every listed local wallet account. Cancelled, denied and failed requests remain flagged. After every known holder confirms archival and deletion, the initiating user confirms that archival discs were destroyed or that none existed; this is a recorded user statement, not a physical-media verification. Requests cover every known private and watch-only holder. Each Agent needs separate local approval. Offline or unsupported holders remain pending, with durable per-holder completion tracking; one node's success cannot complete the group. Retirement records survive profile backup/restore, and normal sync is suppressed for policies being retired or already retired.
+
+Implement the version 2 retirement protocol in [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md), including durable cancellation and completion reporting. Current Agent Build 16 intentionally rejects deletion. No Agent code is changed by this Dashboard build.
+
 # Agent follow-up after Dashboard V1 Build 13
 
 Dashboard Build 13 requires no new Agent protocol. Its changes are presentation, freshness handling, fee review and removal of obsolete current-UI manual-signing screens. The user explicitly keeps the existing signature collection and broadcast workflow.

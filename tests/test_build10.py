@@ -86,10 +86,9 @@ class Retirement(Setup):
         session=type('Session',(),{'user_id':self.user,'user':lambda s:{'id':self.user},'access':lambda s:{'ownership_ready':True}})()
         with self.assertRaisesRegex(ValueError,'Update the Agent'):propose(self.hub,session,self.rid,self.a['node_id'],True)
         self.assertFalse(self.hub.read()['requests'])
-    def test_future_capable_agent_gets_public_local_review_request_no_deletion(self):
-        from wallet_retirement import propose,result
-        self.hub.caps[self.a['node_id']]={'wallet_retirement'};session=type('Session',(),{'user_id':self.user,'user':lambda s:{'id':self.user},'access':lambda s:{'ownership_ready':True}})()
-        request=propose(self.hub,session,self.rid,self.a['node_id'],True);wire=next(p for p in self.exchange(self.a,caps=['wallet_retirement'])['proposals'] if p['kind']=='wallet_retire');self.assertFalse(wire['delete_wallet']);self.assertTrue(wire['require_zero_balance']);self.assertNotIn('xprv',json.dumps(wire))
-        with self.hub.edit() as state:
-            with self.assertRaises(ValueError):result(state,self.b['node_id'],{'request_hash':request['request_hash'],'status':'complete'})
-        self.assertFalse(DescriptorStore(self.config).read()['wallets'][0].get('extinct'))
+    def test_old_archive_only_agent_cannot_receive_deletion_request(self):
+        from wallet_retirement import propose
+        self.hub.caps[self.a['node_id']]={'wallet_retirement'}
+        session=type('Session',(),{'user_id':self.user,'user':lambda s:{'id':self.user},'access':lambda s:{'ownership_ready':True}})()
+        with self.assertRaisesRegex(ValueError,'Update the Agent'):propose(self.hub,session,self.rid,self.a['node_id'],True)
+        self.assertFalse(self.hub.read()['requests'])

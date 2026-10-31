@@ -25,9 +25,27 @@ def validate(state,users,config=None):
         public_vault(row['vault']);clean_diagram(row['diagram']);doc=decode(base64.b64decode(row['psbt'],validate=True))
         if len(doc['inputs'])!=len(row['input_wallets']):raise ValueError('Invalid saved vault funding assignments.')
         if any(any(k[0] in (2,7,8,19,20) for k in f) for f in doc['inputs']):raise ValueError('A composable vault proposal must remain unsigned.')
-    for row in state['requests'].values():
-        if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction','wallet_retire') or row.get('state') not in ('pending','complete','denied','error','recovery_required'):raise ValueError('Invalid saved Agent request.')
+    for ident,row in state['requests'].items():
+        if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction','wallet_retire') or row.get('state') not in ('pending','complete','denied','error','recovery_required','cancelled'):raise ValueError('Invalid saved Agent request.')
+        if row.get('state')=='cancelled' and row.get('kind')!='wallet_retire':raise ValueError('Invalid cancelled request kind.')
         if row.get('proposal'):canonical(row['proposal'])
+        if row.get('kind')=='wallet_retire' and row.get('proposal',{}).get('version')==2:
+            from wallet_retirement import result
+            p=row['proposal'];body=dict(p);request_id=body.pop('request_id',None)
+            if ident!=digest(p) or request_id!=digest(body) or row.get('user_id') not in users or p.get('delete_wallet') is not True or p.get('require_zero_balance') is not True or row.get('disc_status') not in ('unconfirmed','destroyed','none'):raise ValueError('Invalid saved retirement request.')
+            if row['state']!='pending':
+                import copy
+                test=copy.deepcopy(row);test['state']='pending';result({'requests':{ident:test}},row['node_id'],row.get('result'))
+                if test['state']!=row['state']:raise ValueError('Saved retirement outcome mismatch.')
+            if row.get('disc_status')!='unconfirmed' and (row['state']!='complete' or not row.get('disc_confirmed_utc')):raise ValueError('Unverified saved disc confirmation.')
+            root=row.get('root_hash')
+            if root not in state['requests'] or not state['requests'][root].get('expected_holders'):raise ValueError('Invalid retirement holder group.')
+            if ident==root:
+                holders=row['expected_holders']
+                if not isinstance(holders,dict) or not 1<=len(holders)<=256 or row['node_id'] not in holders or any(not isinstance(k,str) or not isinstance(v,str) for k,v in holders.items()):raise ValueError('Invalid expected retirement holders.')
+                if row.get('disc_status')!='unconfirmed':
+                    from wallet_retirement import group_complete
+                    if not group_complete(state,ident):raise ValueError('Not every holder confirmed retirement.')
         if row.get('kind')=='wallet_transfer' and row.get('signed_preview'):
             from wallet_preview import validate as validate_preview,verify,policies
             payload=row['signed_preview'];p=row['proposal'];v=payload['preview']
