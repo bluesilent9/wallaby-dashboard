@@ -2,7 +2,11 @@
 
 Bitcoin tools, wallet insights, Australian CGT working papers and shared family workflows.
 
-**V1 Build 19 — Development.** [Download the DEB](https://github.com/bluesilent9/wallaby-dashboard/raw/refs/heads/Development/dist/wallaby-dashboard_1.0.0~dev19_all.deb) · [Checksums](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) · [Development source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development) · [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/)
+**V1 Build 20 — Development.** [Download the DEB](https://github.com/bluesilent9/wallaby-dashboard/raw/refs/heads/Development/dist/wallaby-dashboard_1.0.0~dev20_all.deb) · [Checksums](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) · [Development source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development) · [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/)
+
+Build 20 saves single-creator Wallet Builder and Transaction Builder workspaces, restores drafts and stages after browser closure, and lets the creator coordinate every funding wallet’s Agent approvals. Cancelling stops Dashboard coordination and tracks durable cancellation receipts per Agent, including offline delivery. Agents must independently offer locally authorised Delete and Cancel or Backup and Cancel; receipt never means deletion. The new builder_cancellation_v1 Agent capability is required. Dashboard-only update; no Agent code changed.
+
+[Builder cancellation protocol](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/BUILDER_CANCELLATION.md).
 
 Build 18 coordinates zero-funds wallet retirement across every known private and watch-only holder. Dashboard verifies fresh balances, including known vault and multisig policies, and sends separate locally approved archival-and-deletion requests to each Agent. One node’s success cannot complete the group: offline or unsupported holders remain pending, and cancellations/errors are flagged. All holders must confirm verified historical archival and deletion before the user records archival-disc destruction or no discs. Requires the matching Agent Build 18 wallet_retirement_v2 capability; Dashboard has no direct deletion or mutating Core RPC authority.
 
