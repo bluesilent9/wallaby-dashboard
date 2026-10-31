@@ -123,12 +123,13 @@ def group_rows(state,key):
 
 def group_complete(state,key):
     root=state['requests'][key];rows=group_rows(state,key)
+    if root.get('cancel_requested'):return False
     return bool(root.get('expected_holders')) and all(any(r['node_id']==node and r['state']=='complete' for r in rows) for node in root['expected_holders'])
 
 def advance(hub):
     # Reconnection may make a previously offline holder available. Never retry a terminal outcome.
     for key,root in list(hub.read()['requests'].items()):
-        if root['kind']!='wallet_retire' or not root.get('expected_holders'):continue
+        if root['kind']!='wallet_retire' or not root.get('expected_holders') or root.get('cancel_requested'):continue
         raw=root['retirement_wallet'];holders=known_holders(hub,raw)
         with hub.edit() as state:state['requests'][key]['expected_holders'].update(holders)
         for option in holder_options(hub,raw):
@@ -160,13 +161,14 @@ def result(state,node,p):
 def snapshot(hub,user):
     state=hub.read();result=[]
     for key,r in state['requests'].items():
-        if r['kind']!='wallet_retire' or r.get('user_id')!=user or not r.get('expected_holders'):continue
+        if r['kind']!='wallet_retire' or not r.get('expected_holders'):continue
         rows=group_rows(state,key);holders=[]
         for node,hostname in r['expected_holders'].items():
             row=next((w for w in rows if w['node_id']==node),None)
-            holders.append({'node_id':node,'hostname':hostname,'state':row['state'] if row else 'waiting_node','message':row.get('message','') if row else 'Waiting for this holder to connect, synchronise and support approved deletion.'})
+            holders.append({'node_id':node,'hostname':hostname,'state':row['state'] if row else 'cancelled' if r.get('cancel_requested') else 'waiting_node','message':row.get('message','') if row else 'Not requested; process cancelled.' if r.get('cancel_requested') else 'Waiting for this holder to connect, synchronise and support approved deletion.','archive_verified':bool((row or {}).get('result',{}).get('archive_verified')),'wallet_deleted':bool((row or {}).get('result',{}).get('wallet_deleted')),'cancel_requested':bool((row or {}).get('cancel_requested'))})
+        pending=any(h['state']=='pending' for h in holders)
         problem=next((h['state'] for h in holders if h['state'] in ('denied','cancelled','error')),None)
-        result.append(dict(request_hash=key,name=r['proposal']['archive_label'],state='complete' if group_complete(state,key) else problem or 'pending',created_utc=r['created_utc'],disc_status=r.get('disc_status','unconfirmed'),message=r.get('coordination_error',''),holders=holders))
+        result.append(dict(request_hash=key,name=r['proposal']['archive_label'],state='complete' if group_complete(state,key) else 'cancelling' if r.get('cancel_requested') and pending else 'cancelled' if r.get('cancel_requested') else problem or 'pending',created_utc=r['created_utc'],disc_status=r.get('disc_status','unconfirmed'),message=r.get('coordination_error',''),holders=holders,cancel_requested=bool(r.get('cancel_requested')),can_cancel=r.get('user_id')==user and not r.get('cancel_requested') and not group_complete(state,key),can_confirm_discs=r.get('user_id')==user))
     return result
 
 def confirm_discs(hub,user,key,status):
@@ -186,9 +188,41 @@ def warnings(hub):
     for key,r in state['requests'].items():
         if r['kind']!='wallet_retire' or not r.get('expected_holders'):continue
         rows=group_rows(state,key);problem=next((v for v in rows if v['state'] in ('denied','cancelled','error')),None);name=r['proposal']['archive_label']
-        if problem:text='Wallet retirement '+problem['state']+' for '+name+'. Not all holders have confirmed archival and deletion. Review the local Agent.';severity='red'
+        if r.get('cancel_requested'):text='Wallet extinction cancellation requested for '+name+'. Completed deletions cannot be undone; delivered requests require Agent cancellation or local denial.';severity='red'
+        elif problem:text='Wallet retirement '+problem['state']+' for '+name+'. Not all holders have confirmed archival and deletion. Review the local Agent.';severity='red'
         elif not group_complete(state,key):text='Wallet retirement pending for '+name+'. Waiting for archival and deletion confirmation from every known holder, including watch-only or offline nodes.';severity='yellow'
         elif r.get('disc_status') not in ('destroyed','none'):text='Every known holder confirmed retirement for '+name+'. Confirm archival-disc destruction on Wallets.';severity='yellow'
         else:continue
         result.append({'id':'retirement-'+key,'kind':'wallet_retirement','severity':severity,'dismissible':False,'target':'balances','created_utc':r['created_utc'],'text':text})
     return result
+
+def readiness(hub,user,wallet_id):
+    family=FamilyStore(hub.config).snapshot();owner=next((r for r in family['ownership'] if r['id']==wallet_id and r.get('owner_id')==user and r.get('confirmed') and r['kind']=='descriptor'),None)
+    if not owner:raise ValueError('No confirmed owned descriptor wallet matches this card. Refresh Ownership and Verify Balances.')
+    wallet=next((w for w in DescriptorStore(hub.config).read()['wallets'] if w['id']==owner['source'] and not w.get('extinct')),None)
+    if not wallet:raise ValueError('The card refers to an outdated wallet identity. Refresh Ownership and Verify Balances.')
+    rows=[]
+    for n in hub.registry.snapshot()['nodes']:
+        inv=hub.inventories.get(n['id'],{});matches=[w for w in inv.get('wallets',[]) if equivalent(w['raw'],wallet['raw'])];reasons=[]
+        if not n.get('connected'):reasons.append('Agent disconnected')
+        elif not n.get('rpc_ready'):reasons.append('Core RPC is unavailable or the node identity conflicts')
+        if n.get('blockchain',{}).get('state')!='ready':reasons.append(n.get('blockchain',{}).get('label') or 'Core synchronisation/health verification is not ready')
+        if CAPABILITY not in hub.caps.get(n['id'],set()):reasons.append('Agent has not advertised wallet_retirement_v2; check the running protected worker, not only the installed package')
+        if not inv.get('complete'):reasons.append('Wallet discovery incomplete: '+str(inv.get('error') or 'awaiting Agent wallet inventory'))
+        elif not matches:reasons.append('No loaded wallet matches the public descriptors; wallet names are not used for matching')
+        elif not any(not w.get('signing_only') and not w.get('extinct') and not w.get('scanning') for w in matches):reasons.append('Matching wallet is scanning, temporary signing-only or already extinct')
+        rows.append({'id':n['id'],'hostname':n['hostname'],'agent_version':n.get('agent',{}).get('version'),'eligible':not reasons,'reasons':reasons,'matching_wallets':[w['name'] for w in matches]})
+    return {'nodes':rows,'options':holder_options(hub,wallet['raw'])}
+
+def cancel(hub,user,key,confirmed):
+    if confirmed is not True:raise ValueError('Confirm cancellation first.')
+    with hub.edit() as state:
+        root=state['requests'].get(key)
+        if not root or root['kind']!='wallet_retire' or root.get('user_id')!=user or not root.get('expected_holders'):raise ValueError('Retirement is unavailable for this user.')
+        if group_complete(state,key):raise ValueError('All holders already completed retirement; deletion cannot be undone.')
+        root.update(cancel_requested=True,cancel_requested_utc=hub.utc())
+        for row in group_rows(state,key):
+            if row['state']!='pending':continue
+            row['cancel_requested']=True
+            if not row.get('delivered'):row.update(state='cancelled',cancelled_before_delivery=True,message='Cancelled before delivery; no Agent operation was requested.')
+    return {'cancel_requested':True,'message':'Undelivered requests stopped. Delivered requests await local Agent cancellation or denial; completed deletion is not undone.'}

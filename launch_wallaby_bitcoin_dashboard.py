@@ -473,10 +473,19 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from wallet_retirement import snapshot
                     return self.json(snapshot(sessions.nodes.hub,session.user_id))
+                if path=='/api/wallets/retirement-readiness':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    from wallet_retirement import readiness
+                    return self.json(readiness(sessions.nodes.hub,session.user_id,parse_qs(urlsplit(self.path).query).get('wallet_id',[''])[0]))
                 if path=='/api/wallets/retirement-options':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from wallet_retirement import candidates
                     return self.json(candidates(sessions.nodes.hub,session.user_id))
+                if path=='/api/wallet-builder/timezones':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    from vault_estimator import timezones_with_offsets
+                    try:return self.json(timezones_with_offsets(parse_qs(urlsplit(self.path).query).get('year',[None])[0]))
+                    except (ValueError,TypeError) as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/wallet-builder':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
@@ -555,11 +564,11 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
-            self.send_header('Content-Type',('text/html' if path=='/' else mimetypes.guess_type(str(file))[0])+'; charset=utf-8')
+            self.send_header('Content-Type',('text/html' if path=='/' else mimetypes.guess_type(str(file))[0] or 'text/plain')+'; charset=utf-8')
             self.send_header('Content-Length',str(len(body)));self.send_header('X-Content-Type-Options','nosniff')
             self.send_header('Referrer-Policy','no-referrer');self.send_header('X-Frame-Options','DENY')
             self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body)
@@ -616,6 +625,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if not session.user():raise ValueError('Select a family user first.')
                     setup=sessions.nodes.hub.wallet_builder
                     if not path.endswith('/cancel'):self.require_builder_node(session)
+                    if path.endswith('/estimate'):
+                        from vault_estimator import from_nodes
+                        return self.json(from_nodes(sessions.nodes,data.get('date'),data.get('timezone')))
                     if path.endswith('/discover'):return self.json(setup.discover())
                     if path.endswith('/create'):return self.json(setup.start(session.user_id,data))
                     if path.endswith('/cancel'):return self.json(setup.cancel(data.get('id')))
@@ -638,6 +650,10 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         hub.inventory_times[connection['node_id']]=0
                         threading.Thread(target=hub.refresh_inventory,args=(connection['node_id'],connection['token']),daemon=True).start()
                     return self.json({'queued':True})
+                if path=='/api/wallets/retirement-cancel':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    from wallet_retirement import cancel
+                    return self.json(cancel(sessions.nodes.hub,session.user_id,data.get('request_hash'),data.get('confirmed')))
                 if path=='/api/wallets/retirement-discs':
                     if not session.user():raise ValueError('Select a family user first.')
                     from wallet_retirement import confirm_discs

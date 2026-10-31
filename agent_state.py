@@ -33,7 +33,9 @@ def validate(state,users,config=None):
             from wallet_retirement import result
             p=row['proposal'];body=dict(p);request_id=body.pop('request_id',None)
             if ident!=digest(p) or request_id!=digest(body) or row.get('user_id') not in users or p.get('delete_wallet') is not True or p.get('require_zero_balance') is not True or row.get('disc_status') not in ('unconfirmed','destroyed','none'):raise ValueError('Invalid saved retirement request.')
-            if row['state']!='pending':
+            if row.get('cancelled_before_delivery'):
+                if row['state']!='cancelled' or row.get('delivered') or not row.get('cancel_requested'):raise ValueError('Invalid cancellation-before-delivery record.')
+            elif row['state']!='pending':
                 import copy
                 test=copy.deepcopy(row);test['state']='pending';result({'requests':{ident:test}},row['node_id'],row.get('result'))
                 if test['state']!=row['state']:raise ValueError('Saved retirement outcome mismatch.')

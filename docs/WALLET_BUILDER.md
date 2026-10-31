@@ -35,3 +35,7 @@ Build 16 shows discovery progress next to its button. Repeated checks preserve a
 ## Build 17 role names
 
 Role names appear only for Multi-Signature and Multi-Signature Vault. Single Signature and Vault automatically use one signing role; select its producing Agent and key storage normally. This is a Dashboard presentation change and requires no Agent update.
+
+## Vault unlock date
+
+Select Vault or Multi-Signature Vault to reveal the calendar estimator. Choose a local date and timezone; map and list stay in sync. UTC offsets include seasonal alternatives for the selected year. Calculate the height using a synchronised node. The model selects a height expected to have been passed with at least 99% probability by 07:00 local; actual hashrate/difficulty can change this. The most-likely timestamp is the mode of the constant-rate arrival model. The copy button produces unformatted digits. Any date or timezone change invalidates the previous height and requires recalculation. Funding remains a separate transaction; wallet creation transfers no Bitcoin.

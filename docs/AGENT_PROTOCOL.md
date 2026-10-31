@@ -121,3 +121,9 @@ Agent Build 10 exposes protected-RAM archive accounts through public wallet rout
 ## Dashboard Build 13 presentation update
 
 No wire protocol, remote RPC permission, partial-signature or broadcast behaviour changes. Vault status responses now include verification timestamps, stale flags, funding status and public policy thresholds; these are Dashboard browser fields, not Agent authority. Dashboard never converts its browser fee acknowledgement into local Agent consent. Remaining Agent-only presentation work is listed in AGENT_FOLLOW_UP.md.
+
+## Dashboard Build 19: cancellation requests
+
+The creator may cancel a retirement group. Dashboard stops queuing new holder requests. Undelivered requests can be marked cancelled locally. Delivered requests remain awaiting an actual Agent outcome; a Dashboard click never establishes that deletion was stopped or reversed. Agent Build 18 supports local denial but does not implement remote cancellation.
+
+A future Agent implementing `wallet_retirement_cancel_v1` receives `{kind:"wallet_retire_cancel",version:1,request_hash:ORIGINAL_HASH}`. It should withdraw the matching pending approval safely and reply using `wallet_retirement_result` with the original hash and `status:"cancelled"` only when execution was stopped. Already-completed deletion must still report its real result. An in-flight uncertain operation must not be reported as cancelled. Agents without this capability receive no incompatible cancellation proposal; users can deny the original request locally.

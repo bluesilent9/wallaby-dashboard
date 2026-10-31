@@ -13,7 +13,7 @@ from node_wallets import NodeWalletLoader
 from preferences import FamilyStore,resource_id
 from agent_rpc import PRIVATE
 
-CAPS={'node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2'}
+CAPS={'node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2','wallet_retirement_cancel_v1'}
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
 def canonical(value):
     raw=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
@@ -284,6 +284,9 @@ class AgentHub:
                 for key,row in sorted(state['requests'].items()):
                     if row['node_id']!=node or row['state']!='pending' or row['kind']=='wallet_transfer':continue
                     if row['kind']=='wallet_retire' and row['proposal'].get('version')==2 and 'wallet_retirement_v2' in caps:
+                        if row.get('cancel_requested'):
+                            if 'wallet_retirement_cancel_v1' in caps:proposals.append({'kind':'wallet_retire_cancel','version':1,'request_hash':key})
+                            continue
                         row['delivered']=True;proposals.append(row['proposal']);continue
                     if row['kind']=='sign_psbt_partial' and 'partial_signing' in caps or row['kind']=='broadcast_transaction' and 'broadcast' in caps:
                         row['delivered']=True;proposals.append(row['proposal'])

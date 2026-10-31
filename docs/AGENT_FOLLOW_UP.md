@@ -6,7 +6,7 @@ Dashboard requires the new `wallet_retirement_v2` Agent capability. Agent Build 
 
 Agent completion must explicitly confirm verified historical archival, complete history, zero funds and deletion of every listed local wallet account. Cancelled, denied and failed requests remain flagged. After every known holder confirms archival and deletion, the initiating user confirms that archival discs were destroyed or that none existed; this is a recorded user statement, not a physical-media verification. Requests cover every known private and watch-only holder. Each Agent needs separate local approval. Offline or unsupported holders remain pending, with durable per-holder completion tracking; one node's success cannot complete the group. Retirement records survive profile backup/restore, and normal sync is suppressed for policies being retired or already retired.
 
-Implement the version 2 retirement protocol in [AGENT_PROTOCOL.md](AGENT_PROTOCOL.md), including durable cancellation and completion reporting. Current Agent Build 16 intentionally rejects deletion. No Agent code is changed by this Dashboard build.
+Agent Build 18 implements the version 2 retirement operation. No Agent code is changed by this Dashboard build.
 
 # Agent follow-up after Dashboard V1 Build 13
 
@@ -24,3 +24,13 @@ For a later Agent update:
 Do not implement withholding the last signature or a new broadcast security barrier: the user declined that change. No Agent files or repository were changed by Dashboard Build 13.
 
 Physical optical media and the installed protected Qt/systemd/AppArmor/Snap lifecycle still require deployment testing. No new guarantee about hardware or operating-system behaviour is implied.
+
+## Dashboard Build 19: cancellation requests
+
+The creator may cancel a retirement group. Dashboard stops queuing new holder requests. Undelivered requests can be marked cancelled locally. Delivered requests remain awaiting an actual Agent outcome; a Dashboard click never establishes that deletion was stopped or reversed. Agent Build 18 supports local denial but does not implement remote cancellation.
+
+A future Agent implementing `wallet_retirement_cancel_v1` receives `{kind:"wallet_retire_cancel",version:1,request_hash:ORIGINAL_HASH}`. It should withdraw the matching pending approval safely and reply using `wallet_retirement_result` with the original hash and `status:"cancelled"` only when execution was stopped. Already-completed deletion must still report its real result. An in-flight uncertain operation must not be reported as cancelled. Agents without this capability receive no incompatible cancellation proposal; users can deny the original request locally.
+
+## Pending-block data failure: Agent follow-up
+
+The local Agent `node_client.NodeClient.execute` replaces every exception from Core with `local_rpc_failed`. The supplied Dashboard log confirms that this is the response for getrawmempool verbose, while smaller fee/header calls succeed. Failures occur in about a second, not near the 15-second Dashboard deadline. Inspect `Core.call`, `http_json` response bounds (16 MiB), `clean_json` result bounds (16 MiB), the protected-worker transport (20 MiB), and exact sanitized exception categories. Do not expose raw RPC credentials or unrestricted responses in logs. Reproduce with a realistic large mempool, including ancestor/dependency information, and preserve bounded transport. Dashboard cannot reconstruct exact pending packages from getmempoolinfo alone. No replacement Agent operation has been invented in this build.

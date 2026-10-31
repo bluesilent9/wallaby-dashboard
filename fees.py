@@ -104,7 +104,8 @@ class FeeService:
                 def nodes(inner):return [node]
                 def call(inner,node_id,method,params=None,wallet=None):
                     state=inner.registry.rpc.call(node_id,method,params or [],wallet,timeout_seconds=service.RPC_SECONDS,consume=True,priority=100)
-                    if state['state']!='succeeded':raise NodeDataUnavailable(str((state.get('error') or {}).get('message',state['state'])))
+                    if state['state']!='succeeded':
+                        error=state.get('error') or {};raise NodeDataUnavailable(str(error.get('message',state['state']))+' [Agent RPC '+str(error.get('code',state['state']))+']')
                     return state['result']
             chain=NodeChain(SelectedRPC(self.registry,priority=100),{'wallets':[]})
             info=self.call(chain,'getblockchaininfo')
@@ -129,13 +130,15 @@ class FeeService:
             except (ValueError,OSError,KeyError,StopIteration) as exc:
                 self.publish(price_error='BTC/AUD valuation unavailable. '+str(exc));self.log('AUD quote unavailable: '+str(exc))
             try:
-                self.log('Reading the local mempool for block projection.');projection=project(self.call(chain,'getrawmempool',[True]));self.publish(projected_blocks=projection);self.log('Mempool projection ready: '+str(len(projection))+' estimated blocks.')
+                self.log('Reading the local mempool for block projection: '+str(mempool['size'])+' transactions; getrawmempool verbose, '+str(self.RPC_SECONDS)+' second RPC deadline.');projection=project(self.call(chain,'getrawmempool',[True]));self.publish(projected_blocks=projection);self.log('Mempool projection ready: '+str(len(projection))+' estimated blocks.')
                 if projection and fallback:
                     for index in fallback:rates[index].update(sat_per_vbyte=number(max(floor,Decimal(projection[0]['minimum_rate']))),basis='Local mempool package estimate; insufficient Core fee history')
                     for i in range(1,len(rates)):rates[i]['sat_per_vbyte']=number(max(Decimal(rates[i]['sat_per_vbyte']),Decimal(rates[i-1]['sat_per_vbyte'])))
                     self.publish(rates=rates)
             except (ValueError,NodeDataUnavailable) as exc:
-                self.publish(projection_error=str(exc));self.log('Block projection unavailable: '+str(exc))
+                message=str(exc)
+                if 'local_rpc_failed' in message:message+=' The Agent could not complete its local Core request. Check its log for a timeout, response-size limit or protected-worker error; mined-block and fee responses use separate requests.'
+                self.publish(projection_error=message);self.log('Block projection unavailable: '+message)
             recent=[];h=info['bestblockhash']
             try:
                 for _ in range(8):
