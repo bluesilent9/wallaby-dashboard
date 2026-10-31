@@ -10,7 +10,7 @@ def core(ident,method,params,wallet=None,timeout=30):
  elif method=='getmempoolinfo':r={'size':0,'mempoolminfee':'0.000001','minrelaytxfee':'0.000001'}
  elif method=='estimatesmartfee':r={'feerate':'0.000002','blocks':params[0]}
  elif method=='getblock':r={'size':500000,'weight':1500000}
- elif method=='getrawmempool':r={}
+ elif method=='wallaby_mempool_snapshot':r={'version':1,'snapshot':'a'*32,'created_at':1700000000,'expires_at':1700000300,'total':0,'offset':0,'next_offset':None,'entries':{}}
  elif method=='getblockheader':r={'height':100,'time':1700000000,'nTx':1}
  else:raise ValueError(method)
  return {'result':r}

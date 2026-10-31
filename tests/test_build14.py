@@ -20,10 +20,10 @@ class Fixture:
   elif method=='getmempoolinfo':result={'size':0,'mempoolminfee':'0.000001','minrelaytxfee':'0.000001'}
   elif method=='estimatesmartfee':result={'feerate':'0.000002','blocks':params[0]}
   elif method=='getblock':result={'size':500000,'weight':1500000}
-  elif method=='getrawmempool':
+  elif method=='wallaby_mempool_snapshot':
    if self.gate:self.gate.wait(3)
    if self.error:return {'state':'failed','error':{'message':self.error}}
-   result={}
+   result={'version':1,'snapshot':'a'*32,'created_at':1700000000,'expires_at':1700000300,'total':0,'offset':0,'next_offset':None,'entries':{}}
   elif method=='getblockheader':result={'height':100,'time':1700000000,'nTx':1}
   else:raise AssertionError(method)
   return {'state':'succeeded','result':result}

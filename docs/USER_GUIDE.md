@@ -301,3 +301,9 @@ A future Agent implementing `wallet_retirement_cancel_v1` receives `{kind:"walle
 Choose Wallet Builder → Start Building a Wallet, or create/load a Transaction Builder template. Your public draft, visual layout and current stage are saved to the shared Dashboard profile. Return using the same family user. Other users can see which user owns each builder but cannot edit their work. The transaction creator sends all signing requests; the wallet holders review them locally on their Agents.
 
 Use Cancel Wallet Creation or the transaction Cancel button, then confirm Yes. If no work reached an Agent, cancellation finishes immediately. Otherwise the saved progress dialog waits for each Agent to receive the cancellation request, including disconnected Agents when they return. Complete in this dialog means receipt only. On the Agent, independently choose Delete and Cancel or Backup and Cancel after checking its local warning. Dashboard does not delete node wallets or backups. Cancelling cannot reverse broadcast. A service restart may pause an unfinished key ceremony for local reconciliation; it never generates replacement keys automatically.
+
+## Fee projection progress and logs
+
+Use Agent V2 Build 20 with Dashboard Build 21. Fee rates appear first while the Dashboard collects the local mempool in pages; the block view shows the received and expected transaction counts. Pending blocks appear only after the complete snapshot is checked. If a page fails or expires, the graph is discarded while rates and mined blocks remain available. Refresh to try a new capture, or wait for the two-minute refresh.
+
+Administration → Logs exports UTF-8 diagnostics with the Dashboard version, UTC export time, connected Agent versions and correlated refresh/RPC/page measurements. Byte counts described as observed_bytes_at_least are lower bounds. Logs retain at most seven UTC days and 1 MiB per day; no mempool payload or credentials are included.

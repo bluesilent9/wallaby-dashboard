@@ -1,3 +1,7 @@
+# Dashboard Build 21 fee paging and diagnostics
+
+The matching Dashboard changes from Agent Build 20’s DASHBOARD_FEE_PAGING.md are implemented: allowlist, same-connection 1,000-entry page collection, complete graph validation, exact modified fees and explicit incomplete-data errors. Fee recommendations/mined blocks remain available independently. Correlated, bounded diagnostics preserve boundary/byte measurements, including observed_bytes_at_least. See [PAGED_MEMPOOL.md](PAGED_MEMPOOL.md). The independent Agent20 transport/formatter is tested with 38,000 transactions and no production node. No Agent code changed here.
+
 # Dashboard Build 20 Agent follow-up
 
 Implement [BUILDER_CANCELLATION.md](BUILDER_CANCELLATION.md): durable receipt of exact-scoped builder cancellation requests, followed by independently authorised local Backup/Delete and Cancel. No Agent code is changed here.

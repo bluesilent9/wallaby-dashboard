@@ -38,7 +38,12 @@ class NodeRegistry:
         frames=traceback.extract_tb(exc.__traceback__)[-2:];location=' → '.join(Path(f.filename).name+':'+str(f.lineno)+' '+f.name for f in frames)
         self.diagnostic_log.append('Agent protocol',path.split('?')[0][:80]+' · '+type(exc).__name__+': '+str(exc)[:400]+(' · '+location if location else ''))
     def log_text(self):
-        return self.diagnostic_log.text()
+        from version import LABEL
+        from datetime import datetime,timezone
+        with self.lock:
+            active=[c['hostname']+' · Agent '+str(c.get('agent_version') or 'not reported')+' · '+str(len(c.get('rpc_methods',[])))+' read-only methods' for c in self.connections.values()]
+        header=LABEL+' · Dashboard diagnostic export\n'+datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M:%S UTC')+' · Export time\nRetention: 7 UTC calendar days, maximum 1 MiB per day. No RPC payloads or credentials.\nConnected Agents: '+(' ; '.join(sorted(active)) if active else 'none')+'\n\n'
+        return header+self.diagnostic_log.text()
     @staticmethod
     def validate(data):
         if not isinstance(data,dict) or set(data)!={'version','nodes'} or data['version']!=1 or not isinstance(data['nodes'],list) or len(data['nodes'])>10000:raise ValueError('Invalid node registry.')
@@ -156,7 +161,7 @@ def create_agent_server(registry,port=DEFAULT_AGENT_PORT,gate=None,ipv6=True,ipv
                 if len(sizes)!=1:raise ValueError('Provide one Content-Length.')
                 length=int(sizes[0])
                 limit=20*1024*1024 if self.path=='/agent/v2/exchange' else MAX_RESULT_BYTES+4096 if self.path=='/agent/v1/result' else 4096
-                if not 0<length<=limit:raise ValueError('Agent request exceeds its size limit.')
+                if not 0<length<=limit:raise ValueError('Agent request exceeds its size limit · boundary=dashboard_http · limit_bytes='+str(limit)+' · declared_bytes='+str(length)+'.')
                 raw=self.rfile.read(length)
                 if len(raw)!=length:raise ValueError('Incomplete agent request.')
                 def unique(pairs):

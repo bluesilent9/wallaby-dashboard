@@ -25,7 +25,12 @@ class DiagnosticLog:
             now=datetime.fromtimestamp(self.clock(),timezone.utc);path=self.root/('diagnostics-'+now.strftime('%Y-%m-%d')+'.log')
             # One record per line; neither command polls nor credential payloads
             # are logged. Length bounds also contain repeated malformed errors.
-            clean=lambda v:' '.join(str(v).split())[:1600]
+            def clean(value):
+                value=' '.join(str(value).split())[:1600]
+                value=re.sub(r"(?i)([\"']?(?:authorization|cookie|password|passphrase|connection[_ -]?token|x-session-token)[\"']?\s*[:=]\s*)(?:Bearer\s+)?(?:[\"'][^\"']*[\"']|[^\s,;]+)",r'\1[redacted]',value)
+                from agent_rpc import PRIVATE
+                while match:=PRIVATE.search(value):value=value[:match.start()]+'[redacted private key]'+value[match.end():]
+                return value
             raw=(now.strftime('%d/%m/%Y %H:%M:%S UTC')+' · '+clean(source)+' · '+clean(message)+'\n').encode('utf-8')
             if path.exists() and path.stat().st_size+len(raw)>self.DAY_BYTES:
                 with path.open('rb') as file:

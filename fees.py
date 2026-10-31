@@ -1,10 +1,13 @@
 """Low-priority, node-only fee and block observations; market FX stays external."""
 from copy import deepcopy
+from contextlib import nullcontext
 from datetime import datetime,timezone
 from decimal import Decimal
-import heapq,json,threading,time,urllib.request,re
+import heapq,json,threading,time,urllib.request,re,uuid
 from collections import deque
-from node_chain import RegistryRPC,NodeChain,satoshis,NodeDataUnavailable
+from mempool_pages import collect,METHOD,MAX_ENTRIES
+from agent_rpc import error_summary
+from node_chain import RegistryRPC,NodeChain,NodeDataUnavailable
 
 class FeeUnavailable(RuntimeError):pass
 class Deferred(Exception):pass
@@ -22,9 +25,12 @@ def project(entries,limit=4,capacity=999000):
     assembler policy or a guarantee. Re-evaluate a package after an ancestor
     enters a block; don't count its size/fee twice.
     """
-    if len(entries)>50000:raise ValueError('Local mempool is too large for the bounded projection; fee recommendations remain available.')
+    if not entries:return []
+    if len(entries)>MAX_ENTRIES:raise ValueError('Local mempool is too large for the bounded projection; fee recommendations remain available.')
+    ancestry_items=0
     parents={t:{p for p in e.get('depends',[]) if p in entries} for t,e in entries.items()};anc={};visiting=set()
     def ancestry(t):
+        nonlocal ancestry_items
         if t in anc:return anc[t]
         if t in visiting:raise ValueError('Cyclic mempool dependency')
         if len(visiting)>500:raise ValueError('Mempool ancestry exceeds the projection complexity limit')
@@ -32,8 +38,14 @@ def project(entries,limit=4,capacity=999000):
         for p in parents[t]:value.update(ancestry(p))
         visiting.remove(t)
         if len(value)>1000:raise ValueError('Mempool package exceeds projection complexity limit')
+        ancestry_items+=len(value)
+        if ancestry_items>2000000:raise ValueError('Mempool ancestry exceeds the bounded projection capacity')
         anc[t]=value;return value
-    values={t:(int(e['vsize']),satoshis(e['fees']['modified'])) for t,e in entries.items()}
+    def modified_sats(value):
+        amount=Decimal(str(value))*100000000
+        if not amount.is_finite() or amount!=amount.to_integral_value() or abs(amount)>21000000*100000000:raise ValueError('Invalid modified mempool fee')
+        return int(amount)
+    values={t:(int(e['vsize']),modified_sats(e['fees']['modified'])) for t,e in entries.items()}
     if any(s<=0 for s,f in values.values()):raise ValueError('Invalid mempool virtual size')
     heap=[];selected=set();blocks=[];versions={t:0 for t in entries};children={t:set() for t in entries}
     for t,ps in parents.items():
@@ -52,6 +64,7 @@ def project(entries,limit=4,capacity=999000):
             # package rate after its best package was selected. Reinsert it.
             if value[4]!=old[4]:heapq.heappush(heap,value);continue
             rate,t,size,fee,package,version=value
+            if fee<0:continue
             if used+size>capacity:deferred.append(value);continue
             selected.update(package);used+=size;fees+=fee;count+=len(package);rates.append(-rate)
             affected=set();pending=list(package)
@@ -61,6 +74,7 @@ def project(entries,limit=4,capacity=999000):
                     if child not in selected and child not in affected:affected.add(child);pending.append(child)
             for child in sorted(affected):versions[child]+=1;heapq.heappush(heap,candidate(child))
         for value in deferred:heapq.heappush(heap,value)
+        if not count:break
         blocks.append({'index':number_,'vsize':used,'weight':used*4,'tx_count':count,'fees_sats':fees,'median_rate':number(sorted(rates)[len(rates)//2]) if rates else '0','minimum_rate':number(min(rates)) if rates else '0','maximum_rate':number(max(rates)) if rates else '0','estimated_minutes':(number_+1)*10})
         if not heap:break
     return blocks
@@ -70,8 +84,9 @@ class FeeService:
     RETRY_SECONDS=30
     RPC_SECONDS=15
     def __init__(self,registry,busy=lambda:False,clock=time.time):
-        self.registry=registry;self.busy=busy;self.clock=clock;self.lock=threading.RLock();self.data=None;self.refreshing=False;self.last_attempt=None;self.error=None;self.headers={};self.price=None;self.closed=False;self.phase='';self.diagnostics=deque(maxlen=100)
+        self.registry=registry;self.busy=busy;self.clock=clock;self.lock=threading.RLock();self.data=None;self.refreshing=False;self.last_attempt=None;self.error=None;self.headers={};self.price=None;self.closed=False;self.phase='';self.refresh_id='';self.diagnostics=deque(maxlen=100)
     def log(self,text):
+        text=('refresh='+self.refresh_id+' · ' if self.refresh_id else '')+str(text)
         with self.lock:self.diagnostics.append(stamp(self.clock())+' · Fee Estimates · '+str(text)+'\n')
         if getattr(self.registry,'diagnostic_log',None):self.registry.diagnostic_log.append('Fee Estimates',text)
     def log_text(self):
@@ -80,7 +95,8 @@ class FeeService:
         with self.lock:return {'active':self.refreshing,'phase':self.phase,'lines':list(self.diagnostics)[-20:]}
     def call(self,chain,method,params=None):
         if self.closed or self.busy():raise Deferred()
-        with self.lock:self.phase='Requesting '+method+' from the connected node…'
+        with self.lock:
+            if method!=METHOD:self.phase='Requesting '+method+' from the connected node…'
         return chain.call(method,params)
     def fx(self):
         if self.price and self.clock()-self.price['unix_time']<120:return self.price
@@ -94,19 +110,27 @@ class FeeService:
         with self.lock:
             if self.data is not None:self.data.update(deepcopy(fields))
     def refresh(self):
-        self.log('Refresh started.')
+        self.refresh_id=uuid.uuid4().hex[:12];started=time.monotonic();self.log('Refresh started.')
         try:
             if self.busy():raise Deferred()
             nodes=[n for n in RegistryRPC(self.registry).nodes() if n.get('rpc_ready')]
             if not nodes:raise FeeUnavailable('Connect a Bitcoin Core node through Wallaby Agent for fee estimates.')
-            node=next((n for n in nodes if n.get('blockchain',{}).get('state')=='ready'),nodes[0]);service=self
+            node=next((n for n in nodes if n.get('blockchain',{}).get('state')=='ready'),nodes[0]);service=self;capture_token=[]
             class SelectedRPC(RegistryRPC):
                 def nodes(inner):return [node]
                 def call(inner,node_id,method,params=None,wallet=None):
-                    state=inner.registry.rpc.call(node_id,method,params or [],wallet,timeout_seconds=service.RPC_SECONDS,consume=True,priority=100)
+                    if method==METHOD and hasattr(inner.registry,'connections'):
+                        with getattr(inner.registry,'lock',nullcontext()):tokens=[t for t,c in inner.registry.connections.items() if c['node_id']==node_id]
+                        if len(tokens)!=1 or capture_token and tokens[0]!=capture_token[0]:raise NodeDataUnavailable('Agent connection changed during mempool capture. Incomplete pages were discarded; refresh to capture a new snapshot.')
+                        if not capture_token:capture_token.append(tokens[0])
+                    began=time.monotonic();state=inner.registry.rpc.call(node_id,method,params or [],wallet,timeout_seconds=service.RPC_SECONDS,consume=True,priority=100);elapsed=round((time.monotonic()-began)*1000)
+                    service.last_rpc={'id':state.get('id','unavailable'),'elapsed_ms':elapsed,'offset':params.get('offset',0) if method==METHOD and isinstance(params,dict) else 0}
                     if state['state']!='succeeded':
-                        error=state.get('error') or {};raise NodeDataUnavailable(str(error.get('message',state['state']))+' [Agent RPC '+str(error.get('code',state['state']))+']')
+                        error=state.get('error') or {};service.log('RPC failed · node='+node['hostname']+' · request='+state.get('id','unavailable')+' · method='+method+(' · offset='+str(service.last_rpc['offset']) if method==METHOD else '')+' · elapsed_ms='+str(elapsed)+' · '+error_summary(error))
+                        raise NodeDataUnavailable(str(error.get('message',state['state']))+' [Agent RPC '+error_summary(error)+']')
+                    if elapsed>=2000:service.log('Slow RPC · node='+node['hostname']+' · request='+state.get('id','unavailable')+' · method='+method+' · elapsed_ms='+str(elapsed))
                     return state['result']
+            self.log('Selected node='+node['hostname']+' · Agent='+str((node.get('agent') or {}).get('version') or 'not reported')+' · RPC deadline='+str(self.RPC_SECONDS)+'s · priority=background.')
             chain=NodeChain(SelectedRPC(self.registry,priority=100),{'wallets':[]})
             info=self.call(chain,'getblockchaininfo')
             if info.get('chain')!='main' or info.get('initialblockdownload') or info.get('blocks',0)<info.get('headers',0):raise FeeUnavailable('Wait for the connected mainnet node to synchronise.')
@@ -130,15 +154,25 @@ class FeeService:
             except (ValueError,OSError,KeyError,StopIteration) as exc:
                 self.publish(price_error='BTC/AUD valuation unavailable. '+str(exc));self.log('AUD quote unavailable: '+str(exc))
             try:
-                self.log('Reading the local mempool for block projection: '+str(mempool['size'])+' transactions; getrawmempool verbose, '+str(self.RPC_SECONDS)+' second RPC deadline.');projection=project(self.call(chain,'getrawmempool',[True]));self.publish(projected_blocks=projection);self.log('Mempool projection ready: '+str(len(projection))+' estimated blocks.')
+                self.phase='Capturing the local mempool snapshot…';self.log('Reading paged local mempool for block projection: reported_transactions='+str(mempool['size'])+' · method='+METHOD+'.')
+                capture=time.monotonic()
+                def progress(received,total,identity,created_at):
+                    self.phase='Reading local mempool: '+format(received,',')+' of '+format(total,',')+' transactions…'
+                    self.publish(projection_progress={'received':received,'total':total})
+                    if received<=1000 or received%10000==0 or received==total:
+                        last=getattr(self,'last_rpc',{});self.log('Mempool snapshot='+identity[:12]+' · received='+str(received)+'/'+str(total)+' · request='+last.get('id','unavailable')+' · offset='+str(last.get('offset',0))+' · pages='+str(max(1,(received+999)//1000))+' · capture_age_s='+str(max(0,round(self.clock()-created_at)))+' · page_elapsed_ms='+str(last.get('elapsed_ms',0))+'.')
+                entries=collect(lambda p:self.call(chain,METHOD,p),progress)
+                self.log('Complete mempool snapshot collected · entries='+str(len(entries))+' · elapsed_ms='+str(round((time.monotonic()-capture)*1000))+'.')
+                self.phase='Calculating pending blocks from the complete local mempool…';calculation=time.monotonic();projection=project(entries);self.publish(projected_blocks=projection,projection_progress=None);self.log('Mempool projection ready: '+str(len(projection))+' estimated blocks · calculation_ms='+str(round((time.monotonic()-calculation)*1000))+'.')
                 if projection and fallback:
                     for index in fallback:rates[index].update(sat_per_vbyte=number(max(floor,Decimal(projection[0]['minimum_rate']))),basis='Local mempool package estimate; insufficient Core fee history')
                     for i in range(1,len(rates)):rates[i]['sat_per_vbyte']=number(max(Decimal(rates[i]['sat_per_vbyte']),Decimal(rates[i-1]['sat_per_vbyte'])))
                     self.publish(rates=rates)
             except (ValueError,NodeDataUnavailable) as exc:
                 message=str(exc)
+                if 'has not enabled this RPC method' in message:message='The selected Agent does not advertise the paged mempool interface. Install the matching Agent build; fee rates and mined blocks remain available.'
                 if 'local_rpc_failed' in message:message+=' The Agent could not complete its local Core request. Check its log for a timeout, response-size limit or protected-worker error; mined-block and fee responses use separate requests.'
-                self.publish(projection_error=message);self.log('Block projection unavailable: '+message)
+                self.publish(projection_error=message,projection_progress=None);self.log('Block projection unavailable: '+message)
             recent=[];h=info['bestblockhash']
             try:
                 for _ in range(8):
@@ -160,7 +194,7 @@ class FeeService:
                 if len(self.headers)>32:self.headers={b['hash']:self.headers[b['hash']] for b in recent}
             except (ValueError,NodeDataUnavailable,KeyError) as exc:
                 self.publish(block_error='Recent block data unavailable. '+str(exc));self.log('Recent blocks unavailable: '+str(exc))
-            self.log('Refresh completed; '+str(len(recent))+' recent block headers loaded. Next automatic refresh in 2 minutes.')
+            self.log('Refresh finished · rates='+str(len(rates))+' · projection='+('unavailable' if self.data.get('projection_error') else 'complete' if self.data.get('projected_blocks') else 'empty')+' · mined_headers='+str(len(recent))+' · elapsed_ms='+str(round((time.monotonic()-started)*1000))+'. Next automatic refresh in 2 minutes.')
         except Deferred:
             self.log('Refresh paused for higher-priority node work.')
         except Exception as exc:

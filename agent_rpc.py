@@ -8,7 +8,7 @@ from datetime import datetime,timezone
 from decimal import Decimal
 import json,re,time,uuid
 
-NODE_METHODS=frozenset('getblockchaininfo getblockcount getbestblockhash getblockhash getblockheader getblock getchaintips getdifficulty getmempoolinfo getrawmempool getmempoolentry getmempoolancestors getmempooldescendants gettxout gettxoutsetinfo getrawtransaction gettxoutproof verifytxoutproof getnetworkinfo getnettotals getpeerinfo getconnectioncount getindexinfo estimatesmartfee deriveaddresses getdescriptorinfo validateaddress decoderawtransaction decodescript decodepsbt analyzepsbt listwallets listwalletdir scantxoutset scanblocks getdescriptoractivity getblockfrompeer'.split())
+NODE_METHODS=frozenset('wallaby_mempool_snapshot getblockchaininfo getblockcount getbestblockhash getblockhash getblockheader getblock getchaintips getdifficulty getmempoolinfo getrawmempool getmempoolentry getmempoolancestors getmempooldescendants gettxout gettxoutsetinfo getrawtransaction gettxoutproof verifytxoutproof getnetworkinfo getnettotals getpeerinfo getconnectioncount getindexinfo estimatesmartfee deriveaddresses getdescriptorinfo validateaddress decoderawtransaction decodescript decodepsbt analyzepsbt listwallets listwalletdir scantxoutset scanblocks getdescriptoractivity getblockfrompeer'.split())
 WALLET_METHODS=frozenset('getwalletinfo getbalances getbalance listunspent gettransaction listtransactions listsinceblock getaddressinfo getaddressesbylabel listlabels listaddressgroupings listreceivedbyaddress listreceivedbylabel listdescriptors'.split())
 METHODS=NODE_METHODS|WALLET_METHODS
 MAX_REQUEST_BYTES=4*1024*1024
@@ -36,13 +36,16 @@ PRIVATE=PrivateMaterial()
 
 def stamp():return datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z')
 
+class MessageLimit(ValueError):
+    def __init__(self,size,limit):self.size=size;self.limit=limit;super().__init__('RPC message exceeds its size limit.')
+
 def clean_json(value,limit):
     """Retain fractional JSON numbers as exact decimal strings, never binary floats."""
     def decimal_text(v):
         if not isinstance(v,Decimal) or not v.is_finite() or abs(v.adjusted())>100 or len(v.as_tuple().digits)>1000:raise ValueError('Unsupported or oversized decimal value.')
         return format(v,'f')
     raw=json.dumps(value,ensure_ascii=True,allow_nan=False,default=decimal_text)
-    if len(raw.encode())>limit:raise ValueError('RPC message exceeds its size limit.')
+    if len(raw.encode())>limit:raise MessageLimit(len(raw.encode()),limit)
     if PRIVATE.search(raw):raise ValueError('Private key material is not accepted by the agent transport.')
     return json.loads(raw),len(raw.encode())
 
@@ -60,8 +63,25 @@ def request(method,params,wallet):
     if wallet is not None and (not isinstance(wallet,str) or len(wallet)>256 or any(ord(c)<32 for c in wallet)):raise ValueError('Invalid wallet name.')
     if method in WALLET_METHODS and wallet is None:raise ValueError('Specify the exact Core wallet name for a wallet RPC.')
     if method not in WALLET_METHODS and wallet is not None:raise ValueError('This node RPC does not take a wallet endpoint.')
+    if method=='wallaby_mempool_snapshot':
+        from mempool_pages import parameters
+        parameters(params)
     if method=='listdescriptors' and params not in ([],[False],{}, {'private':False}):raise ValueError('Only public listdescriptors false exports are permitted.')
     return params,size
+
+def error_summary(error):
+    """Only bounded error categories and numeric transport measurements; no payload."""
+    error=error if isinstance(error,dict) else {};code=error.get('code','unknown')
+    code=str(code) if isinstance(code,(str,int)) and re.fullmatch('[A-Za-z0-9_.-]{1,80}',str(code)) else 'unknown'
+    parts=['code='+code];data=error.get('data')
+    if isinstance(data,dict):
+        for key in ('stage','category','boundary'):
+            v=data.get(key)
+            if isinstance(v,str) and re.fullmatch('[A-Za-z0-9_.-]{1,64}',v):parts.append(key+'='+v)
+        for key in ('limit_bytes','observed_bytes','observed_bytes_at_least'):
+            v=data.get(key)
+            if type(v) is int and 0<=v<=2**40:parts.append(key+'='+str(v))
+    return ' · '.join(parts)
 
 class RPCBroker:
     def __init__(self,registry):
@@ -69,7 +89,11 @@ class RPCBroker:
         self.registry=registry;self.condition=threading.Condition(registry.lock);self.rows={};self.consumed={};self.total_bytes=0
     def _finish(self,row,state,error=None,result=None):
         self.total_bytes-=row['size'];row['state']=state;row['finished']=self.registry.clock();row['finished_utc']=stamp()
+        page_offset=(row.get('params') or {}).get('offset',0) if row['method']=='wallaby_mempool_snapshot' and isinstance(row.get('params'),dict) else 0
         row.pop('params',None);row['error']=error;row['result']=result
+        if state!='succeeded' and getattr(self.registry,'diagnostic_log',None):
+            node=self.registry.connections.get(row['token'],{});elapsed=max(0,round((self.registry.clock()-row['created'])*1000))
+            self.registry.diagnostic_log.append('Agent RPC','request='+row['id']+' · node='+node.get('hostname',row['node_id'][:12])+' · method='+row['method']+(' · offset='+str(page_offset) if row['method']=='wallaby_mempool_snapshot' else '')+' · state='+state+' · elapsed_ms='+str(elapsed)+' · '+error_summary(error))
         row['size']=len(json.dumps({'result':result,'error':error},ensure_ascii=True).encode());self.total_bytes+=row['size'];self.condition.notify_all()
     def _maintain(self):
         now=self.registry.clock()
@@ -110,7 +134,7 @@ class RPCBroker:
             if method not in connection.get('rpc_methods',[]):raise ValueError('The connected agent has not enabled this RPC method.')
             if sum(r['node_id']==node_id and r['state'] in ('queued','delivered','running') for r in self.rows.values())>=MAX_PENDING_PER_NODE:raise ValueError('Too many pending RPC requests for this node.')
             if len(self.rows)>=MAX_REQUESTS or self.total_bytes+size>MAX_TOTAL_BYTES:raise ValueError('RPC request/result storage is full. Wait for completed requests to expire.')
-            ident=uuid.uuid4().hex;now=self.registry.clock();self.rows[ident]={'id':ident,'node_id':node_id,'method':method,'params':params,'wallet':wallet,'owner':owner,'priority':priority,'token':token,'state':'queued','created_utc':stamp(),'deadline':now+timeout_seconds,'timeout_seconds':timeout_seconds,'size':size};self.total_bytes+=size;self.condition.notify_all();return self.status(ident,owner)
+            ident=uuid.uuid4().hex;now=self.registry.clock();self.rows[ident]={'id':ident,'node_id':node_id,'method':method,'params':params,'wallet':wallet,'owner':owner,'priority':priority,'token':token,'state':'queued','created':now,'created_utc':stamp(),'deadline':now+timeout_seconds,'timeout_seconds':timeout_seconds,'size':size};self.total_bytes+=size;self.condition.notify_all();return self.status(ident,owner)
     def _commands(self,token):
         connection=self._connection(token);self._maintain()
         if getattr(self.registry,'hub',None) and self.registry.hub.transfers.is_busy(connection['node_id']):
@@ -154,8 +178,11 @@ class RPCBroker:
             try:
                 value,size=clean_json({'result':result,'error':error},MAX_RESULT_BYTES)
                 if self.total_bytes-row['size']+size>MAX_TOTAL_BYTES:raise ValueError('RPC result storage limit exceeded.')
-            except ValueError:
-                self._finish(row,'failed',{'code':'invalid_result','message':'Agent result was rejected (size, JSON validity or private key material).'});raise
+            except ValueError as exc:
+                measurements={'boundary':'dashboard_validation'}
+                if isinstance(exc,MessageLimit):measurements.update(boundary='dashboard_result',limit_bytes=exc.limit,observed_bytes=exc.size)
+                elif str(exc)=='RPC result storage limit exceeded.':measurements.update(boundary='dashboard_storage',limit_bytes=MAX_TOTAL_BYTES,observed_bytes=self.total_bytes-row['size']+size)
+                self._finish(row,'failed',{'code':'invalid_result','message':'Agent result was rejected (size, JSON validity or private key material).','data':measurements});raise
             self._finish(row,'failed' if error is not None else 'succeeded',value['error'],value['result']);return {'ok':True,'state':row['state'],'accepted':True}
     def status(self,ident,owner=None):
         with self.condition:
