@@ -573,6 +573,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if session:
                         with session.lock:session.active_operations-=1
         def handle_post(self):
+            nonlocal fee_service
             if not self.safe_endpoint():return self.json({'error':'This browser endpoint is not authorised'},403)
             path=urlsplit(self.path).path
             if path=='/api/session':
@@ -598,6 +599,8 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if path=='/api/profile/load':manager.load(parse_qs(urlsplit(self.path).query).get('name',[''])[0],body)
                     else:manager.replace()
                     fee_service.close();sessions.close_all();sessions.user_activity.clear();sessions.nodes.reset()
+                    fee_service=FeeService(sessions.nodes,busy=lambda:any(s.status in {'running','waiting'} for s in list(sessions.sessions.values())))
+                    fee_service.log('Profile replaced; fee service reset and ready for new node connections.')
                     return self.json({'reset':True})
                 if path.startswith('/api/upload/'):
 

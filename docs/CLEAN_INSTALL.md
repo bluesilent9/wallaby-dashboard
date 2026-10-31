@@ -1,4 +1,4 @@
-# Install or upgrade — V1 Build 16
+# Install or upgrade — V1 Build 17
 
 Download the Development DEB and verify it against the accompanying SHA256 checksum before installation. Install it using Kubuntu's package installer or your usual Debian package-management workflow.
 

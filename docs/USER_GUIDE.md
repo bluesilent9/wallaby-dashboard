@@ -1,6 +1,6 @@
 > Current workflow: Ownership Stage 3 ends with Verify Balances. Wallets and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
 
-# Wallaby Bitcoin Dashboard — V1 Build 12
+# Wallaby Bitcoin Dashboard — V1 Build 17
 
 Extract the complete ZIP. Start the service with `./Start_Wallaby_Bitcoin_Dashboard.sh`, or:
 
@@ -42,7 +42,7 @@ The Bitcoin Core CSV and historical-wallet ODS upload workflows have been replac
 
 ## Retained V154 behaviour
 
-Terminal Activity is available only while a process is running or waiting for an answer, and its Dashboard card is hidden while idle. Administration → Logs downloads the browser workspace's UTF-8 `Wallaby_Dashboard.log`, including earlier jobs/profile switches. Fee Estimates refreshes on every visit, then every two minutes. Vaults remains the Ownership-gated **No Vaults Detected** placeholder. Remembered node identities survive profile save/load; live connections and RPC requests/results do not. Duplicate hostname/MAC notices remain red, non-dismissible, and clear when the conflict ends.
+Terminal Activity is available only while a process is running or waiting for an answer, and is disabled in the sidebar while idle. Administration → Logs downloads the browser workspace's UTF-8 `Wallaby_Dashboard.log`, including earlier jobs/profile switches. Fee Estimates refreshes on every visit, then every two minutes. Vaults remains the Ownership-gated **No Vaults Detected** placeholder. Remembered node identities survive profile save/load; live connections and RPC requests/results do not. Duplicate hostname/MAC notices remain red, non-dismissible, and clear when the conflict ends.
 
 ### Dashboard profile archives
 
@@ -166,7 +166,7 @@ Prepared transactions, unsigned PSBTs, verified signature proofs, combined PSBTs
 
 The current Agent workflow is **Stage 1 of 3 — Transaction Templates**, **Stage 2 of 3 — Diagram**, and **Stage 3 of 3 — Agent signing and broadcast**. Different private accounts belonging to one shared policy are independent signing choices, not independent balance wallets to synchronize. Returned partial signatures are checked against the original transaction and previous outputs. Repeated copies of one key's signature count once. Inputs with insufficient signatures stay incomplete.
 
-Once every sending wallet card is green, the transaction creator receives one completion notice. Only that creator can request broadcast; the selected Agent performs its own final local review and Core acceptance. After the node confirms the exact broadcast transaction, Complete returns to Dashboard. Reopening/cancelling closes only the Dashboard workflow; it cannot revoke signed material already held elsewhere.
+Once every sending wallet card is green, the transaction creator receives one completion notice. Only that creator can request broadcast; the selected Agent performs its own final local review and Core acceptance. After the node confirms the exact broadcast transaction, Complete returns to Ownership. Reopening/cancelling closes only the Dashboard workflow; it cannot revoke signed material already held elsewhere.
 
 ## Wallet Builder
 
@@ -179,11 +179,11 @@ V1 Build 12 uses the non-dismissible shared process-age notices described above.
 
 ## Cancelling construction
 
-A red **Cancel** button appears at Stage 3 after transaction preparation. The transaction creator can cancel; other participants see the control disabled. The confirmation offers Yes and No with: “Are you sure you want to cancel construction of the current transaction?” No preserves the current process. Yes closes the prepared workflow, releases dashboard reservations, marks its requests read and returns the creator to Dashboard. Transaction Builder remains available and opens at Stage 1 for a new template selection. Cancelling does not broadcast or revoke any file previously downloaded from Bitcoin Core or Wallaby.
+A red **Cancel** button appears at Stage 3 after transaction preparation. The transaction creator can cancel; other participants see the control disabled. The confirmation offers Yes and No with: “Are you sure you want to cancel construction of the current transaction?” No preserves the current process. Yes closes the prepared workflow, releases dashboard reservations, marks its requests read and returns the creator to Ownership. Transaction Builder remains available and opens at Stage 1 for a new template selection. Cancelling does not broadcast or revoke any file previously downloaded from Bitcoin Core or Wallaby.
 
 ## Combined pages and complete exchange disposals
 
-Ownership contains all three stages, beginning with automatic node wallet collection. Saving complete ownership enables Transaction Builder immediately. Its template chooser is Stage 1, the diagram is Stage 2, signing is Stage 3, and multi-wallet combination is Stage 4. Existing signing-workflow file stage numbers remain compatible internally. The sidebar and Dashboard use the same unlock rules. Notifications is disabled only when its list is empty; read notifications still count.
+Ownership contains all three stages, beginning with automatic node wallet collection. Saving complete ownership enables Transaction Builder immediately. Its template chooser is Stage 1, the diagram is Stage 2, signing is Stage 3, and multi-wallet combination is Stage 4. Existing signing-workflow file stage numbers remain compatible internally. The sidebar shows tool availability. Notifications is disabled only when its list is empty; read notifications still count.
 
 Receipt validation checks all supplied historical wallet records, including receipts outside the target year's active dependency graph. It no longer reports those exhausted historical receipts as unmatched. Unresolved source/destination questions remain on Terminal Activity. A genuine reconciliation error blocks completion rather than producing a partial report with review flags.
 
@@ -251,7 +251,7 @@ Administration → Logs downloads UTF-8 `.log` activity from today and the six p
 
 Wallet Builder unlocks once at least one connected Agent has a fresh, successful, synchronized Core status and no live identity conflict. Presence by itself is insufficient. Transaction Builder also needs completed Ownership, even if a prior transaction is waiting. A node downloading blocks or synchronizing wallets does not qualify; another healthy connected node can keep the pages available.
 
-Locked builder links show an explanation in the sidebar and are omitted from Dashboard cards. Direct URLs also show the requirement. Pending work and saved templates remain intact during a dropout and become available after the prerequisites return.
+Locked builder links show an explanation in the sidebar until their prerequisites are met. Direct URLs also show the requirement. Pending work and saved templates remain intact during a dropout and become available after the prerequisites return.
 
 Nodes shows the Agent-reported version and any automatic Core RPC health error. Administration → Logs includes registration metadata, rejected request information and source locations for handler errors; it does not include connection tokens or private keys. All diagnostics keep the existing seven-UTC-day / 7 MiB cap.
 
@@ -263,3 +263,12 @@ Ownership uses node wallet information, Exchanges ODS and Bitaroo PDFs. There is
 Pending blocks show compact estimated rates with sats/vB on a separate line. Hover a block for the full original rate. The conversion cards and transaction fee calculations are unchanged.
 
 Discover connected Agents shows progress directly beside the button. Wait for the signed identity count to complete before selecting an Agent, and compare each full fingerprint with that Agent locally. Rechecking while a reply is pending reuses the challenge. A stale signed reply from an earlier discovery is discarded rather than being trusted or blocking newer replies. Missing Agents and errors are explained in the same status area; no unsigned identity is substituted.
+
+## Build 17 navigation and setup
+
+Build 17 repairs Fee Estimates after clearing or loading a profile: the old background service is closed and replaced with a fresh service, so node-backed estimates can refresh without restarting Dashboard. Deferred updates are polled promptly; an empty mempool and an unavailable projection have explicit messages instead of an indefinite waiting label.
+
+There is no separate Dashboard page. Use the sidebar to open tools; login, transaction completion/cancellation and finished activity return to Ownership. Historical ownership rows display **Extinct Wallet** as their source. The SMSF icon depicts a person leaning on a cane.
+
+Wallet Builder shows Role name only for multisignature policies. Single Signature and plain Vault still select a producing Agent and storage; their single signing role is assigned automatically. No Agent code or protocol change is needed.
+

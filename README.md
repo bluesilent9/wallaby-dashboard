@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 16 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev16_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 17 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev17_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -18,6 +18,14 @@ Vault monitoring uses public vault records and connected Core nodes. Reports dep
 
 ## This development update
 
+Build 17 repairs Fee Estimates after clearing or loading a profile: the old background service is closed and replaced with a fresh service, so node-backed estimates can refresh without restarting Dashboard. Deferred updates are polled promptly; an empty mempool and an unavailable projection have explicit messages instead of an indefinite waiting label.
+
+There is no separate Dashboard page. Use the sidebar to open tools; login, transaction completion/cancellation and finished activity return to Ownership. Historical ownership rows display **Extinct Wallet** as their source. The SMSF icon depicts a person leaning on a cane.
+
+Wallet Builder shows Role name only for multisignature policies. Single Signature and plain Vault still select a producing Agent and storage; their single signing role is assigned automatically. No Agent code or protocol change is needed.
+
+## Earlier Build 16 fixes
+
 Build 16 fixes the Fee Estimates block view: projected fee-rate labels are compact and stay inside each cube, with a separate sats/vB label. The full node estimate remains in hover details and source data. This is display formatting only; fee conversions and transaction calculations retain their original precision.
 
 Ownership no longer contains the retired requirement for a Wallets ODS upload. Load Records and Review Ownership remains disabled until node-wallet loading (or the explicit skip choice), Exchanges ODS and every applicable user's Bitaroo PDFs have been supplied. Non Bitaroo user declarations still apply. The obsolete “Select Wallets ODS and Exchanges ODS first” error is removed.
@@ -28,7 +36,7 @@ Build 15's live-node builder gating and bounded diagnostic logs remain. This bui
 
 ## Agent compatibility
 
-Use **[Agent V2 Development Build 16](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 16. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
+Use **[Agent V2 Development Build 16](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 17. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
 
 Agent Build 10 or later is required for the current synchronization-permission and disc workflow; Wallet Builder requires Build 9 or later; the existing exchange requires Build 8 or later; older synchronization protocols have been removed. Each Agent receives its complete alphabetically ordered missing-wallet list, including labelled historical address groups. The signed version-2 preview preserves public vault policies, address labels and LOST timestamps. Persistent revisions withdraw outdated lists when peers disconnect. `recovery_required` means received but incomplete; only final receiver completion clears both Agents’ lists. History recovery is locally authorised on the Agent and retains its pruning configuration. No remote restart/reindex command is sent.
 
@@ -51,9 +59,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev16`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev17`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev16_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev17_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 

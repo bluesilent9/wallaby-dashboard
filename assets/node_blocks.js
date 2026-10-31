@@ -32,7 +32,7 @@ function view({el,button,data,state,changed}){
  future.append(el('div',{class:'block-half-label'},'PENDING · ESTIMATED'));
  // The next block is nearest the central dashed separator.
  for(const [i,b]of pending.slice(0,count).entries())future.append(create(b,i,true));
- if(!pending.length)future.append(el('p',{class:'subtle'},data.projection_error||'Waiting for the local mempool…'));
+ if(!pending.length)future.append(el('p',{class:'subtle'},data.projection_error||(data.loading?'Waiting for the local mempool…':data.mempool_transactions===0?'The local mempool is empty.':'Mempool projection unavailable. Select Refresh estimates to retry.')));
  past.append(el('div',{class:'block-half-label'},'MINED · UTC'));
  for(const [i,b]of mined.slice(start,start+count).entries())past.append(create(b,i,false));
  const previous=button('←','outline',()=>{state.offset=Math.max(0,start-count);changed();}),next=button('→','outline',()=>{state.offset=Math.min(Math.max(0,mined.length-count),start+count);changed();}),mode=button(state.mode==='size'?'Show time / fees':'Show sizes','outline',()=>{state.mode=state.mode==='size'?'fees':'size';changed();});

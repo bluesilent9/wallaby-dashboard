@@ -129,7 +129,7 @@ class FeeService:
             except (ValueError,OSError,KeyError,StopIteration) as exc:
                 self.publish(price_error='BTC/AUD valuation unavailable. '+str(exc));self.log('AUD quote unavailable: '+str(exc))
             try:
-                projection=project(self.call(chain,'getrawmempool',[True]));self.publish(projected_blocks=projection);self.log('Mempool projection ready: '+str(len(projection))+' estimated blocks.')
+                self.log('Reading the local mempool for block projection.');projection=project(self.call(chain,'getrawmempool',[True]));self.publish(projected_blocks=projection);self.log('Mempool projection ready: '+str(len(projection))+' estimated blocks.')
                 if projection and fallback:
                     for index in fallback:rates[index].update(sat_per_vbyte=number(max(floor,Decimal(projection[0]['minimum_rate']))),basis='Local mempool package estimate; insufficient Core fee history')
                     for i in range(1,len(rates)):rates[i]['sat_per_vbyte']=number(max(Decimal(rates[i]['sat_per_vbyte']),Decimal(rates[i-1]['sat_per_vbyte'])))

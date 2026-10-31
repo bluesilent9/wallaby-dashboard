@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Wallaby Bitcoin Dashboard · V1 Build 16</title>
+<title>Wallaby Bitcoin Dashboard · V1 Build 17</title>
 <meta name="bitaroo-version" content="1-build1">
 <link rel="icon" href="/assets/logo.svg">
 <link rel="stylesheet" href="/assets/style.css">
@@ -13,10 +13,10 @@
 <script src="/assets/app.js" defer></script>
 </head>
 <body>
-<div id="app-version" class="app-version" aria-label="Dashboard version" title="Wallaby Bitcoin Dashboard · V1 Build 16">V1 Build 16</div>
+<div id="app-version" class="app-version" aria-label="Dashboard version" title="Wallaby Bitcoin Dashboard · V1 Build 17">V1 Build 17</div>
 <a class="skip-link" href="#main">Skip to content</a>
 <aside class="sidebar" aria-label="Application navigation">
-  <a class="brand" href="#/dashboard" aria-label="Wallaby Bitcoin Dashboard home">
+  <a class="brand" href="#/ownership" aria-label="Wallaby Bitcoin Dashboard · Ownership">
     <svg class="brand-mark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none"><title>Wallaby Bitcoin Dashboard</title><rect width="64" height="64" rx="16" fill="#122b28"/><path d="M30 21C30 15 26 9 29 5C33 8 35 13 35 18C35 12 38 6 41 5C42 10 40 17 38 21C40 21 42 23 43 25L49 28C50 30 47 32 43 30L39 29C37 32 35 35 36 39L41 43L45 44C47 45 47 48 44 48L38 47L32 41C33 46 31 50 28 52L37 54C40 55 39 58 36 58H23C19 58 20 55 23 51C15 49 9 45 5 40C3 37 5 35 7 37C14 42 19 44 24 41C21 34 23 28 29 25L30 21Z" fill="#efac68"/><circle cx="40" cy="25" r="1.1" fill="#122b28"/><circle cx="49" cy="47" r="11" fill="#122b28" stroke="#efac68" stroke-width="1.6"/><path d="M43 41h5v5h-5Zm7 0h5v5h-5Zm-7 7h5v5h-5Zm7 0h5v5h-5Z" fill="#efac68"/></svg>
     <span>Wallaby<span class="brand-small">BITCOIN DASHBOARD</span></span>
   </a>
@@ -32,7 +32,6 @@
     <div class="nav-divider"></div>
     <div class="nav-label">SYSTEM</div>
     <button class="nav-item" data-route="admin"><span class="nav-icon" data-icon="user"></span>Administration</button>
-    <button class="nav-item" data-route="dashboard"><span class="nav-icon" data-icon="dashboard"></span>Dashboard</button>
     <button class="nav-item" data-route="notifications"><span class="nav-icon" data-icon="bell"></span>Notifications<span class="notification-dot" hidden></span></button>
     <button class="nav-item" data-route="activity"><span class="nav-icon" data-icon="activity"></span>Terminal Activity</button>
     <div class="nav-divider"></div>
@@ -42,10 +41,10 @@
     <button class="nav-item" data-route="totals"><span class="nav-icon" data-icon="chart"></span>Financial Year Totals</button>
     <button class="nav-item" data-route="balances"><span class="nav-icon" data-icon="wallet"></span>Wallets</button>
   </nav>
-  <div class="sidebar-bottom"><section id="sidebar-users" aria-label="Users"><div class="nav-label">Users</div><div id="sidebar-user-list"></div></section><div class="sidebar-foot">WALLABY BITCOIN DASHBOARD <span>V1 Build 16</span><a href="/source.zip">Source code · AGPL</a></div></div>
+  <div class="sidebar-bottom"><section id="sidebar-users" aria-label="Users"><div class="nav-label">Users</div><div id="sidebar-user-list"></div></section><div class="sidebar-foot">WALLABY BITCOIN DASHBOARD <span>V1 Build 17</span><a href="/source.zip">Source code · AGPL</a></div></div>
 </aside>
 <div class="workspace">
-  <header class="topbar"><div class="breadcrumb"><span>Workspace</span><span class="crumb-divider">/</span><strong id="page-name">Dashboard</strong></div><div class="topbar-actions"><button id="notification-bell" class="notification-bell" aria-label="Notifications" hidden><span data-icon="bell"></span><span class="notification-dot" hidden></span></button><button id="current-profile" type="button" class="profile-chip" aria-label="Your user administration" hidden></button><span id="report-badge" class="year-pill" hidden></span><button id="download-report" class="button small outline" hidden><span data-icon="download"></span>Save HTML report</button></div></header>
+  <header class="topbar"><div class="breadcrumb"><span>Workspace</span><span class="crumb-divider">/</span><strong id="page-name">Administration</strong></div><div class="topbar-actions"><button id="notification-bell" class="notification-bell" aria-label="Notifications" hidden><span data-icon="bell"></span><span class="notification-dot" hidden></span></button><button id="current-profile" type="button" class="profile-chip" aria-label="Your user administration" hidden></button><span id="report-badge" class="year-pill" hidden></span><button id="download-report" class="button small outline" hidden><span data-icon="download"></span>Save HTML report</button></div></header>
   <button id="run-banner" class="run-banner" type="button" hidden></button>
   <aside id="ownership-warning" class="ownership-warning" role="status" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 22 21H2Z"/><path d="M12 9v5m0 3v.2"/></svg><span>Warning: Bitaroo data may be out of date. Update the Bitaroo PDFs and run Ownership to remove this warning</span><a href="#/ownership">Open Ownership</a></aside>
   <main id="main" tabindex="-1"></main>

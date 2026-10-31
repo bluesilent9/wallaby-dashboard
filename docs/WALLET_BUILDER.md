@@ -31,3 +31,7 @@ Cosigner accounts matching a shared monitor are excluded from automatic missing-
 
 
 Build 16 shows discovery progress next to its button. Repeated checks preserve an outstanding identity challenge; completed discovery can be refreshed with a new challenge. Stale signed public replies cannot satisfy that new challenge. No signature verification or local fingerprint comparison is bypassed.
+
+## Build 17 role names
+
+Role names appear only for Multi-Signature and Multi-Signature Vault. Single Signature and Vault automatically use one signing role; select its producing Agent and key storage normally. This is a Dashboard presentation change and requires no Agent update.
