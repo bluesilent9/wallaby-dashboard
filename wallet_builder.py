@@ -37,8 +37,13 @@ class WalletBuilder:
         return result
     def discover(self):
         nodes=self.available()
+        if not nodes:raise ValueError('No eligible synchronised Agents are connected. Check Nodes for the connection, Core status and Agent version.')
         with self.edit() as s:
-            for n in nodes:s['challenges'][n['id']]=secrets.token_hex(32)
+            for n in nodes:
+                prior=s['challenges'].get(n['id']);reply=s['identities'].get(n['id'],{}).get('message',{}).get('challenge')
+                # Checking again while a signed reply is in flight must not
+                # invalidate the outstanding challenge and strand its outbox.
+                if not prior or reply==prior:s['challenges'][n['id']]=secrets.token_hex(32)
         return self.snapshot()
     def start(self,user,data):
         if not isinstance(data,dict) or set(data)!={'name','threshold','height','roles','fingerprints_compared'} or data['fingerprints_compared'] is not True:raise ValueError('Compare each full Agent fingerprint locally before requesting creation.')
@@ -67,7 +72,15 @@ class WalletBuilder:
         s=self.read()
         if kind=='wallet_setup_identity':
             key=envelope.get('public_key') if isinstance(envelope,dict) else None;m=verify(self.config,envelope,key)
-            if not isinstance(m,dict) or set(m)!={'version','challenge','public_key','fingerprint','hostname'} or m['version']!=1 or m['challenge']!=s['challenges'].get(node) or m['public_key']!=key or m['fingerprint']!=fingerprint(key):raise ValueError('Unsolicited or mismatched Agent identity challenge.')
+            if not isinstance(m,dict) or set(m)!={'version','challenge','public_key','fingerprint','hostname'} or m['version']!=1 or not isinstance(m['challenge'],str) or not re.fullmatch('[0-9a-f]{64}',m['challenge']) or m['public_key']!=key or m['fingerprint']!=fingerprint(key) or not isinstance(m['hostname'],str) or not m['hostname'].strip() or len(m['hostname'])>253 or any(ord(c)<32 for c in m['hostname']):raise ValueError('Invalid Agent identity response.')
+            if m['challenge']!=s['challenges'].get(node):
+                known=s['identities'].get(node)
+                if known and known['public_key']!=key:raise ValueError('Stale identity response comes from a different Agent identity.')
+                # Authenticate then discard stale public evidence, without ever
+                # making it eligible to create a wallet. Acknowledge its item so
+                # an older queued reply cannot block the current challenge.
+                self.hub.registry.diagnostic_log.append('Wallet Builder','Discarded a stale signed identity reply; current discovery remains pending.')
+                return False
             with self.edit() as state:state['identities'][node]=envelope
             return
         if not isinstance(envelope,dict) or not isinstance(envelope.get('message'),dict):raise ValueError('Missing signed setup evidence.')
@@ -161,7 +174,7 @@ class WalletBuilder:
         from node_wallets import NodeWalletLoader
         state=self.read();nodes=[]
         for n in self.available():
-            identity=state['identities'].get(n['id']);nodes.append({'id':n['id'],'hostname':n['hostname'],'fingerprint':identity['message']['fingerprint'] if identity else None,'fresh':bool(identity and identity['message']['challenge']==state['challenges'].get(n['id']))})
+            identity=state['identities'].get(n['id']);nodes.append({'id':n['id'],'hostname':n['hostname'],'fingerprint':identity['message']['fingerprint'] if identity else None,'requested':n['id'] in state['challenges'],'fresh':bool(identity and identity['message']['challenge']==state['challenges'].get(n['id']))})
         sessions=[]
         for h,r in state['sessions'].items():
             row=copy.deepcopy(r);row['id']=h;row['samples']=[];row['producers']=[{'role_id':role['id'],'hostname':state['identities'].get(r['routes'][role['id']],{}).get('message',{}).get('hostname','Agent'),'fingerprint':fingerprint(role['agent_key'])} for role in r['proposal']['cosigners']]

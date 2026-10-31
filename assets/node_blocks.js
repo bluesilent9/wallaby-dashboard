@@ -3,6 +3,14 @@
  * Angular StateService/CacheService are replaced by Wallaby node snapshots.
  * Corresponding source and original component: /source.zip. */
 (function(root){'use strict';
+// Compact display only; the node's full rate remains in data and the hover text.
+function displayRate(value){
+ const text=String(value),m=text.length<=100&&text.match(/^(\d+)(?:\.(\d+))?$/);if(!m)return 'Unavailable';
+ const fraction=m[2]||'',whole=BigInt(m[1]);
+ if(whole===0n&&!/[1-9]/.test(fraction.slice(0,3))&&/[1-9]/.test(fraction.slice(3)))return '<0.001';
+ let n=whole*1000n+BigInt((fraction+'000').slice(0,3));if(Number(fraction[3]||'0')>=5)n++;
+ const d=String(n).padStart(4,'0'),f=d.slice(-3).replace(/0+$/,'');return d.slice(0,-3)+(f?'.'+f:'');
+}
 function blockStyle(block,index,width=125){
  const padding=.24*width,offset=width+padding;
  // Upstream getStyleForBlock's weight-driven fill and placement.
@@ -16,9 +24,9 @@ function view({el,button,data,state,changed}){
  const content=el('div',{class:'node-block-track'}),future=el('div',{class:'node-block-half pending-blocks'}),past=el('div',{class:'node-block-half mined-blocks'});
  const create=(b,i,isPending)=>{
   const style=blockStyle(b,i),rate=b.median_rate,known=state.tracked,marked=known&&(isPending?known.status==='mempool'&&i===0:known.status==='confirmed'&&known.block_height===b.height);
-  const cube=el('div',{class:'bitcoin-block '+(isPending?'projected-block':'mined-block'),style:'background:'+style.background,'data-block-height':isPending?'pending-'+i:b.height,tabindex:0},el('strong',{class:'node-block-number'},isPending?'Next '+(i+1):Number(b.height).toLocaleString('en-AU')),el('span',{class:'node-block-main'},state.mode==='size'?(b.vsize?Math.round(b.vsize/1000)+' kvB':b.size?Math.round(b.size/1000)+' kB':'Size unavailable'):isPending?rate+' sats/vB':new Date(b.timestamp*1000).toLocaleTimeString('en-AU',{timeZone:'UTC',hour:'2-digit',minute:'2-digit',hour12:false})+' UTC'),el('span',{class:'transaction-count'},b.tx_count!==null&&b.tx_count!==undefined?Number(b.tx_count).toLocaleString('en-AU')+' transactions':''),el('span',{class:'time-difference'},isPending?'~'+b.estimated_minutes+' minutes':new Date(b.timestamp*1000).toLocaleDateString('en-AU',{timeZone:'UTC'})));
+  const cube=el('div',{class:'bitcoin-block '+(isPending?'projected-block':'mined-block'),style:'background:'+style.background,'data-block-height':isPending?'pending-'+i:b.height,tabindex:0},el('strong',{class:'node-block-number'},isPending?'Next '+(i+1):Number(b.height).toLocaleString('en-AU')),el('span',{class:'node-block-main'},state.mode==='size'?(b.vsize?Math.round(b.vsize/1000)+' kvB':b.size?Math.round(b.size/1000)+' kB':'Size unavailable'):isPending?el('span',{class:'node-block-rate'},displayRate(rate)):new Date(b.timestamp*1000).toLocaleTimeString('en-AU',{timeZone:'UTC',hour:'2-digit',minute:'2-digit',hour12:false})+' UTC'),isPending&&state.mode!=='size'?el('span',{class:'node-block-rate-unit'},'sats/vB'):null,el('span',{class:'transaction-count'},b.tx_count!==null&&b.tx_count!==undefined?Number(b.tx_count).toLocaleString('en-AU')+' transactions':''),el('span',{class:'time-difference'},isPending?'~'+b.estimated_minutes+' minutes':new Date(b.timestamp*1000).toLocaleDateString('en-AU',{timeZone:'UTC'})));
   if(marked)cube.append(el('span',{class:'node-track-marker',title:known.txid,'aria-label':'Tracked transaction'},'▼'));
-  cube.title=isPending?'Projected from ancestor packages in the local mempool. Confirmation timing is uncertain.':b.hash;
+  cube.title=isPending?'Estimated rate: '+rate+' sats/vB. Projected from ancestor packages in the local mempool; confirmation timing is uncertain.':b.hash;
   return cube;
  };
  future.append(el('div',{class:'block-half-label'},'PENDING · ESTIMATED'));
@@ -35,5 +43,5 @@ function view({el,button,data,state,changed}){
  if(data.projection_error&&pending.length)section.append(el('p',{class:'subtle'},data.projection_error));
  return section;
 }
-const api={view,blockStyle,markerIndex};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.WallabyNodeBlocks=api;
+const api={view,blockStyle,markerIndex,displayRate};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.WallabyNodeBlocks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

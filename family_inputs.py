@@ -16,7 +16,6 @@ def declarations(users,settings,paths):
     if not isinstance(skipped,list) or len(skipped)!=len(set(skipped)) or any(uid not in ids for uid in skipped):raise ValueError('Invalid Non Bitaroo user selection.')
     missing=[u['name'] for u in users if u['id'] not in skipped and not paths.get(account_slot(u['id']))]
     if missing:raise ValueError('Upload Bitaroo PDFs or select Non Bitaroo user for: '+', '.join(missing))
-    if not paths.get('historical') or not paths.get('exchanges'):raise ValueError('Select Wallets ODS and Exchanges ODS first.')
     return {u['id']:u['id'] not in skipped for u in users}
 def display_year(zone,now=None):
     now=now or datetime.now(timezone.utc);local=now.astimezone(ZoneInfo(zone));year=local.year-(local.month<7)

@@ -254,3 +254,12 @@ Wallet Builder unlocks once at least one connected Agent has a fresh, successful
 Locked builder links show an explanation in the sidebar and are omitted from Dashboard cards. Direct URLs also show the requirement. Pending work and saved templates remain intact during a dropout and become available after the prerequisites return.
 
 Nodes shows the Agent-reported version and any automatic Core RPC health error. Administration → Logs includes registration metadata, rejected request information and source locations for handler errors; it does not include connection tokens or private keys. All diagnostics keep the existing seven-UTC-day / 7 MiB cap.
+
+
+## Build 16: record loading, fee blocks and discovery feedback
+
+Ownership uses node wallet information, Exchanges ODS and Bitaroo PDFs. There is no Wallets ODS upload. The Load Records and Review Ownership button remains disabled until every applicable upload is selected; mark Non Bitaroo user when appropriate.
+
+Pending blocks show compact estimated rates with sats/vB on a separate line. Hover a block for the full original rate. The conversion cards and transaction fee calculations are unchanged.
+
+Discover connected Agents shows progress directly beside the button. Wait for the signed identity count to complete before selecting an Agent, and compare each full fingerprint with that Agent locally. Rechecking while a reply is pending reuses the challenge. A stale signed reply from an earlier discovery is discarded rather than being trusted or blocking newer replies. Missing Agents and errors are explained in the same status area; no unsigned identity is substituted.

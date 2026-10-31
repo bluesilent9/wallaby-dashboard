@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 15 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev15_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 16 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev16_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -18,17 +18,17 @@ Vault monitoring uses public vault records and connected Core nodes. Reports dep
 
 ## This development update
 
-Build 15 keeps **Wallet Builder** unavailable until at least one Agent has an active, conflict-free RPC connection and a fresh successful mainnet Core health check. A node downloading blocks, synchronising wallets, reporting an RPC error or missing recent health information does not qualify. **Transaction Builder** additionally requires completed Ownership; an old transaction workflow does not bypass it. The sidebar and Dashboard cards use the same readiness condition. Direct browser routes and relevant server operations also enforce it. Connection loss does not delete templates, ceremonies or transaction workflows.
+Build 16 fixes the Fee Estimates block view: projected fee-rate labels are compact and stay inside each cube, with a separate sats/vB label. The full node estimate remains in hover details and source data. This is display formatting only; fee conversions and transaction calculations retain their original precision.
 
-The Nodes page now shows the reported Agent version and automatic Core RPC error details. Diagnostic logs record accepted registrations (without session tokens), refused request headers and unexpected handler failures with source-code locations. The seven-UTC-day / 7 MiB logging limits remain unchanged.
+Ownership no longer contains the retired requirement for a Wallets ODS upload. Load Records and Review Ownership remains disabled until node-wallet loading (or the explicit skip choice), Exchanges ODS and every applicable user's Bitaroo PDFs have been supplied. Non Bitaroo user declarations still apply. The obsolete “Select Wallets ODS and Exchanges ODS first” error is removed.
 
-Live fault-finding verified the installed server is Dashboard Build 14, its service is active, and its Agent listener on port 56443 returns HTTP 200 with the expected protocol. No Agent rejection appears in its retained diagnostic log. Isolated registration, poll, acknowledgement and RPC delivery tests pass. These observations do **not** establish the cause of the user's live disconnect; Agent-side protected-workspace investigation continues separately. Build 15 does not claim to have fixed an unreproduced connection fault.
+Wallet Builder discovery now displays progress beside the button, including requests in progress, identity counts, waiting replies and no eligible Agents. Old GET responses cannot overwrite a newer discovery. Repeated clicks reuse an outstanding challenge. Previously queued, validly signed stale replies are acknowledged and discarded so they cannot block a new reply; they never mark an Agent verified. Signature checks and manual fingerprint comparison remain required. No Agent protocol change or fallback identity source is introduced.
 
-Build 14's early fee-rate publication, two-minute refresh cadence, individually coloured consistent-width signer cards and bounded diagnostic history remain. Transaction/tax/signature logic and broadcast behavior are unchanged.
+Build 15's live-node builder gating and bounded diagnostic logs remain. This build changes no Agent code, private-key handling, transaction/tax algorithms or broadcast behavior.
 
 ## Agent compatibility
 
-Use **[Agent V2 Development Build 14](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 15. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
+Use **[Agent V2 Development Build 16](https://github.com/bluesilent9/wallaby-agent/tree/Development)** with Dashboard V1 Build 16. Both sides now implement unsigned vault composition, separately authorised partial signatures and broadcast, and the signed initial wallet-preview relay for direct Agent-to-Agent synchronisation. The Dashboard verifies the sender's signature and frozen request bindings before relay. Receiving users must still compare the sender identity fingerprint directly between Agent screens; a fingerprint supplied solely through Dashboard is not trusted.
 
 Agent Build 10 or later is required for the current synchronization-permission and disc workflow; Wallet Builder requires Build 9 or later; the existing exchange requires Build 8 or later; older synchronization protocols have been removed. Each Agent receives its complete alphabetically ordered missing-wallet list, including labelled historical address groups. The signed version-2 preview preserves public vault policies, address labels and LOST timestamps. Persistent revisions withdraw outdated lists when peers disconnect. `recovery_required` means received but incomplete; only final receiver completion clears both Agents’ lists. History recovery is locally authorised on the Agent and retains its pruning configuration. No remote restart/reindex command is sent.
 
@@ -51,9 +51,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev15`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev16`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev15_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev16_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 
