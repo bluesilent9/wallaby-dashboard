@@ -1,3 +1,7 @@
+# Dashboard Build 20 Agent follow-up
+
+Implement [BUILDER_CANCELLATION.md](BUILDER_CANCELLATION.md): durable receipt of exact-scoped builder cancellation requests, followed by independently authorised local Backup/Delete and Cancel. No Agent code is changed here.
+
 # Required retirement update for Dashboard Build 18
 
 Build 18 changes Make Extinct into a zero-funds archival-and-deletion request. Dashboard checks fresh Core balances on connected replicas, including known related vault monitors and multisig signing accounts. Pending, immature, watch-only or locked funds block retirement; unavailable balances and scans also block it. The Agent must independently repeat the checks and obtain approval on its local Authorise page before changing anything.

@@ -45,7 +45,7 @@ class WalletBuilder:
                 # invalidate the outstanding challenge and strand its outbox.
                 if not prior or reply==prior:s['challenges'][n['id']]=secrets.token_hex(32)
         return self.snapshot()
-    def start(self,user,data):
+    def start(self,user,data,workspace_id=None):
         if not isinstance(data,dict) or set(data)!={'name','threshold','height','roles','fingerprints_compared'} or data['fingerprints_compared'] is not True:raise ValueError('Compare each full Agent fingerprint locally before requesting creation.')
         roles=data['roles']
         if not isinstance(roles,list) or not 1<=len(roles)<=15:raise ValueError('Choose 1 to 15 independent signer roles.')
@@ -60,13 +60,7 @@ class WalletBuilder:
                 if identity['message']['challenge']!=s['challenges'].get(r['node_id']):raise ValueError('Wait for the fresh identity challenge response.')
                 rid='signer-'+str(index+1);routes[rid]=r['node_id'];assigned.append({'id':rid,'name':r['name'],'storage':r['storage'],'agent_key':identity['public_key']})
             p={'kind':'wallet_setup','version':1,'session_id':secrets.token_hex(32),'chain':'main','name':data['name'].strip(),'threshold':data['threshold'],'cosigners':assigned,'height':data['height'],'expires_at':int(time.time())+86400-5};proposal(p)
-            h=digest(p);s['sessions'][h]={'proposal':p,'routes':routes,'creator_id':user,'state':'participation','contributions':{},'acks':{},'inventories':{},'created_utc':self.hub.utc(),'message':'Approve participation and key generation locally on each producing Agent.'}
-        return self.snapshot()
-    def cancel(self,ident):
-        with self.edit() as s:
-            row=s['sessions'].get(ident)
-            if not row or row['state']=='ready':raise ValueError('Select an unfinished setup.')
-            row['state']='cancelled';row['message']='Cancelled here. Reconcile or discard the pending setup locally on each Agent; this does not delete Core wallets.'
+            h=digest(p);s['sessions'][h]={'proposal':p,'routes':routes,'creator_id':user,'workspace_id':workspace_id,'state':'participation','contributions':{},'acks':{},'inventories':{},'created_utc':self.hub.utc(),'message':'Approve participation and key generation locally on each producing Agent.'}
         return self.snapshot()
     def accept(self,node,kind,envelope):
         s=self.read()
@@ -153,6 +147,8 @@ class WalletBuilder:
                     if sent and time.time()-sent<30:continue
                     row['completion_sent'][node]=time.time()
                     proofs=[e for e in row['acks'].values() if e['message']['status'] in ('policy_approved','backup_verified')];output.append({'kind':'wallet_setup_complete','version':1,'proposal_hash':h,'policy_hash':row['policy_hash'],'acknowledgements':proofs});continue
+                row.setdefault('delivered_nodes',[])
+                if node not in row['delivered_nodes']:row['delivered_nodes'].append(node)
                 if row['state']=='participation':output.append(row['proposal'])
                 elif row['state']=='policy':output.append({'kind':'wallet_setup_policy','version':1,'proposal':row['proposal'],'contributions':[row['contributions'][r['id']] for r in sorted(row['proposal']['cosigners'],key=lambda r:r['id'])],'receive_descriptor':row['descriptors'][0],'change_descriptor':row['descriptors'][1]})
         return output

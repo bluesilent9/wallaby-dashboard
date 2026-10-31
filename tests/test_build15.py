@@ -41,7 +41,7 @@ class Endpoints(unittest.TestCase):
     with patch.object(sessions.nodes,'ready_for_builders',return_value=False):
      code,data=post('/api/wallet-builder/discover');self.assertEqual(code,400);self.assertIn('synchronised',data['error'])
     with patch.object(sessions.nodes,'ready_for_builders',return_value=True),patch.object(sessions.nodes.hub.wallet_builder,'discover',return_value={'ok':True}):
-     self.assertEqual(post('/api/wallet-builder/discover'),(200,{'ok':True}));code,data=post('/api/builder/prepare');self.assertEqual(code,400);self.assertIn('Ownership',data['error'])
+     self.assertEqual(post('/api/builders/wallet/start')[0],200);self.assertEqual(post('/api/wallet-builder/discover'),(200,{'ok':True}));code,data=post('/api/builder/prepare');self.assertEqual(code,400);self.assertIn('Ownership',data['error'])
    finally:server.shutdown();server.server_close();t.join(3)
  def test_invalid_agent_headers_and_unexpected_failures_enter_bounded_log(self):
   with tempfile.TemporaryDirectory() as d:

@@ -27,7 +27,7 @@ def validate(state,users,config=None):
         if any(any(k[0] in (2,7,8,19,20) for k in f) for f in doc['inputs']):raise ValueError('A composable vault proposal must remain unsigned.')
     for ident,row in state['requests'].items():
         if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction','wallet_retire') or row.get('state') not in ('pending','complete','denied','error','recovery_required','cancelled'):raise ValueError('Invalid saved Agent request.')
-        if row.get('state')=='cancelled' and row.get('kind')!='wallet_retire':raise ValueError('Invalid cancelled request kind.')
+        if row.get('state')=='cancelled' and row.get('kind') not in ('wallet_retire','sign_psbt_partial','broadcast_transaction'):raise ValueError('Invalid cancelled request kind.')
         if row.get('proposal'):canonical(row['proposal'])
         if row.get('kind')=='wallet_retire' and row.get('proposal',{}).get('version')==2:
             from wallet_retirement import result

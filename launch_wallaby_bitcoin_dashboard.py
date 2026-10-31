@@ -43,6 +43,7 @@ from matching_policy import matching_window, DEFAULT_WINDOW
 from descriptor_snapshot import history_ready
 from transaction_templates import TemplateStore,clean_diagram
 from transaction_workflows import WorkflowStore
+from builder_workspace import BuilderWorkspace,LOCK as BUILDER_LOCK
 from transaction_builder import builder_catalog
 from fee_planner import plan as estimate_fee_plan,live_coins
 
@@ -121,7 +122,7 @@ class Session:
         balance_report=BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user) if user and access['ownership_ready'] else None
         from wallet_views import annotate_signers
         annotate_signers(balance_report,self.node_registry.hub if self.node_registry else None)
-        return {'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
+        return {'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
                 'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':[dict(item,**source_suggestions(item,data['users'])) for item in display_inventory(self.inventory,DescriptorStore(self.preferences_path).read())] if user else [],'inventory_ready':self.inventory_ready if user else False,
                 **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
                 'restore_error':self.restore_error,'settings':self.settings if user else {},'loaded_slots':{slot:([p.name for p in sorted(path.rglob('*')) if p.is_file()] if path.is_dir() else [path.name]) for slot,path in self.uploads.items()} if user else {}}
@@ -481,6 +482,16 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from wallet_retirement import candidates
                     return self.json(candidates(sessions.nodes.hub,session.user_id))
+                if path.startswith('/api/builders/'):
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    if path=='/api/builders/transaction/export':
+                        try:
+                            workspace=BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction');ident=parse_qs(urlsplit(self.path).query).get('id',[''])[0];value=sessions.nodes.hub.read()['exports'].get(ident)
+                            if not value or workspace['draft'].get('imported_id')!=ident:raise ValueError('No imported vault proposal in this workspace.')
+                            return self.json(dict(value,id=ident))
+                        except ValueError as exc:return self.json({'error':str(exc)},400)
+                    try:return self.json(BuilderWorkspace(session.preferences_path).snapshot(session.user_id,path.rsplit('/',1)[1],sessions.nodes))
+                    except ValueError as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/wallet-builder/timezones':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from vault_estimator import timezones_with_offsets
@@ -516,7 +527,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     except ValueError:return self.json({'error':'Invalid event cursor'},400)
                     with session.lock:return self.json({'fee_activity':fee_service.activity(),'last_job_error':session.last_job_error,'status':session.status,'events':[e for e in session.events if e['sequence']>after],
                                                         'pending':session.pending,**session.access(),'user':session.user(),'mode':session.mode,'job_ready':session.job_result is not None and (session.mode!='cgt' or session.access()['report_ready'])})
-                if path in ('/api/notifications','/api/transactions','/api/transaction','/api/transaction/psbt','/api/transaction/status','/api/transaction/combined'):
+                if path in ('/api/notifications','/api/transactions','/api/transaction','/api/transaction/psbt','/api/transaction/status'):
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     workflows=WorkflowStore(session.preferences_path)
                     try:
@@ -534,9 +545,8 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         if path=='/api/transaction/status':return self.json(workflows.status(session.user_id,ident))
                         if job['cancelled'] or job.get('completed'):raise ValueError('This transaction is closed. Use Transaction Templates to prepare another transaction.')
                         import base64
-                        combined=path=='/api/transaction/combined';body=base64.b64decode(workflows.combined(session.user_id,ident) if combined else job['psbt']);
-                        if combined:workflows.record_combined_download(session.user_id,ident)
-                        self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.send_header('Content-Disposition','attachment; filename="Wallaby_'+('combined_' if combined else 'unsigned_')+ident+'.psbt"');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
+                        body=base64.b64decode(job['psbt']);
+                        self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.send_header('Content-Disposition','attachment; filename="Wallaby_'+'unsigned_'+ident+'.psbt"');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                     except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/templates':
                     if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
@@ -564,7 +574,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
@@ -581,7 +591,10 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 session=self.authorized() if urlsplit(self.path).path in ('/api/descriptors/load','/api/descriptors/history') else None
                 if session:
                     with session.lock:session.active_operations+=1
-                try:self.handle_post()
+                try:
+                    if urlsplit(self.path).path.startswith(('/api/builders/','/api/wallet-builder/','/api/builder','/api/transaction/')):
+                        with BUILDER_LOCK:self.handle_post()
+                    else:self.handle_post()
                 finally:
                     if session:
                         with session.lock:session.active_operations-=1
@@ -602,7 +615,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path in ('/api/descriptors/load','/api/descriptors/history') and length>4*1024*1024+10000:raise ValueError('Descriptor request is too large (maximum 4 MB of descriptor text)')
                 if path=='/api/nodes/rpc' and length>4*1024*1024+4096:raise ValueError('Node RPC request is too large.')
                 if path=='/api/messages/send' and length>20000:raise ValueError('Message request is too large.')
-                if path=='/api/transaction/upload' and length>12*1024*1024:raise ValueError('Select a signed PSBT file up to 8 MB.')
+                if path.startswith('/api/builders/') and length>2*1024*1024+5000:raise ValueError('Builder draft is too large.')
                 if length<0 or length>MAX_FILE:raise ValueError('File is too large (maximum 256 MB per file)')
                 body=self.rfile.read(length)
                 if len(body)!=length:raise ValueError('Incomplete upload')
@@ -621,25 +634,49 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     return self.json(session.upload(slot,name,body))
                 data=json.loads(body or b'{}',parse_float=Decimal) if path=='/api/nodes/rpc' else json.loads(body or b'{}')
                 store=FamilyStore(session.preferences_path)
+                if path.startswith('/api/builders/'):
+                    if not session.user():raise ValueError('Select a family user first.')
+                    _,_,_,kind,action=path.split('/')
+                    workspace=BuilderWorkspace(session.preferences_path)
+                    if action=='start':
+                        self.require_builder_node(session,ownership=kind=='transaction');workspace.start(session.user_id,kind)
+                    elif action=='save':workspace.save(session.user_id,kind,data)
+                    elif action=='cancel':return self.json(workspace.cancel(sessions.nodes.hub,session.user_id,kind,data.get('confirmed')))
+                    elif action=='complete':
+                        workspace.owned(session.user_id,kind)
+                        if kind!='wallet':raise ValueError('Complete the prepared transaction instead.')
+                        row=workspace.read()['workspaces'][kind]
+                        setups=sessions.nodes.hub.wallet_builder.read()['sessions']
+                        if not row['operations'] or any(setups.get(o,{}).get('state')!='ready' or not set(setups[o]['routes'].values())<=set(setups[o].get('completion_confirmed',{})) for o in row['operations']):raise ValueError('Wait for every producing Core node to confirm wallet creation.')
+                        workspace.finish(session.user_id,kind)
+                    else:raise ValueError('Unknown builder operation.')
+                    return self.json(workspace.snapshot(session.user_id,kind,sessions.nodes))
                 if path.startswith('/api/wallet-builder/'):
                     if not session.user():raise ValueError('Select a family user first.')
-                    setup=sessions.nodes.hub.wallet_builder
                     if not path.endswith('/cancel'):self.require_builder_node(session)
+                    workspace=BuilderWorkspace(session.preferences_path);workspace.owned(session.user_id,'wallet')
+                    setup=sessions.nodes.hub.wallet_builder
                     if path.endswith('/estimate'):
                         from vault_estimator import from_nodes
                         return self.json(from_nodes(sessions.nodes,data.get('date'),data.get('timezone')))
                     if path.endswith('/discover'):return self.json(setup.discover())
-                    if path.endswith('/create'):return self.json(setup.start(session.user_id,data))
-                    if path.endswith('/cancel'):return self.json(setup.cancel(data.get('id')))
+                    if path.endswith('/create'):
+                        if workspace.owned(session.user_id,'wallet')['operations']:raise ValueError('A wallet ceremony is already active. Finish or cancel it before starting another.')
+                        result=setup.start(session.user_id,data,workspace.owned(session.user_id,'wallet')['id']);created=next(reversed(setup.read()['sessions']));workspace.attach(session.user_id,'wallet',created);return self.json(result)
                     raise ValueError('Unknown Wallet Builder operation.')
                 if path in ('/api/builder/agent-lease','/api/builder/agent-leave','/api/builder/vault-prepare','/api/builder/vault-estimate','/api/transaction/sign','/api/transaction/broadcast'):
                     if not session.user():raise ValueError('Select a family user first.')
+                    BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
                     hub=sessions.nodes.hub
                     if not path.endswith('/agent-leave'):self.require_builder_node(session,ownership=True)
                     if path.endswith('/agent-lease'):return self.json(hub.lease(session,data.get('node_id'),data.get('draft_id')))
                     if path.endswith('/agent-leave'):hub.clear_lease(session);return self.json({'closed':True})
                     from agent_transactions import prepare_export,queue_sign,queue_broadcast
-                    if path.endswith(('/vault-prepare','/vault-estimate')):return self.json(prepare_export(hub,session,data.get('export_id'),data.get('diagram'),path.endswith('/vault-estimate')))
+                    if path.endswith(('/vault-prepare','/vault-estimate')):
+                        result=prepare_export(hub,session,data.get('export_id'),data.get('diagram'),path.endswith('/vault-estimate'),BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')['id'])
+                        if path.endswith('/vault-prepare'):BuilderWorkspace(session.preferences_path).attach(session.user_id,'transaction',result['id'])
+                        return self.json(result)
+                    if path in ('/api/transaction/sign','/api/transaction/broadcast') and data.get('id') not in BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')['operations']:raise ValueError('This transaction does not belong to the active builder.')
                     if path.endswith('/sign'):return self.json(queue_sign(hub,session,data.get('id'),data.get('wallet_id'),data.get('node_id'),data.get('signer_id')))
                     return self.json(queue_broadcast(hub,session,data.get('id'),data.get('node_id')))
                 if path=='/api/nodes/inventory-refresh':
@@ -684,7 +721,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     target=data.get('id')
                     if any(s.status in {'running','waiting'} and (path=='/api/config/reset' or s.user_id==target) for s in list(sessions.sessions.values())):raise ValueError('Cancel active jobs for affected users before deleting or resetting.')
                     if path=='/api/config/reset':store.reset(data.get('revision'))
-                    else:store.delete_user(target,data.get('revision'))
+                    else:
+                        if any(w['owner_id']==target for w in BuilderWorkspace(session.preferences_path).read()['workspaces'].values()):raise ValueError('Finish or cancel this user’s active builders before deleting the profile.')
+                        store.delete_user(target,data.get('revision'))
                     WorkflowStore(session.preferences_path).prune_users([u['id'] for u in store.snapshot()['users']])
                     if path=='/api/config/reset':DescriptorStore(session.preferences_path).path.unlink(missing_ok=True)
                     for s in list(sessions.sessions.values()):
@@ -712,40 +751,31 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     session.record_activity('Wallet Descriptors: supplemental public history saved.',session.user_id)
                     if DescriptorStore(session.preferences_path).summary()['ready']:session.start_descriptor_scan()
                     return self.json(session.family())
-                if path=='/api/transaction/abandon':
-                    if not session.user():raise ValueError('Select a family user first.')
-                    WorkflowStore(session.preferences_path).cancel(session.user_id,data.get('id'),reason='cancelled')
-                    return self.json(session.family())
                 if path=='/api/transaction/complete':
                     if not session.user():raise ValueError('Select a family user first.')
+                    BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
+                    if data.get('id') not in BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')['operations']:raise ValueError('This transaction does not belong to the active builder.')
                     WorkflowStore(session.preferences_path).complete(session.user_id,data.get('id'))
+                    BuilderWorkspace(session.preferences_path).finish(session.user_id,'transaction')
                     return self.json(session.family())
                 if path in ('/api/templates/save','/api/templates/delete'):
+                    current=BuilderWorkspace(session.preferences_path).read()['workspaces'].get('transaction')
+                    if current:BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
                     self.require_builder_node(session,ownership=True)
                     if not session.access()['templates_ready']:raise ValueError('Complete Ownership and save all assignments before using transaction templates.')
                     templates=TemplateStore(session.preferences_path)
                     if path.endswith('/save'):return self.json(templates.save(data))
                     templates.delete(data.get('id'),data.get('revision'));return self.json({'deleted':True})
-                if path in ('/api/transaction/upload','/api/transaction/combine'):
+                if path in ('/api/notifications/read','/api/notifications/delete'):
                     if not session.user():raise ValueError('Select a family user first.')
                     workflows=WorkflowStore(session.preferences_path)
-                    if path.endswith('/combine'):return self.json(workflows.combine(session.user_id,data.get('id')))
-                    import base64
-                    text=data.get('psbt')
-                    if not isinstance(text,str) or len(text)>12*1024*1024:raise ValueError('Select a signed PSBT file up to 8 MB.')
-                    try:raw=base64.b64decode(text,validate=True)
-                    except Exception:raise ValueError('Invalid PSBT upload encoding.') from None
-                    return self.json(workflows.upload(session.user_id,data.get('id'),data.get('wallet_id'),raw))
-                if path in ('/api/notifications/read','/api/notifications/delete','/api/transaction/cancel'):
-                    if not session.user():raise ValueError('Select a family user first.')
-                    workflows=WorkflowStore(session.preferences_path)
-                    if path=='/api/transaction/cancel':workflows.cancel(session.user_id,data.get('id'));return self.json({'cancelled':True})
                     if path.endswith('/delete') and str(data.get('id','')).startswith('node-conflict-'):raise ValueError('Resolve the node conflict to remove this notification.')
                     if path.endswith('/read'):sessions.nodes.notifications(session.user_id,read=True)
                     workflows.update_notifications(session.user_id,data.get('id') if path.endswith('/delete') else None)
                     return self.json(self.notices(session))
                 if path in ('/api/builder/estimate','/api/builder/prepare'):
                     self.require_builder_node(session,ownership=True)
+                    BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
                     if not session.access()['templates_ready']:raise ValueError('Complete Ownership and save all assignments first.')
                     import re
                     diagram=clean_diagram(data.get('diagram')) if path.endswith('/prepare') else None
@@ -766,7 +796,8 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         with session.lock:
                             # Ownership or profile may have changed during catalogue loading.
                             if not session.access()['templates_ready']:raise ValueError('Ownership changed. Complete Ownership and save all assignments before preparing it.')
-                            workflow=WorkflowStore(session.preferences_path);created=workflow.create(session,builder_catalog(session),diagram)
+                            workflow=WorkflowStore(session.preferences_path);created=workflow.create(session,builder_catalog(session),diagram,BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')['id'])
+                            BuilderWorkspace(session.preferences_path).attach(session.user_id,'transaction',created['id'])
                             return self.json(workflow.public_job(session.user_id,created['id']))
                     return self.json(estimate_fee_plan(edges,catalog,live_coins(session,catalog,sources)))
                 if path=='/api/ownership/save':

@@ -16,7 +16,7 @@ class WorkflowStore:
             with storage_lock(self.config):
                 data=self._read();changed=False
                 for user,rows in data['notices'].items():
-                    kept=[n for n in rows if n.get('kind')!='template_refresh']
+                    kept=[n for n in rows if n.get('kind')!='template_refresh' and not n.get('job_id')]
                     if len(kept)!=len(rows):data['notices'][user]=kept;changed=True
                 if changed:self._write(data)
     def _read(self):return json.loads(self.path.read_text(encoding='utf-8')) if self.path.exists() else {'jobs':{},'notices':{},'change_cursors':{}}
@@ -87,30 +87,18 @@ class WorkflowStore:
         return self.notifications(user)
     def active(self,user):
         with storage_lock(self.config):
-            return [{'id':j['id'],'created_utc':j['created_utc']} for j in self._read()['jobs'].values() if not j.get('cancelled') and not j.get('completed') and user in j['participants']+[j['creator_id']]]
+            return [{'id':j['id'],'created_utc':j['created_utc']} for j in self._read()['jobs'].values() if not j.get('cancelled') and not j.get('completed') and user==j['creator_id']]
     def job(self,user,ident):
         if not isinstance(ident,str) or not re.fullmatch(r'[0-9a-f]{32}',ident):raise ValueError('Invalid transaction ID.')
         with storage_lock(self.config):
             row=self._read()['jobs'].get(ident)
-            if not row or user not in row['participants']+[row['creator_id']]:raise ValueError('This transaction is not available for this profile.')
+            if not row or user!=row['creator_id']:raise ValueError('This transaction is not available for this profile.')
             return copy.deepcopy(row)
     def input_wallets(self,row):
         original=decode(base64.b64decode(row['psbt'],validate=True));assigned=row.get('input_wallets')
         sources={e['from'] for e in row['diagram']['edges'] if e.get('max') or int(e['amount_sats']) or e['fee_rate'].strip('0.')}
         if isinstance(assigned,list) and len(assigned)==len(original['inputs']) and all(uid in sources for uid in assigned):return assigned
-        # V143 prepared jobs predate explicit per-input assignments. Corroborate
-        # their actual previous-output scripts against the supplied wallet history.
-        from descriptor_store import DescriptorStore
-        from descriptor_snapshot import saved_history
-        from fee_planner import known_scripts
-        from preferences import resource_id
-        catalog=DescriptorStore(self.config).read();history=saved_history(self.config,catalog);scripts={resource_id('descriptor',uid):values for uid,values in known_scripts(history).items()}
-        assigned=[]
-        for prev in utxos(original):
-            candidates=[uid for uid in sources if prev.script_pubkey.data.hex() in scripts.get(uid,set())]
-            if len(candidates)!=1:raise ValueError('Reopen this V143 transaction for editing and prepare it again to establish its signing-wallet assignments.')
-            assigned.append(candidates[0])
-        return assigned
+        raise ValueError('Prepared transaction is missing its exact input-wallet assignments.')
     def public_job(self,user,ident):
         row=self.job(user,ident);assigned=self.input_wallets(row);uploads=row.get('signed_uploads',{});wallets={w['id']:w for w in row['wallets']}
         signing=[]
@@ -132,52 +120,6 @@ class WorkflowStore:
     def status(self,user,ident):
         row=self.public_job(user,ident)
         return {k:row[k] for k in ('id','cancelled','creator_id','signing_wallets','all_signed','combined_ready','can_combine','stage','stage_count','completed','combined_downloaded','can_complete','signing_revision','broadcast_txid') if k in row}
-    def upload(self,user,ident,wallet_id,raw,filename=''):
-        row=self.job(user,ident)
-        if row.get('agent_signing'):raise ValueError('This transaction accepts signed results only from its selected Agent.')
-        assigned=self.input_wallets(row);wallet=next((w for w in row['wallets'] if w['id']==wallet_id),None)
-        if wallet_id not in assigned or not wallet or wallet.get('owner_id')!=user:raise ValueError('Only the owner of this sending wallet can upload its signed PSBT.')
-        if row['cancelled'] or row.get('completed') or row.get('combined_psbt'):raise ValueError('This transaction is closed for signed uploads. Reopen it to prepare a replacement.')
-        if len(set(assigned))==1:raise ValueError('Single-wallet transactions are signed and broadcast in Bitcoin Core; no upload is required.')
-        indices=[i for i,uid in enumerate(assigned) if uid==wallet_id];proofs=validate_upload(row['psbt'],raw,indices)
-        with storage_lock(self.config):
-            state=self._read();current=state['jobs'].get(ident)
-            if not current or current['cancelled'] or current.get('completed') or current.get('combined_psbt'):raise ValueError('The transaction was closed while the PSBT was being checked.')
-            current['input_wallets']=assigned
-            current.setdefault('signed_uploads',{})[wallet_id]={'proofs':proofs,'uploaded_by':user,'uploaded_utc':datetime.now(timezone.utc).isoformat()}
-            current['signing_revision']=current.get('signing_revision',0)+1
-            if all(uid in current['signed_uploads'] for uid in set(assigned)) and not current.get('signing_complete_notified'):
-                current['signing_complete_notified']=True
-                state['notices'].setdefault(current['creator_id'],[]).append({'id':uuid.uuid4().hex,'job_id':ident,'text':'All signed PSBTs have been uploaded. Continue your Bitcoin Transaction.','created_utc':datetime.now(timezone.utc).isoformat(),'read':user==current['creator_id']})
-            self._write(state)
-        return self.status(user,ident)
-    def combine(self,user,ident):
-        row=self.job(user,ident)
-        if user!=row['creator_id']:raise ValueError('Only the profile that started this transaction can continue to Stage 4.')
-        if row['cancelled'] or row.get('completed'):raise ValueError('This transaction is closed.')
-        if row.get('combined_psbt'):return self.status(user,ident)
-        assigned=self.input_wallets(row)
-        if len(set(assigned))==1:raise ValueError('Single-wallet transactions do not have a combination stage.')
-        combined=combine(row['psbt'],row.get('signed_uploads',{}),assigned)
-        with storage_lock(self.config):
-            state=self._read();current=state['jobs'].get(ident)
-            if not current or current['cancelled'] or current.get('completed') or current.get('signing_revision',0)!=row.get('signing_revision',0):raise ValueError('Signing data changed during combination. Refresh the transaction and try again.')
-            current['combined_psbt']=combined;current['signing_revision']=current.get('signing_revision',0)+1
-            for notice in state['notices'].get(user,[]):
-                if notice.get('job_id')==ident:notice['read']=True
-            self._write(state)
-        return self.status(user,ident)
-    def combined(self,user,ident):
-        row=self.job(user,ident)
-        if user!=row['creator_id'] or row['cancelled'] or row.get('completed') or not row.get('combined_psbt'):raise ValueError('The combined PSBT is available only to its creator after Stage 4 is complete.')
-        return row['combined_psbt']
-    def record_combined_download(self,user,ident):
-        self.combined(user,ident)
-        with storage_lock(self.config):
-            state=self._read();row=state['jobs'][ident]
-            if row.get('completed') or row['cancelled']:raise ValueError('This transaction is closed.')
-            if not row.get('combined_downloaded_utc'):
-                row['combined_downloaded_utc']=datetime.now(timezone.utc).isoformat();row['signing_revision']=row.get('signing_revision',0)+1;self._write(state)
     def complete(self,user,ident):
         row=self.public_job(user,ident)
         if not row['can_complete']:raise ValueError('Only the creator can complete the final stage; download the combined PSBT first for a multi-wallet transaction.')
@@ -200,7 +142,7 @@ class WorkflowStore:
                 for n in rows:
                     if n.get('job_id')==ident:n['read']=True
             self._write(data)
-    def create(self,session,catalog,diagram):
+    def create(self,session,catalog,diagram,workspace_id=None):
         users={u['id'] for u in FamilyStore(self.config).snapshot()['users']};wallets={w['id']:w for w in catalog['wallets']}
         sources={e['from'] for e in diagram['edges'] if e.get('max') or int(e['amount_sats']) or e['fee_rate'].strip('0.')}
         participants=sorted({wallets[s].get('owner_id') for s in sources if s in wallets}-{None})
@@ -215,10 +157,8 @@ class WorkflowStore:
             active={tuple(point) for job in data['jobs'].values() if not job.get('cancelled') and not job.get('completed') for point in job.get('outpoints',[])}
             if any(tuple(p) in active for p in result['outpoints']):raise ValueError('An input is already used by another prepared transaction. Reopen that transaction for editing before preparing a replacement.')
             now=datetime.now(timezone.utc).isoformat();ident=uuid.uuid4().hex
-            row={'id':ident,'creator_id':session.user_id,'participants':participants,'created_utc':now,'cancelled':False,'agent_signing':True,**result,'wallets':catalog['wallets'],'diagram':{'nodes':copy.deepcopy(diagram['nodes']),'edges':result['edges']}}
+            row={'id':ident,'workspace_id':workspace_id,'creator_id':session.user_id,'participants':participants,'created_utc':now,'cancelled':False,'agent_signing':True,**result,'wallets':catalog['wallets'],'diagram':{'nodes':copy.deepcopy(diagram['nodes']),'edges':result['edges']}}
             data['change_cursors'].update({k:v for k,v in reserved.items() if v!=base_cursors.get(k,0)})
             data['jobs'][ident]=row
-            for user in sorted(set(participants+[session.user_id])):
-                data['notices'].setdefault(user,[]).append({'id':uuid.uuid4().hex,'job_id':ident,'text':'Your actions are required to complete a Bitcoin Transaction','created_utc':now,'read':user==session.user_id})
             self._write(data)
         return row

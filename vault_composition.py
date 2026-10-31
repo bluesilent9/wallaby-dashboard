@@ -69,7 +69,7 @@ def fixed_fee_shares(value):
     return {e['from']:int(e['fee_sats']) for e in value['diagram']['edges'] if e['to']=='network-fee'}
 
 
-def prepare(hub,session,ident,diagram=None,estimate=False):
+def prepare(hub,session,ident,diagram=None,estimate=False,workspace_id=None):
     from transaction_workflows import WorkflowStore
     value,diagram,normal,catalog,fixed=context(hub,session,ident,diagram)
     for txid,index in value['outpoints']:
@@ -99,8 +99,7 @@ def prepare(hub,session,ident,diagram=None,estimate=False):
         if any(tuple(p) in active for p in points):raise ValueError('An input is already reserved by another prepared transaction.')
         if any(state['change_cursors'].get(k)!=base_cursors.get(k) for k in cursors):raise ValueError('A change reservation changed during preparation. Try again.')
         job=uuid.uuid4().hex
-        row={'id':job,'creator_id':session.user_id,'participants':participants,'created_utc':hub.utc(),'cancelled':False,'agent_signing':True,'psbt':encoded,'input_wallets':assigned,'outpoints':points,'wallets':catalog['wallets'],'diagram':diagram,'estimate':result,'unsigned_txid':tx.txid().hex(),'vault_export_id':ident,'vault_intents':[{'vault':value['vault'],'proposal_psbt':value['psbt']}],'signed_uploads':{}}
+        row={'id':job,'workspace_id':workspace_id,'creator_id':session.user_id,'participants':participants,'created_utc':hub.utc(),'cancelled':False,'agent_signing':True,'psbt':encoded,'input_wallets':assigned,'outpoints':points,'wallets':catalog['wallets'],'diagram':diagram,'estimate':result,'unsigned_txid':tx.txid().hex(),'vault_export_id':ident,'vault_intents':[{'vault':value['vault'],'proposal_psbt':value['psbt']}],'signed_uploads':{}}
         state['jobs'][job]=row;state['change_cursors'].update(cursors)
-        for user in sorted(set(participants+[session.user_id])):state['notices'].setdefault(user,[]).append({'id':uuid.uuid4().hex,'job_id':job,'text':'Your actions are required to sign a Bitcoin transaction.','created_utc':hub.utc(),'read':user==session.user_id})
         store._write(state)
     return store.public_job(session.user_id,job)

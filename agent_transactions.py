@@ -137,7 +137,7 @@ def validate_export(hub,payload,lease):
 def queue_sign(hub,session,job_id,wallet_id,node,signer_id=None):
     from transaction_workflows import WorkflowStore
     row=WorkflowStore(hub.config).job(session.user_id,job_id);wallet=next((w for w in row['wallets'] if w['id']==wallet_id),None)
-    if not wallet or wallet.get('owner_id')!=session.user_id:raise ValueError('Only this sending wallet’s owner can request its signature.')
+    if not wallet or row['creator_id']!=session.user_id:raise ValueError('Only the transaction creator can request Agent signatures.')
     if row.get('cancelled') or row.get('completed') or __import__('multisig_psbt').progress(row['psbt'],row.get('signed_uploads',{}).get(wallet_id,{}).get('proofs',{}),[i for i,w in enumerate(row['input_wallets']) if w==wallet_id])['complete']:raise ValueError('This signing card is already complete or the transaction is closed.')
     destination=next((n for n in eligible(hub,wallet_id) if n['id']==node and (signer_id is None or n['signer_id']==signer_id)),None)
     if not destination:raise ValueError('This node is offline, downloading, watch-only, or needs Agent partial-signing support.')
@@ -163,7 +163,11 @@ def accept_result(hub,state,node,kind,p):
     # Dashboard job was cancelled; it never revives or signs that job.
     if p['status'] in ('denied','error'):
         request.update(state=p['status'],message=str(p.get('message',''))[:1000]);return
-    if not row or row.get('cancelled') or row.get('completed'):raise ValueError('The requested transaction is closed.')
+    if row and row.get('cancelled'):
+        if kind=='broadcast_result':
+            row['broadcast_txid']=p.get('txid');request.update(state='complete',txid=p.get('txid'),message='Broadcast reported after Dashboard cancellation; cancellation cannot undo it.');workflows._write(data)
+        return
+    if not row or row.get('completed'):raise ValueError('The requested transaction is closed.')
     if kind=='partial_sign_result':
         if p['status']!='signed' or set(p)-{'request_hash','status','psbt'} or not isinstance(p.get('psbt'),str) or len(p['psbt'])>2*1024*1024:raise ValueError('Return a bounded, partially signed PSBT.')
         assigned=row['input_wallets'];uid=request['wallet_id'];indices=[i for i,w in enumerate(assigned) if w==uid]
@@ -172,9 +176,6 @@ def accept_result(hub,state,node,kind,p):
         proofs,new=validate_partial(row['psbt'],p['psbt'].encode(),indices,row.get('signed_uploads',{}).get(uid,{}).get('proofs',{}))
         if row.get('signed_uploads',{}).get(uid,{}).get('request_hash')!=p['request_hash']:
             row.setdefault('signed_uploads',{})[uid]={'proofs':proofs,'uploaded_by':next(w['owner_id'] for w in row['wallets'] if w['id']==uid),'uploaded_utc':hub.utc(),'request_hash':p['request_hash'],'node_id':node};row['signing_revision']=row.get('signing_revision',0)+1
-            if all(progress(row['psbt'],row['signed_uploads'].get(w,{}).get('proofs',{}),[i for i,u in enumerate(assigned) if u==w])['complete'] for w in set(assigned)) and not row.get('all_signed_notice'):
-                row['all_signed_notice']=True
-                data['notices'].setdefault(row['creator_id'],[]).append({'id':uuid.uuid4().hex,'job_id':row['id'],'text':'All Agent signatures have been verified. Review and broadcast the combined PSBT.','created_utc':hub.utc(),'read':False})
     else:
         if p['status']!='broadcast' or p.get('txid')!=request['txid']:raise ValueError('Broadcast result does not match the approved transaction.')
         row['broadcast_txid']=p['txid'];row['broadcast_utc']=hub.utc();row['signing_revision']=row.get('signing_revision',0)+1
@@ -212,7 +213,7 @@ def signing_state(hub,user,job_id):
     from transaction_workflows import WorkflowStore
     row=WorkflowStore(hub.config).public_job(user,job_id);state=hub.read()
     for wallet in row['signing_wallets']:
-        wallet['nodes']=eligible(hub,wallet['id']) if wallet['owner_id']==user and not wallet['complete'] else []
+        wallet['nodes']=eligible(hub,wallet['id']) if row['creator_id']==user and not wallet['complete'] else []
         requests=[dict(r,request_hash=k) for k,r in state['requests'].items() if r.get('job_id')==job_id and r.get('wallet_id')==wallet['id']]
         wallet['request']=requests[-1] if requests else None
         if wallet['request']:
@@ -228,6 +229,6 @@ def signing_state(hub,user,job_id):
     return row
 
 
-def prepare_export(hub,session,export_id,diagram=None,estimate=False):
+def prepare_export(hub,session,export_id,diagram=None,estimate=False,workspace_id=None):
     from vault_composition import prepare
-    return prepare(hub,session,export_id,diagram,estimate)
+    return prepare(hub,session,export_id,diagram,estimate,workspace_id)

@@ -1,3 +1,7 @@
+# Dashboard Build 20
+
+Builder cancellation contract: [BUILDER_CANCELLATION.md](BUILDER_CANCELLATION.md).
+
 # Dashboard Build 12 — Agent integration contract
 
 Dashboard Build 12 uses Agent V2 Development Build 11 for persistent local sync choices and disc signing. Wallet Builder was introduced with Agent Build 9. The existing exchange requires Build 8 or later. There is one synchronization queue/preview protocol; older Agents must be upgraded. No old signing or transfer fallback is used.

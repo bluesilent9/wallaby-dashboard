@@ -103,6 +103,9 @@ def validate(root):
     if (root/'data/wallet-setups.json').exists():
         from wallet_builder import validate_archive
         validate_archive(cfg,json.loads((root/'data/wallet-setups.json').read_text()),ids)
+    if (root/'data/builder-workspaces.json').exists():
+        from builder_workspace import validate as validate_workspaces
+        validate_workspaces(json.loads((root/'data/builder-workspaces.json').read_text()),ids)
     with tempfile.TemporaryDirectory(dir=root,prefix='.verify-') as temp:
         for uid in raw.get('ownership_runs',{}):
             if uid not in ids:raise ValueError('Unknown Ownership profile.')

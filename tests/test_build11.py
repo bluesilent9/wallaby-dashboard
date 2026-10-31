@@ -114,7 +114,7 @@ class Signing(Setup):
         store=WorkflowStore(self.config);data=store._read();row=data['jobs'][ident];row.update(psbt=original,input_wallets=[self.rid],wallets=[{'id':self.rid,'name':'Shared policy','owner_id':self.user,'owner':'Example','colour':'green'}]);store._write(data);return ident
     def test_distinct_cosigners_do_not_sync_and_both_are_signing_choices(self):
         ident=self.install_shared();self.exchange(self.a,caps=['partial_signing','wallet_transfer']);self.exchange(self.b,caps=['partial_signing','wallet_transfer']);self.assertFalse([r for r in self.hub.read()['requests'].values() if r['kind']=='wallet_transfer']);choices=eligible(self.hub,self.rid);self.assertEqual(len(choices),2);self.assertNotEqual(choices[0]['signer_id'],choices[1]['signer_id'])
-    def test_two_agents_accumulate_signatures_and_notify_once(self):
+    def test_two_agents_accumulate_signatures_without_dashboard_login_notices(self):
         ident=self.install_shared();session=type('Session',(),{'user_id':self.user})();choices=eligible(self.hub,self.rid)
         for i,choice in enumerate(choices):
             queued=queue_sign(self.hub,session,ident,self.rid,choice['id'],choice['signer_id'])
@@ -122,7 +122,7 @@ class Signing(Setup):
             public=signing_state(self.hub,self.user,ident);self.assertEqual(public['all_signed'],i==1);self.assertEqual(public['signing_wallets'][0]['signature_progress']['received'],i+1)
         self.assertTrue(public['all_signed']);self.assertFalse(public['signing_wallets'][0]['nodes'])
         from transaction_workflows import WorkflowStore
-        notices=WorkflowStore(self.config)._read()['notices'][self.user];self.assertEqual(len(notices),1)
+        notices=WorkflowStore(self.config)._read()['notices'].get(self.user,[]);self.assertEqual(notices,[])
 
 class CardPolicy(unittest.TestCase):
     def test_tooltip_threshold_comes_from_policy_not_display_name(self):
@@ -148,6 +148,14 @@ class SetupInventoryWindow(Ceremony):
         self.hub.inventories[self.a['node_id']]={'complete':True,'wallets':[{'name':'First private account before monitor','id':'example-key','raw':{'wallet_name':'Private account','descriptors':rows},'private_keys_enabled':True}]};self.hub.inventories[self.b['node_id']]={'complete':True,'wallets':[]};self.exchange(self.a);self.assertFalse(self.hub.read()['requests'])
     def test_public_monitor_waits_until_every_producer_core_is_ready(self):
         h,row=self.start();row=self.contribute(h,row);raw={'wallet_name':'Pending policy','descriptors':[{'desc':d,'range':[0,99],'next_index':1} for d in row['descriptors']]};self.hub.inventories[self.a['node_id']]={'complete':True,'wallets':[{'name':'Pending monitor','id':'example','raw':raw,'private_keys_enabled':False}]};self.hub.inventories[self.b['node_id']]={'complete':True,'wallets':[]};self.exchange(self.a);self.assertFalse(self.hub.read()['requests'])
+
+    def test_ready_monitor_waits_for_creator_to_finish_active_workspace(self):
+        from builder_workspace import BuilderWorkspace
+        w=BuilderWorkspace(self.config).start(self.user,'wallet');h,row=self.start();row=self.contribute(h,row)
+        with self.hub.wallet_builder.edit() as s:s['sessions'][h].update(workspace_id=w['id'],state='ready',completion_confirmed={self.a['node_id']:'now',self.b['node_id']:'now'})
+        raw={'wallet_name':'Completed monitor','descriptors':[{'desc':d,'range':[0,99],'next_index':1} for d in row['descriptors']]};self.hub.inventories[self.a['node_id']]={'complete':True,'wallets':[{'name':'Completed monitor','id':'example','raw':raw,'private_keys_enabled':False}]};self.hub.inventories[self.b['node_id']]={'complete':True,'wallets':[]}
+        with self.hub.edit() as state:self.hub.pair_transfers(state)
+        self.assertFalse(self.hub.read()['requests'])
 
 # Reuse ceremony helpers without discovering the parent test methods twice.
 for _name in vars(Ceremony):
