@@ -34,7 +34,7 @@ class Build23(unittest.TestCase):
   def request(path,body=None):
    c=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=3);c.request('POST' if body is not None else 'GET',path,json.dumps(dict(body,user_id=self.uid)) if body is not None else None,{'X-Session-Token':session.token,'Content-Type':'application/json'});r=c.getresponse();out=json.loads(r.read());c.close();self.assertEqual(r.status,200,out);return out
   try:
-   row=request('/api/salary/start',{});self.assertTrue(row['started']);row=request('/api/salary/save',{'revision':row['revision'],'inputs':{'base_pay':'24000'}});self.assertEqual(request('/api/salary')['inputs'],row['inputs']);self.assertFalse(request('/api/salary/reset',{})['started']);self.assertEqual(pool.nodes.hub.read()['requests'],{})
+   row=request('/api/salary/start',{});self.assertTrue(row['started']);row=request('/api/salary/save',{'revision':row['revision'],'inputs':{'people':[{'id':self.uid,'target':'24000'}]}});self.assertEqual(request('/api/salary')['inputs'],row['inputs']);self.assertFalse(request('/api/salary/reset',{})['started']);self.assertEqual(pool.nodes.hub.read()['requests'],{})
   finally:server.shutdown();server.server_close();thread.join(3)
  def test_personal_and_fund_upload_declarations_are_independent(self):
   users=[self.user];paths={'bitaroo_user_'+self.uid:'personal'}
@@ -62,7 +62,7 @@ class Build23(unittest.TestCase):
   with patch.object(reg,'snapshot',return_value={'nodes':nodes}):self.assertEqual(reg.hub.lease_all(session,'diagram-example'),{'exports':[]})
   self.assertEqual({l['node_id'] for l in reg.hub.leases.values()},{'0','1'});reg.hub.clear_lease(session);self.assertFalse(reg.hub.leases)
  def test_salary_diagram_is_scoped_saved_and_has_no_transaction_side_effects(self):
-  s=SalaryStore(self.cfg);self.assertFalse(s.snapshot(self.uid)['started']);state=s.change(self.uid,'start');plan={'base_pay':'24000'};saved=s.change(self.uid,'save',{'revision':state['revision'],'inputs':plan});self.assertEqual(SalaryStore(self.cfg).snapshot(self.uid)['inputs']['base_pay'],'24000')
+  s=SalaryStore(self.cfg);self.assertFalse(s.snapshot(self.uid)['started']);state=s.change(self.uid,'start');plan={'people':[{'id':self.uid,'target':'24000'}]};saved=s.change(self.uid,'save',{'revision':state['revision'],'inputs':plan});self.assertEqual(SalaryStore(self.cfg).snapshot(self.uid)['inputs']['people'][0]['target'],'24000')
   with self.assertRaisesRegex(ValueError,'changed'):s.change(self.uid,'save',{'revision':state['revision'],'inputs':plan})
   self.assertFalse((self.cfg.parent/'data/transactions').exists());self.assertFalse((self.cfg.parent/'data/agent-hub.json').exists());self.assertFalse((self.cfg.parent/'data/builder-workspaces.json').exists());self.family.delete_user(self.uid,self.family.snapshot()['revision']);self.assertNotIn(self.uid,s.read())
  def test_balance_trace_costs_smsf_purchase_without_fund_cgt_or_personal_contamination(self):

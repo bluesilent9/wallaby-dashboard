@@ -18,7 +18,7 @@ function volumeGeometry(weight){
 }
 function volume(el,weight){
  const make=(tag,attrs)=>{if(typeof document==='undefined')return el(tag,attrs);const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);return n;};
- const g=volumeGeometry(weight),svg=make('svg',{viewBox:'0 0 160 174',class:'block-volume','aria-hidden':'true'});
+ const g=volumeGeometry(weight),svg=make('svg',{viewBox:'0 0 160 174',class:'block-volume','aria-hidden':'true',style:'animation-delay:-'+(Date.now()%2000)/1000+'s'});
  const poly=(points,cls)=>make('polygon',{points,class:cls});
  svg.append(poly('8,20 128,20 148,44 28,44','cube-shell'),poly('8,20 28,44 28,164 8,140','cube-shell'),poly('28,44 148,44 148,164 28,164','cube-shell'));
  if(g.fraction>0){const fill=make('g',{class:'cube-fill'});fill.append(poly(g.side,'cube-fill-side'),poly(g.front,'cube-fill-front'),poly(g.top,'cube-fill-top'));svg.append(fill);}

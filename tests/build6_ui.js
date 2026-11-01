@@ -4,6 +4,7 @@ const tip=element('div');tip.offsetWidth=400;tip.offsetHeight=200;
 const ctx={el:element,icon:x=>x,clearTimeout:()=>{},tipPinned:false,tipTimer:null,fieldLabels:{},$:(s)=>tip,cash:v=>Number(v).toLocaleString('en-AU',{style:'currency',currency:'AUD'}),innerWidth:1600,innerHeight:1000};vm.createContext(ctx);
 vm.runInContext(source.slice(source.indexOf('function resourceIcons('),source.indexOf('function el(')),ctx);
 const row=ctx.resourceIcons({has_vault:true,watch_only:true,smsf:true,kind:'descriptor'});assert.deepEqual(row.children.map(n=>n.children[0]),['vault','wallet','eye','smsf']);
+vm.runInContext(source.slice(source.indexOf('function balanceSourceLabel('),source.indexOf('function errorPanel(')),ctx);
 vm.runInContext(source.slice(source.indexOf('function showTip('),source.indexOf('function hideTip(')),ctx);
 ctx.showTip('Example Wallet','',{balance_summary:true,gain_aud:'-426.67',Owner:'Example',SMSF:'No',purchase_aud:'1000',Sources:['PDF:sample.pdf:page1:row4']},{getBoundingClientRect:()=>({left:500,right:600,top:100,bottom:200,width:100})},true);
 const dl=tip.children[1];assert.deepEqual(dl.children.filter(n=>n.tag==='dt').map(n=>n.children[0]),['AUD Gain/Loss','Owner','SMSF','Purchase Price','Sources']);assert.equal(dl.children[1].children[0],'-$426.67');assert.match(dl.children[1].attrs.class,/balance-loss/);assert.equal(tip.children.length,2,'balance tooltip has no redundant footnote');assert.equal(tip.children[0].children[0].children.length,1,'balance tooltip has no subtitle');

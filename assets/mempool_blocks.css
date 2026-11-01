@@ -13,9 +13,9 @@
 .projected-block .cube-shell{fill:#fae9e688;stroke:#ab615b}
 .projected-block .cube-outline{stroke:#783a35}
 .projected-block .cube-fill-front{fill:#d8766e}.projected-block .cube-fill-side{fill:#a84943}.projected-block .cube-fill-top{fill:#efa69c;stroke:#934f48}
-.projected-block .cube-fill{animation:pending-cube 3s ease-in-out infinite alternate}
-@keyframes pending-cube{from{filter:brightness(.93)}to{filter:brightness(1.1)}}
-@media(prefers-reduced-motion:reduce){.projected-block .cube-fill{animation:none}}
+.projected-block .block-volume{animation:pending-cube 2s ease-in-out infinite}
+@keyframes pending-cube{0%,100%{opacity:.85}50%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.projected-block .block-volume{animation:none}}
 .node-block-main,.node-block-rate-unit,.transaction-count,.time-difference{text-shadow:0 1px 3px #fff,0 0 7px #ffffffdc}
 
 .bitcoin-block>span,.bitcoin-block>strong{position:relative;z-index:1}.bitcoin-block>.node-block-number{position:absolute}.bitcoin-block>.node-track-marker{position:absolute}

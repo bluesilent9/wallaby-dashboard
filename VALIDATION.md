@@ -1,3 +1,15 @@
+# V1 Build 25 validation
+
+All 287 Python regression tests pass after network permission was restored, including the 15 previously blocked socket cases. New tests cover chained recipient shares, proportional shortfalls, automatic remainder targets, target restoration, card layouts, missing identities, cycles, duplicate parents, excessive shares and exact annual/payday conservation.
+
+First-payday template tests use invented confirmed UTXOs and verify payment plus fee equals the source budget, layout conversion, ordinary TemplateStore round trips, missing tax/address/funds/rate rejection, offline status and applying the annual fee reserve once. No real node or Agent is contacted and no PSBT is created. Statement-source labels retain the evidence type and remove temporary paths without changing trace accounting.
+
+The real Salary component and canvas run in DOM/API simulations: modal target/share controls, chained users, persisted dragging, naming cancellation, template save, revision scoping and preserving active inputs across delayed saves/results. Static checks cover bundled script order, graphical notification colours and pending-cube timing. Live browser checks cover funding/user diagrams, modal target edits, recalculation, template naming and the saved template appearing in Transaction Builder. Connection dots were measured at 12 × 12 CSS pixels after overriding shared form-button sizing. The HTML preview contains invented data and a fixed calculated-result snapshot.
+
+Debian packaging is checked for source parity, absence of private/runtime inputs, source-download bundling and systemd enable/start maintainer instructions. Packaged-service startup over IPv4/IPv6 is tested in an isolated temporary profile; the package is not installed here. No production configuration, Agent code, wallet files, private keys, signing requests, broadcasts or SSH settings are changed.
+
+## Earlier validation
+
 # V1 Build 24 validation
 
 The Salary Builder uses invented profile/account fixtures, actual official-source parser fixtures and the shared CGT engine. Coverage includes leap years, 53 weekly / 27 fortnightly paydays, monthly day clamping, combined personal/SMSF pools, inaccessible fund bridges, annual top-ups, birth-date horizons, user-ID ownership, cent reconciliation, shared/independent partner targets, asset reserves and recurring salary equivalents.

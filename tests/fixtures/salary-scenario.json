@@ -3,17 +3,29 @@
     "user": {
       "id": "a",
       "name": "Profile A",
-      "date_of_birth": "13/10/1988"
+      "date_of_birth": "13/10/1988",
+      "colour": "green",
+      "gender": "male"
     },
     "users": [
       {
         "id": "a",
         "name": "Profile A",
-        "date_of_birth": "13/10/1988"
+        "date_of_birth": "13/10/1988",
+        "colour": "green",
+        "gender": "male"
       },
       {
         "id": "b",
-        "name": "Profile B"
+        "name": "Profile B",
+        "colour": "purple",
+        "gender": "female"
+      },
+      {
+        "id": "c",
+        "name": "Profile C",
+        "colour": "teal",
+        "gender": "female"
       }
     ],
     "start": "2027-07-01",
@@ -28,17 +40,68 @@
         "external": false,
         "name": "Unrelated display source",
         "kind": "wallet",
-        "btc": "62",
+        "btc": "620",
         "cash_aud": "0",
-        "cost_basis_aud": "6200",
+        "cost_basis_aud": "62000",
         "smsf": false,
         "planning_lots": [
           {
-            "quantity_btc": "62",
-            "cost_aud": "6200",
+            "quantity_btc": "620",
+            "cost_aud": "62000",
             "acquired": "2018-01-01"
           }
         ]
+      },
+      {
+        "id": "fund",
+        "resource_id": "fund",
+        "owner_id": "a",
+        "external": false,
+        "name": "Unrelated display fund",
+        "kind": "wallet",
+        "btc": "310",
+        "cash_aud": "0",
+        "cost_basis_aud": "31000",
+        "smsf": true,
+        "planning_lots": [
+          {
+            "quantity_btc": "310",
+            "cost_aud": "31000",
+            "acquired": "2018-01-01"
+          }
+        ]
+      },
+      {
+        "id": "extra",
+        "resource_id": "extra",
+        "owner_id": "a",
+        "external": false,
+        "name": "Unrelated display extra",
+        "kind": "wallet",
+        "btc": "1",
+        "cash_aud": "0",
+        "cost_basis_aud": "100",
+        "smsf": false,
+        "planning_lots": [
+          {
+            "quantity_btc": "1",
+            "cost_aud": "100",
+            "acquired": "2018-01-01"
+          }
+        ]
+      },
+      {
+        "id": "distributor",
+        "resource_id": "distributor",
+        "owner_id": "a",
+        "external": false,
+        "name": "Distribution wallet",
+        "kind": "wallet",
+        "btc": "0",
+        "cash_aud": "0",
+        "cost_basis_aud": "0",
+        "smsf": false,
+        "planning_lots": []
       }
     ],
     "tax_tables": {
@@ -84,6 +147,14 @@
       {
         "id": "source",
         "mode": "lifetime"
+      },
+      {
+        "id": "fund",
+        "mode": "lifetime"
+      },
+      {
+        "id": "extra",
+        "mode": "one_year"
       }
     ],
     "frequency": "weekly",
@@ -91,10 +162,43 @@
     "include_lito": false,
     "medicare_percent": "0",
     "anchor": "2027-07-01",
-    "partner_id": "b",
-    "base_pay": "3000",
+    "people": [
+      {
+        "id": "a",
+        "target": "80000"
+      },
+      {
+        "id": "b",
+        "target": "0"
+      },
+      {
+        "id": "c",
+        "target": "0"
+      }
+    ],
+    "allocations": [
+      {
+        "from": "a",
+        "to": "b",
+        "share": "10"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "share": "25"
+      }
+    ],
+    "asset_base_id": "a",
+    "price_aud": "100000",
+    "distribution_id": "distributor",
+    "fee_edges": [
+      {
+        "from": "source",
+        "rate": "1"
+      }
+    ],
     "asset_enabled": true,
-    "asset_multiple": "1.3"
+    "asset_multiple": "2"
   },
   "result": {
     "financial_year": "2027\u201328",
@@ -104,45 +208,100 @@
     "years": 62,
     "target_age": 100,
     "payday_count": 53,
-    "price_aud": "10000.00",
+    "price_aud": "100000.00",
     "transition_price_aud": "10000.00",
     "smsf_release": "2053-10-13",
-    "pool_aud": "620000.00",
-    "topups_aud": "0.00",
-    "lifetime_annual_aud": "10000.00",
-    "planned_gross_aud": "10000.00",
-    "gross_aud": "10000.00",
+    "pool_aud": "93000000.00",
+    "topups_aud": "100000.00",
+    "lifetime_annual_aud": "1500000.00",
+    "planned_gross_aud": "1600000.00",
+    "gross_aud": "1600000.00",
     "unfunded_aud": "0.00",
-    "tax_aud": "0.00",
+    "tax_aud": "649242.00",
     "network_fees_aud": "0.00",
     "fund_tax_aud": "0.00",
     "tax_details": {
-      "bracket_tax": "0.00",
+      "bracket_tax": "649242.00",
       "minimum_tax": "0.00",
       "medicare_buffer": "0.00",
-      "total": "0.00"
+      "total": "649242.00"
     },
     "capital_gains": {
-      "net_gain": "4950.00",
+      "net_gain": "1519200.00",
       "net_loss": "0.00",
-      "minimum_tax_gain": "0.00",
-      "net_gain_before_discount": "9900.00",
-      "net_result_before_discount": "9900.00",
-      "net_result_after_discount": "4950.00",
+      "minimum_tax_gain": "1440000.00",
+      "net_gain_before_discount": "1598400.00",
+      "net_result_before_discount": "1598400.00",
+      "net_result_after_discount": "1519200.00",
       "discounted_long_gain": "0.00",
       "current_year_losses": "0.00",
       "prior_year_losses": "0.00",
       "losses_applied": "0.00"
     },
-    "net_aud": "10000.00",
-    "own_aud": "2700.00",
-    "partner_aud": "300.00",
-    "asset_aud": "3900.00",
-    "asset_target_aud": "3900.00",
-    "surplus_aud": "3100.00",
+    "net_aud": "950758.00",
+    "own_aud": "72000.00",
+    "asset_aud": "160000.00",
+    "asset_target_aud": "160000.00",
+    "surplus_aud": "710758.00",
     "salary_shortfall_aud": "0.00",
-    "additional_salary_equivalents": 1,
-    "recurring_surplus_aud": "3100.00",
+    "additional_salary_equivalents": 8,
+    "recurring_surplus_aud": "651335.63",
+    "allocation": {
+      "people": [
+        {
+          "id": "a",
+          "name": "Profile A",
+          "receiving": false,
+          "target_aud": "80000.00",
+          "share": null,
+          "parent_id": null,
+          "incoming_aud": "80000.00",
+          "retained_aud": "72000.00",
+          "sent_aud": "8000.00"
+        },
+        {
+          "id": "b",
+          "name": "Profile B",
+          "receiving": true,
+          "target_aud": null,
+          "share": "10",
+          "parent_id": "a",
+          "incoming_aud": "8000.00",
+          "retained_aud": "6000.00",
+          "sent_aud": "2000.00"
+        },
+        {
+          "id": "c",
+          "name": "Profile C",
+          "receiving": true,
+          "target_aud": null,
+          "share": "25",
+          "parent_id": "b",
+          "incoming_aud": "2000.00",
+          "retained_aud": "2000.00",
+          "sent_aud": "0"
+        }
+      ],
+      "edges": [
+        {
+          "from": "a",
+          "to": "b",
+          "share": "10",
+          "amount_aud": "8000.00"
+        },
+        {
+          "from": "b",
+          "to": "c",
+          "share": "25",
+          "amount_aud": "2000.00"
+        }
+      ],
+      "asset_aud": "160000.00",
+      "asset_target_aud": "160000.00",
+      "surplus_aud": "710758.00",
+      "salary_shortfall_aud": "0.00",
+      "reference_salary_aud": "80000.00"
+    },
     "first_unfunded_year": null,
     "sources": [
       {
@@ -150,1148 +309,2024 @@
         "name": "Unrelated display source",
         "mode": "lifetime",
         "smsf": false,
-        "value_aud": "620000.00",
-        "annual_draw_aud": "10000.00",
+        "value_aud": "62000000.00",
+        "annual_draw_aud": "1500000.00",
+        "annual_draw_btc": "15.00000000"
+      },
+      {
+        "id": "fund",
+        "name": "Unrelated display fund",
+        "mode": "lifetime",
+        "smsf": true,
+        "value_aud": "31000000.00",
+        "annual_draw_aud": "0.00",
+        "annual_draw_btc": "0E-8"
+      },
+      {
+        "id": "extra",
+        "name": "Unrelated display extra",
+        "mode": "one_year",
+        "smsf": false,
+        "value_aud": "100000.00",
+        "annual_draw_aud": "100000.00",
         "annual_draw_btc": "1.00000000"
+      }
+    ],
+    "funding_paydays": [
+      {
+        "date": "2027-07-02",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-07-09",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-07-16",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-07-23",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-07-30",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-08-06",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-08-13",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-08-20",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-08-27",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-09-03",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-09-10",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-09-17",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-09-24",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886800",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-10-01",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-10-08",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-10-15",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-10-22",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-10-29",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-11-05",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-11-12",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-11-19",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-11-26",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-12-03",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-12-10",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-12-17",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-12-24",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2027-12-31",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-01-07",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-01-14",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-01-21",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-01-28",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-02-04",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-02-11",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-02-18",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-02-25",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-03-03",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301890",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-03-10",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-03-17",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-03-24",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-03-31",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-04-07",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-04-14",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-04-21",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-04-28",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-05-05",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-05-12",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-05-19",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-05-26",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-06-02",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-06-09",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-06-16",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-06-23",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
+      },
+      {
+        "date": "2028-06-30",
+        "sources": [
+          {
+            "id": "source",
+            "btc": "0.28301880",
+            "cash_aud": "0.00"
+          },
+          {
+            "id": "extra",
+            "btc": "0.01886790",
+            "cash_aud": "0.00"
+          }
+        ]
       }
     ],
     "paydays": [
       {
         "date": "2027-07-02",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.67",
-        "asset": "73.59",
-        "surplus": "58.47"
+        "person:a": "1358.50",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-07-09",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.67",
-        "asset": "73.59",
-        "surplus": "58.47"
+        "person:a": "1358.50",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-07-16",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.50",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-07-23",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-07-30",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-08-06",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-08-13",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-08-20",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-08-27",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-09-03",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-09-10",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-09-17",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-09-24",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.69",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-10-01",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-10-08",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-10-15",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-10-22",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-10-29",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.95",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.48"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-11-05",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.52"
       },
       {
         "date": "2027-11-12",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-11-19",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-11-26",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-12-03",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-12-10",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-12-17",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-12-24",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.59",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2027-12-31",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-01-07",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-01-14",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-01-21",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.74",
+        "asset": "3018.86",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-01-28",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-02-04",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-02-11",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-02-18",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-02-25",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-03-03",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.68",
+        "lifetime_gross": "28301.89",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-03-10",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-03-17",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-03-24",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-03-31",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-04-07",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-04-14",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-04-21",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-04-28",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-05-05",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-05-12",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-05-19",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-05-26",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.85",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-06-02",
-        "gross": "188.68",
-        "lifetime_gross": "188.68",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.84",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.50"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-06-09",
-        "gross": "188.67",
-        "lifetime_gross": "188.67",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.84",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-06-16",
-        "gross": "188.67",
-        "lifetime_gross": "188.67",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.84",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-06-23",
-        "gross": "188.67",
-        "lifetime_gross": "188.67",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.84",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.21",
+        "person:c": "37.73",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       },
       {
         "date": "2028-06-30",
-        "gross": "188.67",
-        "lifetime_gross": "188.67",
+        "gross": "30188.67",
+        "lifetime_gross": "28301.88",
         "shortfall": "0.00",
-        "tax": "0.00",
+        "tax": "12249.84",
         "fees": "0.00",
-        "own": "50.94",
-        "partner": "5.66",
-        "asset": "73.58",
-        "surplus": "58.49"
+        "person:a": "1358.49",
+        "person:b": "113.20",
+        "person:c": "37.74",
+        "asset": "3018.87",
+        "surplus": "13410.53"
       }
     ],
     "projection": [
       {
         "year": 2027,
         "age": 38,
-        "gross": "10000.00",
+        "gross": "1600000.00",
         "shortfall": "0.00",
-        "personal_left": "610000.00",
-        "smsf_left": "0.00"
+        "personal_left": "60500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2028,
         "age": 39,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "600000.00",
-        "smsf_left": "0.00"
+        "personal_left": "59000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2029,
         "age": 40,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "590000.00",
-        "smsf_left": "0.00"
+        "personal_left": "57500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2030,
         "age": 41,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "580000.00",
-        "smsf_left": "0.00"
+        "personal_left": "56000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2031,
         "age": 42,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "570000.00",
-        "smsf_left": "0.00"
+        "personal_left": "54500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2032,
         "age": 43,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "560000.00",
-        "smsf_left": "0.00"
+        "personal_left": "53000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2033,
         "age": 44,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "550000.00",
-        "smsf_left": "0.00"
+        "personal_left": "51500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2034,
         "age": 45,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "540000.00",
-        "smsf_left": "0.00"
+        "personal_left": "50000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2035,
         "age": 46,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "530000.00",
-        "smsf_left": "0.00"
+        "personal_left": "48500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2036,
         "age": 47,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "520000.00",
-        "smsf_left": "0.00"
+        "personal_left": "47000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2037,
         "age": 48,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "510000.00",
-        "smsf_left": "0.00"
+        "personal_left": "45500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2038,
         "age": 49,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "500000.00",
-        "smsf_left": "0.00"
+        "personal_left": "44000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2039,
         "age": 50,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "490000.00",
-        "smsf_left": "0.00"
+        "personal_left": "42500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2040,
         "age": 51,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "480000.00",
-        "smsf_left": "0.00"
+        "personal_left": "41000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2041,
         "age": 52,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "470000.00",
-        "smsf_left": "0.00"
+        "personal_left": "39500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2042,
         "age": 53,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "460000.00",
-        "smsf_left": "0.00"
+        "personal_left": "38000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2043,
         "age": 54,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "450000.00",
-        "smsf_left": "0.00"
+        "personal_left": "36500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2044,
         "age": 55,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "440000.00",
-        "smsf_left": "0.00"
+        "personal_left": "35000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2045,
         "age": 56,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "430000.00",
-        "smsf_left": "0.00"
+        "personal_left": "33500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2046,
         "age": 57,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "420000.00",
-        "smsf_left": "0.00"
+        "personal_left": "32000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2047,
         "age": 58,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "410000.00",
-        "smsf_left": "0.00"
+        "personal_left": "30500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2048,
         "age": 59,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "400000.00",
-        "smsf_left": "0.00"
+        "personal_left": "29000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2049,
         "age": 60,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "390000.00",
-        "smsf_left": "0.00"
+        "personal_left": "27500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2050,
         "age": 61,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "380000.00",
-        "smsf_left": "0.00"
+        "personal_left": "26000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2051,
         "age": 62,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "370000.00",
-        "smsf_left": "0.00"
+        "personal_left": "24500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2052,
         "age": 63,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "360000.00",
-        "smsf_left": "0.00"
+        "personal_left": "23000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2053,
         "age": 64,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "350000.00",
-        "smsf_left": "0.00"
+        "personal_left": "21500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2054,
         "age": 65,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "340000.00",
-        "smsf_left": "0.00"
+        "personal_left": "20000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2055,
         "age": 66,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "330000.00",
-        "smsf_left": "0.00"
+        "personal_left": "18500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2056,
         "age": 67,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "320000.00",
-        "smsf_left": "0.00"
+        "personal_left": "17000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2057,
         "age": 68,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "310000.00",
-        "smsf_left": "0.00"
+        "personal_left": "15500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2058,
         "age": 69,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "300000.00",
-        "smsf_left": "0.00"
+        "personal_left": "14000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2059,
         "age": 70,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "290000.00",
-        "smsf_left": "0.00"
+        "personal_left": "12500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2060,
         "age": 71,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "280000.00",
-        "smsf_left": "0.00"
+        "personal_left": "11000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2061,
         "age": 72,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "270000.00",
-        "smsf_left": "0.00"
+        "personal_left": "9500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2062,
         "age": 73,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "260000.00",
-        "smsf_left": "0.00"
+        "personal_left": "8000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2063,
         "age": 74,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "250000.00",
-        "smsf_left": "0.00"
+        "personal_left": "6500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2064,
         "age": 75,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "240000.00",
-        "smsf_left": "0.00"
+        "personal_left": "5000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2065,
         "age": 76,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "230000.00",
-        "smsf_left": "0.00"
+        "personal_left": "3500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2066,
         "age": 77,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "220000.00",
-        "smsf_left": "0.00"
+        "personal_left": "2000000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2067,
         "age": 78,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "210000.00",
-        "smsf_left": "0.00"
+        "personal_left": "500000.00",
+        "smsf_left": "31000000.00"
       },
       {
         "year": 2068,
         "age": 79,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "200000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "30000000.00"
       },
       {
         "year": 2069,
         "age": 80,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "190000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "28500000.00"
       },
       {
         "year": 2070,
         "age": 81,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "180000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "27000000.00"
       },
       {
         "year": 2071,
         "age": 82,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "170000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "25500000.00"
       },
       {
         "year": 2072,
         "age": 83,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "160000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "24000000.00"
       },
       {
         "year": 2073,
         "age": 84,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "150000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "22500000.00"
       },
       {
         "year": 2074,
         "age": 85,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "140000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "21000000.00"
       },
       {
         "year": 2075,
         "age": 86,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "130000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "19500000.00"
       },
       {
         "year": 2076,
         "age": 87,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "120000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "18000000.00"
       },
       {
         "year": 2077,
         "age": 88,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "110000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "16500000.00"
       },
       {
         "year": 2078,
         "age": 89,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "100000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "15000000.00"
       },
       {
         "year": 2079,
         "age": 90,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "90000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "13500000.00"
       },
       {
         "year": 2080,
         "age": 91,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "80000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "12000000.00"
       },
       {
         "year": 2081,
         "age": 92,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "70000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "10500000.00"
       },
       {
         "year": 2082,
         "age": 93,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "60000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "9000000.00"
       },
       {
         "year": 2083,
         "age": 94,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "50000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "7500000.00"
       },
       {
         "year": 2084,
         "age": 95,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "40000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "6000000.00"
       },
       {
         "year": 2085,
         "age": 96,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "30000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "4500000.00"
       },
       {
         "year": 2086,
         "age": 97,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "20000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "3000000.00"
       },
       {
         "year": 2087,
         "age": 98,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
-        "personal_left": "10000.00",
-        "smsf_left": "0.00"
+        "personal_left": "0.00",
+        "smsf_left": "1500000.00"
       },
       {
         "year": 2088,
         "age": 99,
-        "gross": "10000.00",
+        "gross": "1500000.00",
         "shortfall": "0.00",
         "personal_left": "0.00",
         "smsf_left": "0.00"
       }
     ],
     "warnings": [],
+    "btc_estimates": {
+      "gross": "16.00000000",
+      "tax": "6.49242000",
+      "own": "0.72000000",
+      "asset": "1.60000000",
+      "fees": "0E-8",
+      "surplus": "7.10758000"
+    },
     "tax_complete": true,
     "tax_table": {
       "year": 2027,
@@ -1321,6 +2356,80 @@
         }
       ]
     },
-    "tax_checked_utc": "2026-11-01T00:00:00+00:00"
+    "tax_checked_utc": "2026-11-01T00:00:00+00:00",
+    "funding_template": {
+      "ready": true,
+      "reason": "First payday 2027-07-02 checked against current confirmed UTXOs. Future sizes and fees can change.",
+      "date": "2027-07-02",
+      "estimate": {
+        "can_continue": true,
+        "validation_message": "Plan checked against confirmed funds and a conservative fee estimate.",
+        "vbytes": 264,
+        "total_fee_sats": "264",
+        "wallet_fees_sats": {
+          "extra": "0",
+          "source": "264"
+        },
+        "maximum_amounts": {},
+        "confirmed_balances_sats": {
+          "extra": "2000000000",
+          "source": "2000000000"
+        },
+        "combined_rate": "1",
+        "input_count": 2,
+        "change_outputs": 2,
+        "estimated": true,
+        "basis": "Confirmed public UTXOs; conservative signed input sizes. Maximum spends every confirmed spendable input and has no change."
+      },
+      "payments": {
+        "source": "0.28301626",
+        "extra": "0.018868"
+      },
+      "annual_fee_aud": "13.99",
+      "diagram": {
+        "nodes": [
+          {
+            "id": "source",
+            "x": 25,
+            "y": 25
+          },
+          {
+            "id": "extra",
+            "x": 25,
+            "y": 235
+          },
+          {
+            "id": "distributor",
+            "x": 390,
+            "y": 25
+          },
+          {
+            "id": "network-fee",
+            "x": 710,
+            "y": 235
+          }
+        ],
+        "edges": [
+          {
+            "from": "source",
+            "to": "distributor",
+            "amount_sats": "28301626",
+            "fee_rate": "0"
+          },
+          {
+            "from": "extra",
+            "to": "distributor",
+            "amount_sats": "1886800",
+            "fee_rate": "0"
+          },
+          {
+            "from": "source",
+            "to": "network-fee",
+            "amount_sats": "0",
+            "fee_rate": "1"
+          }
+        ]
+      }
+    }
   }
 }

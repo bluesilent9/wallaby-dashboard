@@ -36,13 +36,12 @@ def clean_inputs(value):
         item=value.get(key,'')
         if not isinstance(item,str) or len(item)>limit or any(ord(c)<32 for c in item):raise ValueError('Invalid salary '+key+'.')
         return item
-    result={k:text(k) for k in ('distribution_id','tax_wallet_id','pay_wallet_id','partner_wallet_id','partner_id','anchor','timezone')}
+    result={k:text(k) for k in ('distribution_id','asset_base_id','anchor','timezone')}
     result['frequency']=value.get('frequency','fortnightly')
-    result['partner_mode']=value.get('partner_mode','share')
     result['fund_phase']=value.get('fund_phase','accumulation')
-    if result['frequency'] not in ('daily','weekly','fortnightly','monthly') or result['partner_mode'] not in ('share','independent') or result['fund_phase'] not in ('accumulation','pension'):raise ValueError('Invalid salary planning option.')
+    if result['frequency'] not in ('daily','weekly','fortnightly','monthly') or result['fund_phase'] not in ('accumulation','pension'):raise ValueError('Invalid salary planning option.')
     for key,default,low,high in [('target_age',100,1,150),('access_age',65,60,100),('weekday',4,0,6),('monthday',1,1,31)]:result[key]=integer(value.get(key,default),key,low,high)
-    for key,default,low,high in [('price_aud','',ZERO,MAX_MONEY),('transition_price_aud','',ZERO,MAX_MONEY),('base_pay','0',ZERO,MAX_MONEY),('partner_pay','0',ZERO,MAX_MONEY),('pay_multiplier','1',D('.01'),D(100)),('partner_percent','10',ZERO,D(100)),('asset_multiple','10',ZERO,D(1000)),('other_income','0',ZERO,MAX_MONEY),('capital_losses','0',ZERO,MAX_MONEY),('cpi_percent','0',ZERO,D(100)),('medicare_percent','2',ZERO,D(10)),('medicare_threshold','0',ZERO,MAX_MONEY),('tax_adjustment','0',ZERO,MAX_MONEY),('network_fees_aud','0',ZERO,MAX_MONEY)]:
+    for key,default,low,high in [('price_aud','',ZERO,MAX_MONEY),('transition_price_aud','',ZERO,MAX_MONEY),('pay_multiplier','1',D('.01'),D(100)),('asset_multiple','10',ZERO,D(1000)),('other_income','0',ZERO,MAX_MONEY),('capital_losses','0',ZERO,MAX_MONEY),('cpi_percent','0',ZERO,D(100)),('medicare_percent','2',ZERO,D(10)),('medicare_threshold','0',ZERO,MAX_MONEY),('tax_adjustment','0',ZERO,MAX_MONEY),('network_fees_aud','0',ZERO,MAX_MONEY)]:
         raw=value.get(key,default)
         result[key]='' if raw=='' and key in ('price_aud','transition_price_aud') else str(number(raw,key,low,high))
     for key,default in [('asset_enabled',False),('access_confirmed',False),('include_lito',True)]:
@@ -55,6 +54,20 @@ def clean_inputs(value):
     for row in rows:
         if not isinstance(row,dict) or set(row)!={'id','mode'} or not isinstance(row['id'],str) or not 1<=len(row['id'])<=160 or row['id'] in seen or row['mode'] not in ('lifetime','one_year'):raise ValueError('Invalid or repeated salary funding source.')
         seen.add(row['id']);result['sources'].append(dict(row))
+    from salary_graph import clean_graph
+    result['people'],result['allocations']=clean_graph(value,number)
+    layout=value.get('layout',{})
+    if not isinstance(layout,dict) or len(layout)>210:raise ValueError('Invalid salary card layout.')
+    result['layout']={}
+    for ident,position in layout.items():
+        if not isinstance(ident,str) or len(ident)>200 or not isinstance(position,dict) or set(position)!={'x','y'}:raise ValueError('Invalid salary card position.')
+        result['layout'][ident]={k:float(number(position[k],'Card position',ZERO,D(100000))) for k in ('x','y')}
+    fees=value.get('fee_edges',[])
+    if not isinstance(fees,list) or len(fees)>100:raise ValueError('Invalid salary fee connections.')
+    result['fee_edges']=[];seen=set()
+    for edge in fees:
+        if not isinstance(edge,dict) or set(edge)!={'from','rate'} or edge['from'] not in {s['id'] for s in result['sources']} or edge['from'] in seen:raise ValueError('A fee connection must come from a selected funding source.')
+        seen.add(edge['from']);result['fee_edges'].append({'from':edge['from'],'rate':format(number(edge['rate'],'Fee rate',ZERO,D(1000000)),'f')})
     if result['anchor']:
         try:date.fromisoformat(result['anchor'])
         except ValueError as exc:raise ValueError('Choose a valid fortnightly payday date.') from exc
@@ -184,7 +197,6 @@ def evaluate(ctx,value):
     price=number(inputs['price_aud'] or ctx.get('price_aud') or '', 'Scenario BTC/AUD',SAT)
     transition=number(inputs['transition_price_aud'] or ctx.get('price_aud') or price,'Transition BTC/AUD',SAT)
     release=birthday(born,born.year+inputs['access_age']);catalog={w['id']:w for w in ctx['wallets']};users={u['id']:u for u in ctx['users']}
-    if inputs['partner_id'] and (inputs['partner_id'] not in users or inputs['partner_id']==user['id']):raise ValueError('Choose a different profile for the partner allocation.')
     selected=[];missing=[]
     for row in inputs['sources']:
         w=catalog.get(row['id'])
@@ -200,10 +212,10 @@ def evaluate(ctx,value):
     if any(w['smsf'] for w in selected) and inputs['access_age']<65 and not inputs['access_confirmed']:warnings.append('SMSF access before 65 is conditional. Confirm the planned condition of release; the model will otherwise use age 65.')
     if inputs['access_age']<65 and not inputs['access_confirmed']:release=birthday(born,born.year+65)
     # Destination choices only label a calculation. They never create payments.
-    for field in ('distribution_id','tax_wallet_id','pay_wallet_id','partner_wallet_id'):
+    for field in ('distribution_id',):
         ident=inputs[field]
         if not ident:continue
-        w=catalog.get(ident);owner=inputs['partner_id'] if field=='partner_wallet_id' else user['id']
+        w=catalog.get(ident);owner=user['id']
         if not w or w.get('owner_id')!=owner or w.get('smsf') or w.get('external'):raise ValueError('A selected distribution destination is no longer available for its chosen profile.')
     pool=sum((w['value'] for w in selected if w['mode']=='lifetime'),ZERO)
     topups=sum((w['value'] for w in selected if w['mode']=='one_year'),ZERO)
@@ -249,41 +261,25 @@ def evaluate(ctx,value):
         net=max(ZERO,gross-tax_total-D(inputs['network_fees_aud'])).quantize(CENT,rounding=ROUND_DOWN)
         if tax_total+D(inputs['network_fees_aud'])>gross:warnings.append('The tax and network fee reserves exceed the funded gross allocation.')
     else:tax_total=None
-    base=D(inputs['base_pay'])*D(inputs['pay_multiplier']);partner_target=D(inputs['partner_pay'])*D(inputs['pay_multiplier'])
-    asset_target=base*D(inputs['asset_multiple']) if inputs['asset_enabled'] else ZERO
-    own=partner=asset=surplus=None;salary_shortfall=None;equivalents=None;recurring=None
+    from salary_graph import allocate,divide
+    allocation=allocate(net,inputs,ctx['users'])
+    own=next((D(p['retained_aud']) for p in allocation['people'] if p['id']==user['id'] and p['retained_aud'] is not None),None)
+    asset=allocation['asset_aud'];asset_target=allocation['asset_target_aud'];surplus=allocation['surplus_aud'];salary_shortfall=allocation['salary_shortfall_aud'];equivalents=None;recurring=None
     if net is not None:
-        if inputs['partner_mode']=='share':
-            # Base target is optional in shared mode. Zero spends available net.
-            household=min(net,base) if base else net
-            partner=household*D(inputs['partner_percent'])/100 if inputs['partner_id'] else ZERO
-            own=household-partner;salary_shortfall=max(ZERO,base-household)
-        else:
-            own=min(net,base);partner=min(max(ZERO,net-own),partner_target) if inputs['partner_id'] else ZERO
-            salary_shortfall=max(ZERO,base-own)+(max(ZERO,partner_target-partner) if inputs['partner_id'] else ZERO)
-        own=own.quantize(CENT,rounding=ROUND_HALF_UP);partner=partner.quantize(CENT,rounding=ROUND_DOWN)
-        asset=min(max(ZERO,net-own-partner),asset_target).quantize(CENT,rounding=ROUND_DOWN);surplus=max(ZERO,net-own-partner-asset)
-        if inputs['asset_enabled'] and base==0:warnings.append('Enter a base annual pay target before using an Asset Allocation multiplier.')
-        # Do not call a one-year top-up a lifelong employment budget. A
-        # conservative reserve uses the full year's effective tax rate.
+        spent=sum((D(p['retained_aud']) for p in allocation['people']),ZERO)
         recurring_net=max(ZERO,actual_life-(tax_total*actual_life/gross if gross else ZERO))
-        recurring=max(ZERO,min(surplus,recurring_net-own-partner-asset-D(inputs['network_fees_aud'])))
-        equivalents=int(recurring/base) if base>0 else 0
-        if salary_shortfall>CENT:warnings.append('The available pay does not fully fund the entered salary targets.')
-        if asset+CENT<asset_target:warnings.append('Asset Allocation is only partly funded after the salary allocations.')
+        recurring=max(ZERO,min(surplus,recurring_net-spent-asset-D(inputs['network_fees_aud'])))
+        reference=allocation['reference_salary_aud'];equivalents=int(recurring/reference) if reference else 0
+        if salary_shortfall>CENT:warnings.append('Available pay does not fully fund the entered independent salary targets. Targets share the shortfall proportionally.')
+        if asset+CENT<asset_target:warnings.append('Asset Allocation is only partly funded after the salary targets.')
+        if inputs['asset_enabled'] and not any(p['id']==inputs['asset_base_id'] and not p['receiving'] and D(p['target_aud'] or '0')>0 for p in allocation['people']):warnings.append('Set an independent salary target and choose it as the Asset Allocation reference.')
         capacities=[r['gross'] for r in periods]
-        for key,total in [('tax',min(tax_total,gross)),('fees',min(D(inputs['network_fees_aud']),max(ZERO,gross-tax_total))),('own',own),('partner',partner),('asset',asset),('surplus',surplus)]:
-            scaled=[total*r['gross']/gross if gross else ZERO for r in periods]
-            parts=[min(cap,x.quantize(CENT,rounding=ROUND_DOWN)) for cap,x in zip(capacities,scaled)]
-            left=int((total-sum(parts,ZERO))/CENT)
-            order=sorted(range(count),key=lambda i:(-(scaled[i]-parts[i]),i))
-            while left>0:
-                progressed=False
-                for i in order:
-                    if capacities[i]-parts[i]>=CENT:parts[i]+=CENT;left-=1;progressed=True
-                    if left<=0:break
-                if not progressed:raise ValueError('Payday allocations could not be reconciled to the funded amount.')
-            for i,(row,part) in enumerate(zip(periods,parts)):row[key]=part;capacities[i]-=part
+        totals=[('tax',min(tax_total,gross)),('fees',min(D(inputs['network_fees_aud']),max(ZERO,gross-tax_total)))]+[('person:'+p['id'],D(p['retained_aud'])) for p in allocation['people']]+[('asset',asset),('surplus',surplus)]
+        for key,total in totals:
+            parts=divide(total,capacities)
+            for i,(row,part) in enumerate(zip(periods,parts)):
+                if part>capacities[i]:raise ValueError('Payday allocations exceed funded capacity.')
+                row[key]=part;capacities[i]-=part
     # Gross-only lifetime projection uses exactly the same private-first/access
     # gates. One-year top-ups are absent after the selected financial year.
     projection=[{'year':fy,'age':age,'gross':money(gross),'shortfall':money(shortfall),'personal_left':money(sum((remaining[w['id']] for w in selected if w['mode']=='lifetime' and not w['smsf']),ZERO)),'smsf_left':money(sum((remaining[w['id']] for w in selected if w['mode']=='lifetime' and w['smsf']),ZERO))}]
@@ -304,10 +300,13 @@ def evaluate(ctx,value):
     for w in selected:
         drawn=sum((a for row,d,q,a in movements if row['id']==w['id']),ZERO)
         source_rows.append({'id':w['id'],'name':w['name'],'mode':w['mode'],'smsf':w['smsf'],'value_aud':money(w['value']),'annual_draw_aud':money(drawn),'annual_draw_btc':str(sum((q for row,d,q,a in movements if row['id']==w['id']),ZERO).quantize(SAT,rounding=ROUND_DOWN))})
+    funding_by_day={when:[] for when in days}
+    for wallet,when,quantity,amount in movements:
+        funding_by_day[when].append({'id':wallet['id'],'btc':str(quantity.quantize(SAT,rounding=ROUND_DOWN)),'cash_aud':money(amount-quantity*price)})
     # Keep JSON numeric strings explicit and stable; no binary floating money.
     def packed(value):
         if isinstance(value,D):return money(value)
         if isinstance(value,list):return [packed(v) for v in value]
         if isinstance(value,dict):return {k:packed(v) for k,v in value.items()}
         return value
-    return packed({'financial_year':ctx['financial_year'],'start':ctx['start'],'end':ctx['end'],'age':age,'years':years,'target_age':inputs['target_age'],'payday_count':count,'price_aud':price,'transition_price_aud':transition,'smsf_release':release.isoformat(),'pool_aud':pool,'topups_aud':topups,'lifetime_annual_aud':life_budget,'planned_gross_aud':life_budget+topup_budget,'gross_aud':gross,'unfunded_aud':shortfall,'tax_aud':tax_total,'network_fees_aud':D(inputs['network_fees_aud']),'fund_tax_aud':fund_reserve,'tax_details':tax,'capital_gains':summary,'net_aud':net,'own_aud':own,'partner_aud':partner,'asset_aud':asset,'asset_target_aud':asset_target,'surplus_aud':surplus,'salary_shortfall_aud':salary_shortfall,'additional_salary_equivalents':equivalents,'recurring_surplus_aud':recurring,'first_unfunded_year':first_gap,'sources':source_rows,'paydays':periods,'projection':projection,'warnings':warnings,'btc_estimates':{k:(str((v/price).quantize(SAT,rounding=ROUND_HALF_UP)) if v is not None else None) for k,v in {'gross':gross,'tax':tax_total,'own':own,'partner':partner,'asset':asset,'fees':D(inputs['network_fees_aud']),'surplus':surplus}.items()},'tax_complete':not incomplete,'tax_table':table,'tax_checked_utc':(table or {}).get('checked_utc') or tables.get('checked_utc')})
+    return packed({'financial_year':ctx['financial_year'],'start':ctx['start'],'end':ctx['end'],'age':age,'years':years,'target_age':inputs['target_age'],'payday_count':count,'price_aud':price,'transition_price_aud':transition,'smsf_release':release.isoformat(),'pool_aud':pool,'topups_aud':topups,'lifetime_annual_aud':life_budget,'planned_gross_aud':life_budget+topup_budget,'gross_aud':gross,'unfunded_aud':shortfall,'tax_aud':tax_total,'network_fees_aud':D(inputs['network_fees_aud']),'fund_tax_aud':fund_reserve,'tax_details':tax,'capital_gains':summary,'net_aud':net,'own_aud':own,'asset_aud':asset,'asset_target_aud':asset_target,'surplus_aud':surplus,'salary_shortfall_aud':salary_shortfall,'additional_salary_equivalents':equivalents,'recurring_surplus_aud':recurring,'allocation':allocation,'first_unfunded_year':first_gap,'sources':source_rows,'funding_paydays':[{'date':when.isoformat(),'sources':funding_by_day[when]} for when in days],'paydays':periods,'projection':projection,'warnings':warnings,'btc_estimates':{k:(str((v/price).quantize(SAT,rounding=ROUND_HALF_UP)) if v is not None else None) for k,v in {'gross':gross,'tax':tax_total,'own':own,'asset':asset,'fees':D(inputs['network_fees_aud']),'surplus':surplus}.items()},'tax_complete':not incomplete,'tax_table':table,'tax_checked_utc':(table or {}).get('checked_utc') or tables.get('checked_utc')})

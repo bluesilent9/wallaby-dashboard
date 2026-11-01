@@ -572,7 +572,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/assets/salary_diagram.js':'assets/salary_diagram.js','/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
@@ -635,10 +635,17 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path.startswith('/api/salary/'):
                     if data.get('user_id')!=session.user_id:raise ValueError('Salary profile changed. Reopen Salary Builder before editing.')
                     if not session.user() or not session.access()['balances_ready']:raise ValueError('Verify Balances in Ownership before using Salary Builder.')
-                    if path=='/api/salary/calculate':
-                        from salary_planning import context,evaluate
+                    if path in ('/api/salary/calculate','/api/salary/template'):
+                        from salary_planning import context
+                        from salary_funding import calculate
                         ctx=context(store.snapshot(),session.family().get('balance_report'),session.user(),session.settings);ctx['tax_tables']=tax_tables.snapshot()
-                        return self.json(evaluate(ctx,data.get('inputs',{})))
+                        result=calculate(session,ctx,data.get('inputs',{}),lambda:self.require_builder_node(session,ownership=True),force=path.endswith('/template'))
+                        if path.endswith('/template'):
+                            current=BuilderWorkspace(session.preferences_path).read()['workspaces'].get('transaction')
+                            if current:BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
+                            if not result['funding_template']['ready']:raise ValueError(result['funding_template']['reason'])
+                            return self.json(TemplateStore(session.preferences_path).save({'name':data.get('name'),'diagram':result['funding_template']['diagram']}))
+                        return self.json(result)
                     return self.json(__import__('salary_builder').SalaryStore(session.preferences_path).change(session.user_id,path.rsplit('/',1)[1],data))
                 if path.startswith('/api/builders/'):
                     if not session.user():raise ValueError('Select a family user first.')

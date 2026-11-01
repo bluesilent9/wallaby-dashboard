@@ -92,6 +92,8 @@ def trace_current_basis(core,engine):
                 if not reference and details.get('source_file'):
                     reference='ODS:'+str(details['source_file'])+':'+str(details.get('location',''))+':row'+str(details.get('source_row',''))
                 if not reference:reference=lot.source
+                from source_display import source_label
+                reference=source_label(reference)
                 if reference and reference not in sources:sources.append(reference)
             result[name]={'planning_lots':[{'acquired':lot.acquired.isoformat(),'quantity_btc':str(lot.qty),'cost_aud':str(lot.cost)} for lot in lots] if known else [],'qty':qty,'cost':cost,'sources':sources,'reason':'Acquisition costs established by Balance Trace for retained holdings.' if known else ' '.join(dict.fromkeys(reasons))}
         return result

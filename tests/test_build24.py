@@ -26,7 +26,13 @@ def ctx(wallets=None):
  return {'user':user,'users':[user,{'id':'b','name':'Profile B'}],'start':'2027-07-01','end':'2028-06-30','financial_year':'2027–28','price_aud':'10000','wallets':wallets or [wallet()],'tax_tables':{'data':tax_data()}}
 
 def inputs(**values):
- return dict({'sources':[{'id':'source','mode':'lifetime'}],'frequency':'weekly','weekday':4,'include_lito':False,'medicare_percent':'0','anchor':'2027-07-01'},**values)
+ # Historical regression scenarios expressed through the new people graph.
+ base=values.pop('base_pay','0');partner=values.pop('partner_id','');mode=values.pop('partner_mode','share');partner_pay=values.pop('partner_pay','0');share=values.pop('partner_percent','10')
+ people=[{'id':'a','target':base}];edges=[]
+ if partner:
+  people.append({'id':partner,'target':partner_pay})
+  if mode=='share':edges.append({'from':'a','to':partner,'share':share})
+ return dict({'sources':[{'id':'source','mode':'lifetime'}],'frequency':'weekly','weekday':4,'include_lito':False,'medicare_percent':'0','anchor':'2027-07-01','people':people,'allocations':edges,'asset_base_id':'a'},**values)
 
 class Schedules(unittest.TestCase):
  def test_actual_dates_include_leap_year_and_53_weekdays(self):
@@ -66,12 +72,12 @@ class Funding(unittest.TestCase):
  def test_release_age_requires_confirmation_below_65(self):
   a=evaluate(ctx(),inputs(access_age=60));b=evaluate(ctx(),inputs(access_age=60,access_confirmed=True));self.assertEqual(a['smsf_release'],'2053-10-13');self.assertEqual(b['smsf_release'],'2048-10-13')
  def test_shared_allowance_salary_targets_payrise_and_asset_reserve(self):
-  shared=evaluate(ctx(),inputs(partner_id='b'));self.assertEqual(D(shared['partner_aud']),D(shared['net_aud'])*D('.10'));self.assertEqual(D(shared['own_aud'])+D(shared['partner_aud']),D(shared['net_aud']))
-  r=evaluate(ctx([wallet(btc='62000',cost='6200000')]),inputs(partner_id='b',partner_mode='independent',base_pay='60000',partner_pay='50000',pay_multiplier='1.2',asset_enabled=True,asset_multiple='10'));self.assertEqual(r['own_aud'],'72000.00');self.assertEqual(r['partner_aud'],'60000.00');self.assertEqual(r['asset_aud'],'720000.00');self.assertGreater(r['additional_salary_equivalents'],0)
+  shared=evaluate(ctx(),inputs(partner_id='b'));self.assertEqual(D(shared['allocation']['people'][1]['retained_aud']),(D(shared['net_aud'])*D('.10')).quantize(D('.01')));self.assertEqual(sum(D(p['retained_aud']) for p in shared['allocation']['people']),D(shared['net_aud']))
+  r=evaluate(ctx([wallet(btc='62000',cost='6200000')]),inputs(partner_id='b',partner_mode='independent',base_pay='60000',partner_pay='50000',pay_multiplier='1.2',asset_enabled=True,asset_multiple='10'));self.assertEqual(r['own_aud'],'72000.00');self.assertEqual(r['allocation']['people'][1]['retained_aud'],'60000.00');self.assertEqual(r['asset_aud'],'720000.00');self.assertGreater(r['additional_salary_equivalents'],0)
  def test_every_payday_and_annual_total_reconcile_to_cents(self):
   r=evaluate(ctx(),inputs(partner_id='b',base_pay='3000',asset_enabled=True,asset_multiple='1.3',network_fees_aud='53.11'))
-  for p in r['paydays']:self.assertEqual(sum((D(p[k]) for k in ['tax','fees','own','partner','asset','surplus']),D(0)),D(p['gross']))
-  for key,total in [('tax','tax_aud'),('fees','network_fees_aud'),('own','own_aud'),('partner','partner_aud'),('asset','asset_aud'),('surplus','surplus_aud')]:self.assertEqual(sum((D(p[key]) for p in r['paydays']),D(0)),D(r[total]))
+  for p in r['paydays']:self.assertEqual(sum((D(p[k]) for k in ['tax','fees','person:a','person:b','asset','surplus']),D(0)),D(p['gross']))
+  for key,total in [('tax','tax_aud'),('fees','network_fees_aud'),('person:a','own_aud'),('asset','asset_aud'),('surplus','surplus_aud')]:self.assertEqual(sum((D(p[key]) for p in r['paydays']),D(0)),D(r[total]))
   values=[D(p['tax']) for p in r['paydays']];self.assertLessEqual(max(values)-min(values),D('.01'))
  def test_tax_engine_discounts_gains_and_future_growth_enters_minimum_tax(self):
   old=evaluate(ctx(),inputs());self.assertEqual(old['capital_gains']['net_gain'],'4950.00')
@@ -119,12 +125,12 @@ class HttpAndProfiles(unittest.TestCase):
    def request(path,body=None):
     c=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=3);c.request('POST' if body is not None else 'GET',path,json.dumps(body) if body is not None else None,{'X-Session-Token':session.token,'Content-Type':'application/json'});r=c.getresponse();out=json.loads(r.read());c.close();return r.status,out
    try:
-    _,row=request('/api/salary/start',{'user_id':a['id']});plan=inputs(sources=[{'id':source,'mode':'lifetime'}]);code,saved=request('/api/salary/save',{'user_id':a['id'],'revision':row['revision'],'inputs':plan});self.assertEqual(code,200,saved);self.assertEqual(request('/api/salary')[1]['inputs'],saved['inputs']);code,result=request('/api/salary/calculate',{'user_id':a['id'],'inputs':plan});self.assertEqual(code,200,result);self.assertGreater(D(result['gross_aud']),0);self.assertEqual(pool.nodes.hub.read()['requests'],{});self.assertEqual(pool.nodes.rpc.rows,{})
+    _,row=request('/api/salary/start',{'user_id':a['id']});plan=inputs(sources=[{'id':source,'mode':'lifetime'}],people=[{'id':a['id'],'target':'0'}],asset_base_id=a['id']);code,saved=request('/api/salary/save',{'user_id':a['id'],'revision':row['revision'],'inputs':plan});self.assertEqual(code,200,saved);self.assertEqual(request('/api/salary')[1]['inputs'],saved['inputs']);code,result=request('/api/salary/calculate',{'user_id':a['id'],'inputs':plan});self.assertEqual(code,200,result);self.assertGreater(D(result['gross_aud']),0);self.assertEqual(pool.nodes.hub.read()['requests'],{});self.assertEqual(pool.nodes.rpc.rows,{})
     session.user_id=b['id'];code,error=request('/api/salary/save',{'user_id':a['id'],'revision':saved['revision'],'inputs':plan});self.assertEqual(code,400);self.assertIn('profile changed',error['error']);self.assertFalse(request('/api/salary')[1]['started'])
    finally:server.shutdown();server.server_close();thread.join(3)
  def test_profile_archive_includes_validated_tax_tables_and_salary_inputs(self):
   from profile_archive import ProfileArchive
   with tempfile.TemporaryDirectory() as folder:
-   cfg=Path(folder)/'source/config.cfg';family=FamilyStore(cfg);family.save_user('Sample profile','green',revision=0,date_of_birth='01/01/1980');uid=family.snapshot()['users'][0]['id'];store=SalaryStore(cfg);row=store.change(uid,'start');store.change(uid,'save',{'revision':row['revision'],'inputs':{'base_pay':'52000'}});rates=ResidentTaxTables(cfg);rates.path.write_text(json.dumps(tax_data()));archive=ProfileArchive(cfg).save();target=Path(folder)/'restored/config.cfg';FamilyStore(target);ProfileArchive(target).load('profile.7z',archive);self.assertEqual(SalaryStore(target).snapshot(uid)['inputs']['base_pay'],'52000');self.assertEqual(ResidentTaxTables(target).read()['tables'],rates.read()['tables'])
+   cfg=Path(folder)/'source/config.cfg';family=FamilyStore(cfg);family.save_user('Sample profile','green',revision=0,date_of_birth='01/01/1980');uid=family.snapshot()['users'][0]['id'];store=SalaryStore(cfg);row=store.change(uid,'start');store.change(uid,'save',{'revision':row['revision'],'inputs':{'people':[{'id':uid,'target':'52000'}]}});rates=ResidentTaxTables(cfg);rates.path.write_text(json.dumps(tax_data()));archive=ProfileArchive(cfg).save();target=Path(folder)/'restored/config.cfg';FamilyStore(target);ProfileArchive(target).load('profile.7z',archive);self.assertEqual(SalaryStore(target).snapshot(uid)['inputs']['people'][0]['target'],'52000');self.assertEqual(ResidentTaxTables(target).read()['tables'],rates.read()['tables'])
 
 if __name__=='__main__':unittest.main()
