@@ -70,6 +70,8 @@ class NodeRegistry:
         now=self.clock()
         for token in list(self.connections):
             if now-self.connections[token]['seen']>=DISCONNECT_SECONDS:
+                c=self.connections[token];pending=sum(r['token']==token and r['state'] in ('queued','delivered','running') for r in self.rpc.rows.values())
+                self.diagnostic_log.append('Agent protocol','Connection expired · node='+c['hostname']+' · authenticated_traffic_age_s='+str(round(now-c['seen'],1))+' · pending_rpc='+str(pending))
                 self.rpc.disconnected(token);del self.connections[token]
     def register(self,mac,hostname,rpc=None,agent_version=None):
         mac,hostname=identity(mac,hostname);methods=capabilities(rpc)

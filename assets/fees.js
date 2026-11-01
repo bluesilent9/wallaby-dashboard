@@ -7,5 +7,6 @@ function btcTooSmall(value){const d=decimal(value);return d.n*100000000n<10n**Bi
 function rates(value){const d=decimal(value);return {sat_vb:plain(d.n,d.scale),sat_kb:plain(d.n*1000n,d.scale),btc_vb:plain(d.n,d.scale+8,8),btc_kb:plain(d.n*1000n,d.scale+8,8)};}
 function audCost(feeSats,quote){const d=decimal(quote),numerator=feeSats*d.n*100n,denominator=10n**BigInt(d.scale+8),cents=(numerator+denominator/2n)/denominator;const s=String(cents).padStart(3,'0');return 'AUD$'+s.slice(0,-2).replace(/\B(?=(\d{3})+(?!\d))/g,',')+'.'+s.slice(-2);}
 function estimate(rate,size,quote){if(!/^\d+$/.test(String(size))||BigInt(size)<1n||BigInt(size)>1000000n)throw Error('Enter a whole transaction size from 1 to 1,000,000 vB.');const d=decimal(rate),denominator=10n**BigInt(d.scale),feeSats=(d.n*BigInt(size)+denominator-1n)/denominator;return {sats:String(feeSats),btc:plain(feeSats,8,8),aud:quote===null||quote===undefined?null:audCost(feeSats,quote)};}
-const api={rates,grouped,estimate,btcTooSmall};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.WallabyFees=api;
+function displayRate(value){try{const d=decimal(value),base=10n**BigInt(d.scale),scale=d.n>=base?0:1,denominator=base,n=(d.n*10n**BigInt(scale)+denominator/2n)/denominator;return plain(n,scale,scale);}catch{return 'Unavailable';}}
+const api={displayRate,rates,grouped,estimate,btcTooSmall};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.WallabyFees=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

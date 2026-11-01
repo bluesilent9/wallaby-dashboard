@@ -318,3 +318,14 @@ Ownership Stage 1 of 2 loads exchange records. Stage 2 of 2 confirms ownership a
 Profiles require a name and date of birth. Enter DD/MM/YYYY or choose the date with the adjacent calendar. Birth dates remain in the Dashboard profile and its archive; they are not used in tax calculations at this stage. Existing imported profiles without a birth date need one when edited.
 
 Calculations → Mempool shows fee estimates, projected pending blocks, recent mined blocks and transaction tracking. Full cube outlines remain visible at every fill level. The coloured internal top surface meets both sides at the same fill height. Pending blocks pulse red; reduced-motion preferences disable the animation.
+
+
+## Build 23: separate fund records and salary calculations
+
+On Ownership, each profile has independent personal and SMSF Bitaroo upload areas. Untick **Non-Bitaroo SMSF User** to enable the fund statement folder; tick either checkbox to skip only that account. Supply the historical and current AUD/BTC statements for each enabled account. Uploaded fund accounts retain their fixed member profile and SMSF classification. Verify Balances returns to Wallets and reconstructs fund acquisition costs separately from personal holdings. Personal CGT reports exclude SMSFs; no SMSF tax return is generated here.
+
+Create/edit users with the date calendar. Existing users show their saved Date of Birth in DD/MM/YYYY. Hover a resource icon for its explanation, or another part of a wallet card for its financial details.
+
+After Verify Balances, open **Calculations → Salary Builder → Start Building Your Salary**. Add wallets/exchanges, arrange cards, draw connections and enter Bitcoin amounts or Network Fee rates. The diagram saves per profile. This is a work-in-progress calculator: it cannot prepare/sign/broadcast PSBTs, accept Agent vault proposals, or convert fee rates into an actual fee without a transaction size. Reset starts a blank salary calculation.
+
+A ready-node dropout redirects Wallet/Transaction Builder to Nodes while retaining the public draft. Reconnect the Agent and reopen the builder to continue. No failed signing request is automatically replayed.

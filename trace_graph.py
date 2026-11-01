@@ -140,7 +140,8 @@ class TraceGraph:
         if claim is not None:return claim['owned']
         if scope[0]=='addresses' and scope[1]:
             known=[self.address_owners.get(a) for a in scope[1]]
-            if any(v is not None and v==(profile,False) for v in known):return True
+            entity=(profile.removesuffix(':smsf'),profile.endswith(':smsf')) if isinstance(profile,str) else (profile,False)
+            if any(v is not None and v==entity for v in known):return True
             if all(v is not None for v in known):return False
         if scope[0]=='addresses' and len(scope[1])>1:
             # A group No is never split into individual No claims: a mixed group

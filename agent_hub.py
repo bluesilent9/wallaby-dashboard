@@ -118,7 +118,7 @@ class AgentHub:
         if not isinstance(draft,str) or not re.fullmatch('[a-zA-Z0-9-]{1,80}',draft):raise ValueError('Invalid open diagram identity.')
         candidates=self.registry.snapshot()['nodes'];n=next((n for n in candidates if n['id']==node and n['rpc_ready'] and n.get('blockchain',{}).get('state')=='ready'),None)
         if not n:raise ValueError('Select a connected, synchronised node for this diagram.')
-        key=session.session_dir.name
+        key=session.session_dir.name+':'+node
         with self.lock:
             if (key,draft) in self.retired:raise ValueError('This diagram was closed. Open a new diagram.')
             rows=[dict(v,id=k) for k,v in self.read()['exports'].items() if v['user_id']==session.user_id and v['draft_id']==draft and v['node_id']==node]
@@ -126,8 +126,15 @@ class AgentHub:
         return {'exports':rows}
     def clear_lease(self,session):
         with self.lock:
-            key=session.session_dir.name;prior=self.leases.pop(key,None)
-            if prior:self.retired.add((key,prior['draft_id']))
+            prefix=session.session_dir.name
+            for key in [k for k in self.leases if k==prefix or k.startswith(prefix+':')]:
+                prior=self.leases.pop(key);self.retired.add((key,prior['draft_id']))
+    def lease_all(self,session,draft):
+        result=[]
+        for node in self.registry.snapshot()['nodes']:
+            if node.get('rpc_ready') and node.get('blockchain',{}).get('state')=='ready':
+                result.extend(self.lease(session,node['id'],draft)['exports'])
+        return {'exports':result}
     def pair_transfers(self,state):
         ready={c['node_id']:c for c in list(self.registry.connections.values()) if self.registry.rpc._unique(c)}
         from policy_accounts import cosigner_accounts,keys as account_keys

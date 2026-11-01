@@ -23,7 +23,7 @@ def save_workspace(config,user_id,uploads,inventory,address_book,settings,comple
     meta={'data_id':generation,'completed_utc':completed_utc or datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
           'inventory':copy.deepcopy(inventory),'address_book':copy.deepcopy(address_book),
           'settings':{k:v for k,v in settings.items() if k not in {'financial_year','taxpayer','mode','matching_window','refresh_descriptor_history'}},'files':[]}
-    meta.update({k:v for k,v in (metadata or {}).items() if k in {'descriptor_fingerprint','bitaroo_as_of_date','bitaroo_data','historical_balances','family_accounts'}})
+    meta.update({k:v for k,v in (metadata or {}).items() if k in {'descriptor_fingerprint','bitaroo_as_of_date','bitaroo_data','bitaroo_smsf_data','historical_balances','family_accounts'}})
     try:
         for slot,path in uploads.items():
             if slot=='historical':continue  # Retired ODS input; node labels now define historical wallets.

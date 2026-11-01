@@ -4,7 +4,7 @@ from copy import deepcopy
 import json,os,uuid
 from storage import data_directory,storage_lock
 
-BALANCE_ALGORITHM=4
+BALANCE_ALGORITHM=5
 
 class BalanceStore:
     def __init__(self,config):self.config=Path(config);self.path=data_directory(self.config)/'balance-trace.json'
@@ -59,7 +59,7 @@ class BalanceStore:
             row['multisig']=policies.get(row.get('descriptor_id'),[])
             owned=row.get('owner_name')==user['name'] and not row.get('smsf')
             row['ownership']='personal' if owned else 'external'
-            if row['kind']=='exchange':row['name']='Bitaroo Exchange' if owned else 'Bitaroo Exchange · '+row.get('owner_name','Unknown')
+            if row['kind']=='exchange':row['name']=('Bitaroo SMSF Exchange · '+row.get('owner_name','Unknown')) if row.get('smsf') else 'Bitaroo Exchange' if owned else 'Bitaroo Exchange · '+row.get('owner_name','Unknown')
         from wallet_views import extinct_cards
         balance['extinct_wallets']=extinct_cards(self.config)
         return {'taxpayer':user['name'],'balances':balance}

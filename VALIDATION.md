@@ -11,3 +11,14 @@ Diagnostics tests check RPC/refresh IDs, hostname, method, page offset, elapsed 
 Existing builder persistence/cancellation, locally authorised signing, retirement, multisig role separation, vault monitoring, ownership and CGT regression tests remain passing. No Agent code, production wallets, Core settings, installed service, user configuration, private keys, optical media or SSH settings were changed here. Actual installation on the family machines remains deployment testing.
 
 The architecture-all DEB is checked for source parity, excluded runtime records, source download, IPv4/IPv6 web and Agent-listener startup, and systemd enable/start-at-install packaging. It is not installed here. Use matching Agent V2 Build 20 for paged projections; there is no oversized full-response fallback or increase to the ordinary remote RPC limit.
+
+
+## V1 Build 23
+
+- 247 Python regression checks and 19 JavaScript interface regression programs pass, including current Agent V2 Build 22 read-only transport.
+- Separate personal/SMSF statement declarations, fixed fund exchange ownership, isolated entity trace facts, live watch/private replica detection, authenticated-traffic liveness, all-node proposal leasing and Salary start/save/restore HTTP are exercised.
+- An isolated purchase/withdrawal fixture proves personal and fund acquisition cost and unrealised P/L remain separate. Fund replay cannot invoke annual fund CGT. Shared CGT/Balance Trace allocation and parcel logic remains covered by the existing joint-transaction fixtures.
+- The six supplied SMSF AUD/BTC statements parse with complete coverage and paired trades. Personal source documents and logs are not packaged or published.
+- Browser checks cover calendar-only DOB, saved birth dates, independent upload controls, Salary connection/amount entry and restored projections, multisig icon explanations and Mempool display rounding. Workspace tests include GET responses delayed across local autosaves.
+- Debian source parity, absence of financial inputs, startup over IPv4/IPv6, Agent health and service enable/start maintainer instructions are checked. The package is not installed on this development machine.
+- Production node disconnect/recovery and an end-to-end run against the user's actual wallet histories still need deployment testing. No real transactions, wallet mutation or private-key access occurs in these checks.

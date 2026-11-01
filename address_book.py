@@ -141,7 +141,7 @@ def shared_address_book(snapshot,local=None):
     entries=[dict(e) for e in (local or {}).get('entries',[]) if e.get('kind') in ('descriptor','wallet')]
     checked=[(local or {}).get('generated_utc') or '']
     for user_id,entry in snapshot.get('bitaroo_addresses',{}).items():
-        if user_id not in users:continue
-        entries.append(dict(entry,owner_id=user_id,shared=True));checked.append(entry.get('checked_utc') or '')
+        if user_id.removesuffix(':smsf') not in users:continue
+        entries.append(dict(entry,owner_id=user_id.removesuffix(':smsf'),smsf=user_id.endswith(':smsf'),shared=True));checked.append(entry.get('checked_utc') or '')
     if not entries and not local:return None
     return {'entries':entries,'generated_utc':max(checked) or None}

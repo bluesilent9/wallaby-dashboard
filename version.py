@@ -1,5 +1,5 @@
 """Public application version; storage and tax-algorithm versions are independent."""
 VERSION='1'
-BUILD=22
+BUILD=23
 CHANNEL='Development'
-LABEL='V1 Build 22'
+LABEL='V1 Build 23'

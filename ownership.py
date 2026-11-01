@@ -32,7 +32,7 @@ def inventory_for(core,wallets,other,user):
         rows.append({'id':resource_id(kind,source),'kind':kind,'source':source,'extinct':bool(evidence.get('extinct')) or not bool(uid),'has_vault':bool(evidence.get('has_vault')),'multisig':evidence.get('multisig',[]),'watch_only':bool(evidence.get('watch_only')),'name':suggest_wallet_name(original) if uid and not evidence.get('extinct') else name,**({'source_name':original} if uid else {})})
     rows += [{'id':resource_id('exchange',name),'kind':'exchange','source':name,'name':name} for name in sorted({r.exchange for r in other})]
     for profile in getattr(core,'FAMILY_ACCOUNT_USERS',[user]):
-        rows.append({'id':resource_id('bitaroo',profile['id']),'kind':'bitaroo','source':profile['id'],'name':'Bitaroo Exchange · '+profile['name']})
+        rows.append({'id':resource_id('bitaroo',profile['id']),'kind':'bitaroo','source':profile['id'],'owner_id':profile.get('owner_id',profile['id']),'smsf':bool(profile.get('smsf')),'name':('Bitaroo SMSF Exchange · ' if profile.get('smsf') else 'Bitaroo Exchange · ')+profile['name']})
     return sorted(rows,key=lambda r:(r['kind'],r['source'].casefold()))
 
 def ownership_class(core,snapshot,user,inventory):

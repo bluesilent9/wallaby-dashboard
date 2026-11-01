@@ -113,7 +113,7 @@ def run(core,calculation,joints,snapshot,user,console,emit,client):
             return super().decide_unresolved_destination(origin,dt,amount,transaction_id,address,'Balance Trace',decision_ref)
     calculation.base_ownership=BalanceOwnership
     calculation.joints=joints
-    if joints:
+    if joints and not getattr(calculation,'balance_only',False):
         # Resolve the established annual-prefix convention once for ambiguous
         # jointly funded history. These working replays are not published as tax reports.
         _,initial=calculation.run(joints,user)

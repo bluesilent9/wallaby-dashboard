@@ -99,7 +99,7 @@ class Session:
                 context=hashlib.sha256(json.dumps([user['id'],user['name'],rows,saved_bitaroo_destinations(data)],sort_keys=True,ensure_ascii=True).encode()).hexdigest()
             except MissingOwnership:pass
         if context is not None:
-            try:declarations(data['users'],self.settings,self.uploads)
+            try:declarations(data['users'],self.settings,self.uploads);declarations(data['users'],self.settings,self.uploads,smsf=True)
             except ValueError:context=None
         ready=context is not None
         if ready and self.status not in {'running','waiting'}:
@@ -122,10 +122,17 @@ class Session:
         balance_report=BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user) if user and access['ownership_ready'] else None
         from wallet_views import annotate_signers
         annotate_signers(balance_report,self.node_registry.hub if self.node_registry else None)
-        return {'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
+        from live_wallet_traits import annotate
+        traits=annotate(balance_report,DescriptorStore(self.preferences_path).read(),self.node_registry)
+        result={'wallet_traits':traits,'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
                 'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':[dict(item,**source_suggestions(item,data['users'])) for item in display_inventory(self.inventory,DescriptorStore(self.preferences_path).read())] if user else [],'inventory_ready':self.inventory_ready if user else False,
                 **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
                 'restore_error':self.restore_error,'settings':self.settings if user else {},'loaded_slots':{slot:([p.name for p in sorted(path.rglob('*')) if p.is_file()] if path.is_dir() else [path.name]) for slot,path in self.uploads.items()} if user else {}}
+        for row in result['inventory']:
+            if row.get('source') in traits:row['watch_only']=traits[row['source']]
+        for row in result['descriptors']['wallets']:
+            if row['id'] in traits:row['watch_only']=traits[row['id']]
+        return result
     def select_user(self,user_id):
         with self.lock:
             if self.status in {'running','waiting'}:raise ValueError('Cancel the active job before switching users.')
@@ -281,7 +288,7 @@ class Session:
                         if {'exchanges','chain'}.issubset(self.uploads):
                             for profile in FamilyStore(self.preferences_path).snapshot()['users']:
                                 uid=profile['id'];coverage=completed.get('coverage_by_user',{}).get(uid,{})
-                                saved=save_workspace(self.preferences_path,uid,self.uploads,self.inventory,book,self.settings,metadata={'descriptor_fingerprint':self.descriptor_fingerprint,'bitaroo_as_of_date':coverage.get('bitaroo_as_of_date'),'bitaroo_data':completed.get('bitaroo_data_by_user',{}).get(uid,{}),'historical_balances':completed.get('historical_balances',{}),'family_accounts':completed.get('family_accounts',{})})
+                                saved=save_workspace(self.preferences_path,uid,self.uploads,self.inventory,book,self.settings,metadata={'descriptor_fingerprint':self.descriptor_fingerprint,'bitaroo_as_of_date':coverage.get('bitaroo_as_of_date'),'bitaroo_data':completed.get('bitaroo_data_by_user',{}).get(uid,{}),'bitaroo_smsf_data':completed.get('bitaroo_smsf_data_by_user',{}).get(uid,{}),'historical_balances':completed.get('historical_balances',{}),'family_accounts':completed.get('family_accounts',{})})
                             self.ownership_completed_utc=saved['completed_utc'];self.restore_error='';self.workspace_dirty=False;self.workspace_stamp=None
                             with FamilyStore(self.preferences_path).transaction() as family_data:
                                 family_data['bitaroo_accounts']=completed.get('family_accounts',{})
@@ -538,6 +545,11 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         if ident and not session.access()['templates_ready']:raise ValueError('Complete Ownership and save all assignments before loading a template.')
                         return self.json(templates.read(ident) if ident else {'templates':templates.listing()})
                     except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
+                if path in ('/api/salary','/api/salary/catalog'):
+                    if not session.user() or not session.access()['balances_ready']:return self.json({'error':'Verify Balances in Ownership before using Salary Builder.'},400)
+                    if path=='/api/salary':return self.json(__import__('salary_builder').SalaryStore(session.preferences_path).snapshot(session.user_id))
+                    balance=session.family().get('balance_report') or {};quote=balance.get('balances',{}).get('price_aud_per_btc')
+                    return self.json(builder_catalog(session,{'aud_per_btc':quote} if quote else None))
                 if path=='/api/builder':
                     if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
                     if not session.access()['templates_ready']:return self.json({'error':'Complete Ownership and save all assignments first.'},400)
@@ -555,7 +567,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
@@ -615,6 +627,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     return self.json(session.upload(slot,name,body))
                 data=json.loads(body or b'{}',parse_float=Decimal) if path=='/api/nodes/rpc' else json.loads(body or b'{}')
                 store=FamilyStore(session.preferences_path)
+                if path.startswith('/api/salary/'):
+                    if not session.user() or not session.access()['balances_ready']:raise ValueError('Verify Balances in Ownership before using Salary Builder.')
+                    return self.json(__import__('salary_builder').SalaryStore(session.preferences_path).change(session.user_id,path.rsplit('/',1)[1],data))
                 if path.startswith('/api/builders/'):
                     if not session.user():raise ValueError('Select a family user first.')
                     _,_,_,kind,action=path.split('/')
@@ -650,7 +665,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
                     hub=sessions.nodes.hub
                     if not path.endswith('/agent-leave'):self.require_builder_node(session,ownership=True)
-                    if path.endswith('/agent-lease'):return self.json(hub.lease(session,data.get('node_id'),data.get('draft_id')))
+                    if path.endswith('/agent-lease'):return self.json(hub.lease_all(session,data.get('draft_id')))
                     if path.endswith('/agent-leave'):hub.clear_lease(session);return self.json({'closed':True})
                     from agent_transactions import prepare_export,queue_sign,queue_broadcast
                     if path.endswith(('/vault-prepare','/vault-estimate')):

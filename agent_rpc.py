@@ -111,6 +111,9 @@ class RPCBroker:
     def _connection(self,token):
         self.registry._expire();connection=self.registry.connections.get(token)
         if not connection:raise PermissionError('Connection expired. Register again.')
+        # Every authenticated Agent request is evidence of a live transport;
+        # busy result/exchange traffic must not require a separate heartbeat.
+        connection['seen']=self.registry.clock()
         return connection
     def _unique(self,connection):
         return sum(c['mac']==connection['mac'] for c in self.registry.connections.values())==1 and sum(c['hostname']==connection['hostname'] for c in self.registry.connections.values())==1

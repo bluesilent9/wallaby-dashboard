@@ -26,10 +26,10 @@ def builder_catalog(session,price=None):
         address=next((a['address'] for a in entry.get('addresses',[]) if valid_address(a.get('address'))),None) if entry.get('status')=='available' else None
         own=owners.get(ident,{})
         owner_id=entry.get('owner_id') or own.get('owner_id');user=users.get(owner_id,{})
-        if kind=='bitaroo':name='Bitaroo Exchange'
+        if kind=='bitaroo':name='Bitaroo SMSF Exchange' if own.get('smsf') else 'Bitaroo Exchange'
         amount=Decimal(balance) if balance is not None else None
         aud=str(amount*Decimal(price['aud_per_btc'])) if amount is not None and price else None
-        cards[ident]={'id':ident,'kind':kind,'name':name,'owner_id':owner_id,'owner':user.get('name','Someone else / external'),'colour':user.get('colour','neutral'),'btc':str(amount) if amount is not None else None,'aud':aud,'address':address,'can_send':send,'can_receive':bool(address)}
+        cards[ident]={'id':ident,'kind':kind,'name':name,'owner_id':owner_id,'owner':user.get('name','Someone else / external'),'colour':user.get('colour','neutral'),'btc':str(amount) if amount is not None else None,'aud':aud,'address':address,'can_send':send,'smsf':bool(own.get('smsf')),'can_receive':bool(address)}
     for wallet in chain['wallets']:
         if wallet.get('extinct'):continue
         ident=resource_id('descriptor',wallet['id']);own=owners.get(ident,{})
@@ -45,7 +45,7 @@ def builder_catalog(session,price=None):
             if balance is None or Decimal(balance)==0:continue
             add(ident,'wallet',owners.get(ident,{}).get('name') or entry['source'],balance)
         elif entry['kind']=='bitaroo':
-            uid=entry.get('owner_id') or entry['source'];rows=store.get('ownership_runs',{}).get(uid,{}).get('bitaroo_data',{}).get('btc_rows',[])
+            uid=entry.get('owner_id') or entry['source'].removesuffix(':smsf');rows=store.get('ownership_runs',{}).get(uid,{}).get('bitaroo_smsf_data' if entry.get('smsf') else 'bitaroo_data',{}).get('btc_rows',[])
             last=max(enumerate(rows),key=lambda x:(x[1]['utc'],x[0]))[1] if rows else None
             add(ident,'bitaroo','Bitaroo Exchange',last['balance'] if last else None)
     from unsigned_psbt import public_change_candidate

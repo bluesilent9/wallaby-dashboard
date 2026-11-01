@@ -155,7 +155,7 @@ def run(config):
     try:
         core.configure();emit('stage',stage='loading',label='Reading your statements and wallet records')
         core.FAMILY_TAX_CONTEXTS=tax_contexts(core,paths.get('tax_context'),snapshot['users'])
-        print('Wallaby Bitcoin Dashboard · V1 Build 7 calculation engine')
+        print('Wallaby Bitcoin Dashboard · '+__import__('version').LABEL+' calculation engine')
         print('Transaction matching tolerance: '+window['label'])
         if mode=='descriptors':
             emit('stage',stage='discovering',label='Discovering descriptor wallet blockchain history')
@@ -168,8 +168,10 @@ def run(config):
         exchanges=paths['exchanges']
         combined=Path(config['result']).parent/'bitaroo_combined'
         accounts=prepare_family(core,snapshot['users'],settings,paths,combined)
+        smsf_accounts=prepare_family(core,snapshot['users'],settings,paths,str(combined)+'_smsf',smsf=True) if mode in ('inventory','balances') else {}
+        smsf_active=declarations(snapshot['users'],settings,paths,smsf=True) if smsf_accounts else {}
         active=declarations(snapshot['users'],settings,paths)
-        core.FAMILY_ACCOUNT_USERS=[u for u in snapshot['users'] if active[u['id']]]
+        core.FAMILY_ACCOUNT_USERS=[u for u in snapshot['users'] if active[u['id']]]+([dict(u,id=u['id']+':smsf',owner_id=u['id'],smsf=True) for u in snapshot['users'] if smsf_active.get(u['id'])] if mode=='inventory' else [])
         coverage=accounts[user['id']]['coverage'];reports=accounts[user['id']]['reports']
         other=core.load_other_exchange_ods(exchanges)
         if mode=='inventory':
@@ -195,6 +197,10 @@ def run(config):
             chain_path=Path(config['result']).with_name('descriptor_history.json');chain_path.write_text(json.dumps(chain))
             emit('stage',stage='addresses',label='Discovering receiving addresses from your supplied records')
             books=[build_address_book(core,wallets,accounts[u['id']]['reports'],other,u,client=chain_client) for u in snapshot['users'] if active[u['id']]]
+            for u in snapshot['users']:
+                if smsf_active.get(u['id']):
+                    extra=build_address_book(core,wallets,smsf_accounts[u['id']]['reports'],other,dict(u,id=u['id']+':smsf'),client=chain_client)
+                    books.append(extra)
             if books:
                 book=books[0]
                 for extra in books[1:]:book['entries'].extend(e for e in extra['entries'] if e['kind']=='bitaroo')
@@ -203,16 +209,19 @@ def run(config):
                 book['entries']=[e for e in book['entries'] if e['kind']!='bitaroo']
             result={'inventory':inventory_for(core,wallets,other,user),'address_book':book,'chain_path':str(chain_path),
                     'bitaroo_data_by_user':{uid:ledger_snapshot(core,a['reports']) for uid,a in accounts.items()},
-                    'coverage_by_user':{uid:a['coverage'] for uid,a in accounts.items()},'family_accounts':active,
+                    'bitaroo_smsf_data_by_user':{uid:ledger_snapshot(core,a['reports']) for uid,a in smsf_accounts.items()},
+                    'coverage_by_user':{uid:a['coverage'] for uid,a in accounts.items()},'family_accounts':dict(active,**{uid+':smsf':value for uid,value in smsf_active.items()}),
                     'historical_balances':{name:str(rows[-1].balance) if rows else '0' for name,rows in historical_rows.items()},**coverage}
             Path(config['result']).write_text(json.dumps(result));emit('complete',event_count=0,review_count=0);return 0
-        graph.seed(core,wallets,chain,snapshot,accounts,other)
+        graph.seed(core,wallets,chain,snapshot,dict(accounts,**{uid+':smsf':a for uid,a in smsf_accounts.items()}),other)
         print('Ownership loaded from config.cfg. SMSF ownership is recorded separately and excluded from personal CGT.')
         emit('stage',stage='tracing',label='Preparing all family financial years and joint payments')
         joints=collect(core,chain,chain_client,accounts,snapshot['users'],snapshot=snapshot)
         calculation=FamilyCalculation(core,chain,historical_rows,accounts,other,snapshot,settings,console,emit,rank_users)
         if mode=='balances':
             merged=balance_trace(core,calculation,joints,snapshot,user,console,emit,chain_client)
+            from smsf_balances import add_smsf_balances
+            add_smsf_balances(merged,core,chain,historical_rows,smsf_accounts,other,snapshot,settings,console,emit,rank_users,chain_client,calculation.base_ownership,calculation.allocations,calculation.policies)
             result={'balances':merged,'trace_graph':graph.export(),'trace_answers':[[*key,value] for key,value in trace_answers.items()]}
             Path(config['result']).write_text(json.dumps(result));emit('complete',event_count=0,review_count=0);return 0
         report,engines=calculation.run(joints,user)
@@ -225,7 +234,8 @@ def run(config):
         report['descriptor_scan']={'scanned_utc':chain['scanned_utc'],'timestamp_basis':chain['timestamp_basis'],'coverage':chain['coverage']}
         saved_balances=BalanceStore(config['preferences']).personal(context_key,user)
         if saved_balances:
-            report['balances']=saved_balances['balances'];report['balance_report']=saved_balances
+            personal_balances=dict(saved_balances['balances'],wallets=[w for w in saved_balances['balances']['wallets'] if not w.get('smsf')])
+            report['balances']=personal_balances;report['balance_report']=dict(saved_balances,balances=personal_balances)
         emit('stage',stage='explorer',label='Corroborating transaction links in every financial year')
         for profile in calculation.users:
             for key,annual in report['family_reports'][profile['id']].items():

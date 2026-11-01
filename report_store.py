@@ -15,11 +15,20 @@ def signature(snapshot,fingerprint):
     return hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()
 
 
+def without_funds(report):
+    for key in ('balances','balance_report'):
+        value=report.get(key)
+        if isinstance(value,dict):
+            balance=value.get('balances',value)
+            if isinstance(balance,dict) and 'wallets' in balance:balance['wallets']=[w for w in balance['wallets'] if not w.get('smsf')]
+    for annual in report.get('annual_reports',{}).values():without_funds(annual)
+    return report
+
 def personal_report(family,uid,profile=None):
     years=family.get('family_reports',{}).get(uid)
     if not years:
         if family.get('owner_id')!=uid:raise ValueError('The calculation contains no report for this profile.')
-        return {k:deepcopy(v) for k,v in family.items() if k!='family_reports'}
+        return without_funds({k:deepcopy(v) for k,v in family.items() if k!='family_reports'})
     year=str(family['selected_year']);selected=deepcopy(years[year])
     if selected.get('owner_id')!=uid or any(r.get('owner_id')!=uid for r in years.values()):raise ValueError('Invalid personal report ownership.')
     for key in ('selected_year','maximum_year','minimum_year','calculation_scope','allocation_algorithm','profiles_calculated','descriptor_scan','matching_window'):
@@ -29,7 +38,7 @@ def personal_report(family,uid,profile=None):
         for key in ('balances','balance_report','bitaroo_as_of_date'):
             if key in family:selected[key]=deepcopy(family[key])
     elif 'balances' in family:
-        balance=deepcopy(family['balances']);name=profile['name'] if profile else selected['taxpayer']
+        balance=deepcopy(family['balances']);balance['wallets']=[w for w in balance.get('wallets',[]) if not w.get('smsf')];name=profile['name'] if profile else selected['taxpayer']
         for w in balance.get('wallets',[]):
             own=w.get('owner_name')==name and not w.get('smsf')
             if w.get('kind')=='exchange':w['name']='Bitaroo Exchange' if own else 'Bitaroo Exchange · '+w.get('owner_name','Unknown')
@@ -38,7 +47,7 @@ def personal_report(family,uid,profile=None):
     for annual in selected['annual_reports'].values():
         if 'matching_window' in selected:annual['matching_window']=selected['matching_window']
         if 'balances' in selected:annual['balances']=selected['balances']
-    return selected
+    return without_funds(selected)
 
 
 class ReportStore:

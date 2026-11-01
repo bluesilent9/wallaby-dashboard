@@ -206,10 +206,12 @@ class FamilyStore:
             if not any(u['id']==user_id for u in data['users']):raise ValueError('User no longer exists.')
             data['users']=[u for u in data['users'] if u['id']!=user_id]
             data.get('bitaroo_addresses',{}).pop(user_id,None)
+            data.get('bitaroo_addresses',{}).pop(user_id+':smsf',None)
             previous=data.get('ownership_runs',{}).pop(user_id,None)
             for r in data['ownership']:
                 if r.get('owner_id')==user_id:r.update(owner_id=None,external=False,confirmed=False)
         self._discard_ownership_files(previous)
+        __import__('salary_builder').SalaryStore(self.path).discard(user_id)
         return self.snapshot()
     def _discard_ownership_files(self,meta):
         import re,shutil
@@ -247,7 +249,7 @@ class FamilyStore:
             clean['addresses']=[{'address':item['address'],'txid':item['txid'],'observed_utc':utc(item.get('observed_utc'))}]
         else:clean['reason']=str(entry.get('reason') or 'The latest supplied Bitaroo deposit could not be identified.')[:2000]
         with self.transaction() as data:
-            if not any(u['id']==user_id for u in data['users']):raise ValueError('User no longer exists.')
+            if not any(u['id']==user_id.removesuffix(':smsf') for u in data['users']):raise ValueError('User no longer exists.')
             data.setdefault('bitaroo_addresses',{})[user_id]=clean
         return self.snapshot()
     def save_ownership(self,rows,revision,inventory):
@@ -262,8 +264,8 @@ class FamilyStore:
                 from wallet_names import source_suggestions
                 if source_suggestions(src,data['users'])['smsf_detected']:row['smsf']=True
                 if src['kind']=='bitaroo':
-                    if src['source'] not in users:raise ValueError('Bitaroo account owner no longer exists.')
-                    owner=src['source'];external=False;row['smsf']=False
+                    if src.get('owner_id',src['source'].removesuffix(':smsf')) not in users:raise ValueError('Bitaroo account owner no longer exists.')
+                    owner=src.get('owner_id',src['source'].removesuffix(':smsf'));external=False;row['smsf']=bool(src.get('smsf'))
                 elif src['kind']=='exchange':row['smsf']=False
                 if type(row.get('smsf')) is not bool or type(external) is not bool or (owner not in users if not external else owner is not None):raise ValueError('Choose a user or Someone else / external for every entry.')
                 if not name or len(name)>1000 or any(ord(c)<32 for c in name):raise ValueError('Every wallet needs a name (maximum 1,000 characters).')
