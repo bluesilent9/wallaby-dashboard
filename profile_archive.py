@@ -107,6 +107,9 @@ def validate(root):
     if (root/'data/builder-workspaces.json').exists():
         from builder_workspace import validate as validate_workspaces
         validate_workspaces(json.loads((root/'data/builder-workspaces.json').read_text()),ids)
+    if (root/'data/resident-tax-tables.json').exists():
+        from resident_tax_tables import validate as validate_rates
+        validate_rates(json.loads((root/'data/resident-tax-tables.json').read_text()))
     if (root/'data/salary-builder.json').exists():
         from salary_builder import validate as validate_salary
         validate_salary(json.loads((root/'data/salary-builder.json').read_text()),ids)

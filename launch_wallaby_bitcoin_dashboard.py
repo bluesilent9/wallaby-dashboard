@@ -393,6 +393,8 @@ class Sessions:
 def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_seconds=86400,ipv6=True,ipv4=True):
     sessions=Sessions(state_dir,preferences_path,max_sessions,idle_seconds)
     configure_nodes(RegistryRPC(sessions.nodes),default=True)
+    from resident_tax_tables import ResidentTaxTables
+    tax_tables=ResidentTaxTables(sessions.preferences_path)
     fee_service=FeeService(sessions.nodes,busy=lambda:any(s.status in {'running','waiting'} for s in list(sessions.sessions.values())))
     from background_discovery import BackgroundDiscovery
     discovery=BackgroundDiscovery(sessions,busy=lambda:fee_service.activity()['active'] or any(s.status in {'running','waiting'} or s.active_operations for s in list(sessions.sessions.values())))
@@ -545,11 +547,14 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         if ident and not session.access()['templates_ready']:raise ValueError('Complete Ownership and save all assignments before loading a template.')
                         return self.json(templates.read(ident) if ident else {'templates':templates.listing()})
                     except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
-                if path in ('/api/salary','/api/salary/catalog'):
+                if path in ('/api/salary','/api/salary/context','/api/salary/tax-tables'):
                     if not session.user() or not session.access()['balances_ready']:return self.json({'error':'Verify Balances in Ownership before using Salary Builder.'},400)
                     if path=='/api/salary':return self.json(__import__('salary_builder').SalaryStore(session.preferences_path).snapshot(session.user_id))
-                    balance=session.family().get('balance_report') or {};quote=balance.get('balances',{}).get('price_aud_per_btc')
-                    return self.json(builder_catalog(session,{'aud_per_btc':quote} if quote else None))
+                    if path=='/api/salary/tax-tables':return self.json(tax_tables.snapshot(refresh=parse_qs(urlsplit(self.path).query).get('refresh',[''])[0]=='1'))
+                    from salary_planning import context
+                    result=context(FamilyStore(session.preferences_path).snapshot(),session.family().get('balance_report'),session.user(),session.settings)
+                    result['tax_tables']=tax_tables.snapshot(refresh=True)
+                    return self.json(result)
                 if path=='/api/builder':
                     if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
                     if not session.access()['templates_ready']:return self.json({'error':'Complete Ownership and save all assignments first.'},400)
@@ -628,7 +633,12 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 data=json.loads(body or b'{}',parse_float=Decimal) if path=='/api/nodes/rpc' else json.loads(body or b'{}')
                 store=FamilyStore(session.preferences_path)
                 if path.startswith('/api/salary/'):
+                    if data.get('user_id')!=session.user_id:raise ValueError('Salary profile changed. Reopen Salary Builder before editing.')
                     if not session.user() or not session.access()['balances_ready']:raise ValueError('Verify Balances in Ownership before using Salary Builder.')
+                    if path=='/api/salary/calculate':
+                        from salary_planning import context,evaluate
+                        ctx=context(store.snapshot(),session.family().get('balance_report'),session.user(),session.settings);ctx['tax_tables']=tax_tables.snapshot()
+                        return self.json(evaluate(ctx,data.get('inputs',{})))
                     return self.json(__import__('salary_builder').SalaryStore(session.preferences_path).change(session.user_id,path.rsplit('/',1)[1],data))
                 if path.startswith('/api/builders/'):
                     if not session.user():raise ValueError('Select a family user first.')

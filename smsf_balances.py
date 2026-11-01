@@ -5,7 +5,7 @@ from family_tax import FamilyCalculation
 from joint_allocations import collect
 from balance_trace import run
 
-BASIS_FIELDS=('cost_basis_aud','unrealised_gain_aud','state','cost_basis_note','sources')
+BASIS_FIELDS=('cost_basis_aud','unrealised_gain_aud','state','cost_basis_note','sources','planning_lots')
 def entity_snapshot(snapshot,accounts):
     """Use separate stable entity IDs so fund facts cannot answer personal questions."""
     owners={r['owner_id'] for r in snapshot['ownership'] if r.get('confirmed') and r.get('smsf') and not r.get('external')}
@@ -49,4 +49,5 @@ def add_smsf_balances(merged,core,chain,historical,accounts,other,snapshot,setti
     for entry in fund_result['wallets']:
         if entry.get('kind')!='exchange':continue
         owner=entry.get('owner_name','').removesuffix(' SMSF')
-        merged['wallets'].append(dict(entry,name='Bitaroo SMSF Exchange · '+owner,owner_name=owner,smsf=True,ownership='external'))
+        fund_uid=entry.get('owner_id','');uid=fund_uid.removesuffix(':smsf')
+        merged['wallets'].append(dict(entry,resource_id=resource_id('bitaroo',fund_uid),owner_id=uid,name='Bitaroo SMSF Exchange · '+owner,owner_name=owner,smsf=True,ownership='external'))

@@ -2,7 +2,7 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 23 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev23_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 24 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev24_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
@@ -18,9 +18,19 @@ Vault monitoring uses public vault records and connected Core nodes. Reports dep
 
 ## This development update
 
+Build 24 replaces the Salary Builder diagram with a saved retirement-funding and payday simulator. Choose owned funding accounts by their records, combine long-term private/SMSF pools, add one-year top-ups, set an age horizon, and compare personal/partner net spending targets, tax reserves and an optional asset allocation. Daily, weekday-based weekly, anchored fortnightly and monthly schedules use the actual upcoming financial year's dates. Source identities never depend on wallet or user names.
+
+Resident income-tax brackets are downloaded from the ATO whenever Salary Builder is opened (concurrent checks are coalesced). Enacted future-year tables are read from the Income Tax Rates Act where needed. Validated tables and the plan are included in profile backups; changed published tables replace the cache. A failed lookup retains valid cached data with a visible status, and no matching table means no invented tax result. There are no bundled resident bracket rates or thresholds.
+
+The simulator reuses the traced parcel and CGT allocation engine, draws private funds before accessible SMSF funds, reports bridge shortfalls, and separates recurring capacity from one-year supplements. Tax is a planning estimate for spending/gifting the allocation, not for moving Bitcoin between your own wallets. Prices, future CPI/transition valuations, Medicare buffer, SMSF release conditions and fund phase are explicit assumptions. It is not an employment payroll calculator or an SMSF tax return.
+
+**After upgrading, run Verify Balances again** so Salary Builder can use the retained acquisition parcels. Existing balances without those parcels show gross funding but cannot produce a complete tax/net estimate. Browser automation was unavailable for this build; interface tests use the real component with simulated DOM/API responses, alongside live isolated HTTP tests.
+
+### Earlier Build 23
+
 Build 23 separates personal and SMSF Bitaroo uploads for every profile. SMSF accounts are skipped by default until enabled. Balance Trace now reconstructs fund acquisition costs and unrealised gains for Wallets using the shared parcel engine, with fund facts isolated from personal facts. SMSF balances remain outside personal CGT reports; this build does not create an SMSF tax report.
 
-Salary Builder is a saved visual calculator under Calculations. It uses the shared wallet/exchange diagram, amounts and fee-rate contributions, but never contacts Agents to create, sign or broadcast a transaction. Fee rates have no Bitcoin cost until a transaction size is defined.
+Build 23 introduced a saved visual Salary calculator. Build 24 replaces that prototype with the funding simulator described above; it still never asks Agents to create, sign or broadcast transactions.
 
 Profiles use a single date calendar, with Australian-format birth dates shown beside existing users. Nodes is under System. Resource icons have graphical explanations; multisig uses paired physical keys. The watch-only badge tracks connected public/private replicas without invalidating unchanged transaction history. Displayed Mempool sats/vB rates round half up; conversions and copy buttons retain their exact source values.
 
@@ -101,9 +111,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev23`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev24`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev23_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev24_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 

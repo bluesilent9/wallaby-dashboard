@@ -1,3 +1,15 @@
+# V1 Build 24 validation
+
+The Salary Builder uses invented profile/account fixtures, actual official-source parser fixtures and the shared CGT engine. Coverage includes leap years, 53 weekly / 27 fortnightly paydays, monthly day clamping, combined personal/SMSF pools, inaccessible fund bridges, annual top-ups, birth-date horizons, user-ID ownership, cent reconciliation, shared/independent partner targets, asset reserves and recurring salary equivalents.
+
+Tax tests cover ATO and statutory tables, changed source rates without application changes, malformed cumulative formulas, wrong-year rejection, failed refresh/cache retention, the official offset parser and profile backup/restore. HTTP tests exercise user-scoped start/save/calculate and reject stale cross-profile saves. Balance integration verifies retained personal/fund acquisition parcels. No personal source records are packaged or published.
+
+The real Salary interface component is exercised with DOM/API simulations, including schedule controls, source selection, delayed saves/calculations and preserving active input nodes. Browser control is unavailable in this session: no browser-verified screenshot or visual-QA claim is made. The supplied HTML preview renders the actual component with invented read-only data.
+
+272 Python regression tests and 21 JavaScript interface suites pass. Debian checks are recorded in the Build 24 review output. Packaging checks include source parity, excluded runtime inputs, IPv4/IPv6 web and Agent-health startup, and systemd enable/start-at-install instructions. The DEB is not installed here. Actual family-node deployment and visual confirmation remain user testing. No Agent code, real wallets, transactions, SSH configuration or installed service is changed.
+
+## Earlier validation
+
 # V1 Development Build 21 validation
 
 230 Python regression tests passed with the independent Agent Build 20 source, plus a final focused rerun of 12 fee/paging/diagnostic cases after small logging changes. All 17 JavaScript test programs and asset syntax checks passed. The real block renderer test includes live page-progress text.

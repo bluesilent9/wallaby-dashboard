@@ -1,15 +1,15 @@
-"""Saved visual salary calculations. No signing, Agent requests or transactions."""
+"""Saved per-profile salary planning inputs. No signing, Agent requests or transactions."""
 import json,os
 from pathlib import Path
 from storage import data_directory,storage_lock
-from transaction_templates import clean_diagram
+from salary_planning import clean_inputs
 from preferences import FamilyStore
 
 def validate(value,users):
     if not isinstance(value,dict) or set(value)-set(users):raise ValueError('Invalid Salary Builder profile.')
     for row in value.values():
         if not isinstance(row,dict) or type(row.get('started')) is not bool or type(row.get('revision')) is not int or row['revision']<0:raise ValueError('Invalid Salary Builder state.')
-        if row['started']:clean_diagram(row.get('diagram'))
+        if row['started']:clean_inputs(row.get('inputs',{}))
     return value
 
 class SalaryStore:
@@ -29,11 +29,11 @@ class SalaryStore:
         if not FamilyStore(self.config).user(user):raise ValueError('Select a family user first.')
         with storage_lock(self.config):
             data=self.read();old=data.get(user,{'started':False,'revision':0})
-            if action=='start':row=old if old['started'] else {'started':True,'revision':old['revision']+1,'diagram':{'nodes':[{'id':'network-fee','x':400,'y':330}],'edges':[]}}
+            if action=='start':row=old if old['started'] else {'started':True,'revision':old['revision']+1,'inputs':clean_inputs({})}
             elif action=='reset':row={'started':False,'revision':old['revision']+1}
             elif action=='save':
-                if not old['started'] or value.get('revision')!=old['revision']:raise ValueError('Salary diagram changed in another browser. Reopen it before saving.')
-                row={'started':True,'revision':old['revision']+1,'diagram':clean_diagram(value.get('diagram'))}
+                if not old['started'] or value.get('revision')!=old['revision']:raise ValueError('Salary plan changed in another browser. Reopen it before saving.')
+                row={'started':True,'revision':old['revision']+1,'inputs':clean_inputs(value.get('inputs'))}
             else:raise ValueError('Unknown salary calculation action.')
             data[user]=row;raw=json.dumps(data)
             if len(raw)>16*1024*1024:raise ValueError('Salary diagram storage is full.')
