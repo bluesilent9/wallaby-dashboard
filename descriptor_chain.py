@@ -29,8 +29,8 @@ def scan(catalog,client,progress=print):
         if info.get('chain')!='main' or info.get('initialblockdownload'):raise ValueError('Wait for a fully synchronised Bitcoin mainnet node before loading wallet history.')
     for wallet in catalog['wallets']:
         uid=wallet['id'];history=wallet.get('node_history')
-        if history is None:raise ValueError('Load Node Wallets again to collect current Core wallet history for '+wallet['name'])
-        wallets.append({'id':uid,'name':wallet['name'],'records':[],'pending_btc':'0','receiving_address':wallet.get('receiving_address'),'has_vault':bool(wallet.get('has_vault')),'vault_evidence':wallet.get('vault_evidence',[]),'watch_only':bool(wallet.get('watch_only')),'extinct':bool(wallet.get('extinct')),'address_labels':wallet.get('address_labels',{})})
+        if history is None:raise ValueError('Wait for automatic discovery to collect current Core wallet history for '+wallet['name'])
+        wallets.append({'id':uid,'name':wallet['name'],'records':[],'pending_btc':'0','receiving_address':wallet.get('receiving_address'),'has_vault':bool(wallet.get('has_vault')),'multisig':__import__('policy_accounts').multisig_summary(wallet['raw']),'vault_evidence':wallet.get('vault_evidence',[]),'watch_only':bool(wallet.get('watch_only')),'extinct':bool(wallet.get('extinct')),'address_labels':wallet.get('address_labels',{})})
         # Register fixed watched scripts even when their receipt is absent: this
         # makes missing owned-input history an error rather than an external gift.
         for row in wallet['raw']['descriptors']:

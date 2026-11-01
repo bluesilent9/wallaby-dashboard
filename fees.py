@@ -123,7 +123,7 @@ class FeeService:
                         with getattr(inner.registry,'lock',nullcontext()):tokens=[t for t,c in inner.registry.connections.items() if c['node_id']==node_id]
                         if len(tokens)!=1 or capture_token and tokens[0]!=capture_token[0]:raise NodeDataUnavailable('Agent connection changed during mempool capture. Incomplete pages were discarded; refresh to capture a new snapshot.')
                         if not capture_token:capture_token.append(tokens[0])
-                    began=time.monotonic();state=inner.registry.rpc.call(node_id,method,params or [],wallet,timeout_seconds=service.RPC_SECONDS,consume=True,priority=100);elapsed=round((time.monotonic()-began)*1000)
+                    began=time.monotonic();state=inner.registry.rpc.call(node_id,method,params or [],wallet,timeout_seconds=service.RPC_SECONDS,consume=True,priority=10);elapsed=round((time.monotonic()-began)*1000)
                     service.last_rpc={'id':state.get('id','unavailable'),'elapsed_ms':elapsed,'offset':params.get('offset',0) if method==METHOD and isinstance(params,dict) else 0}
                     if state['state']!='succeeded':
                         error=state.get('error') or {};service.log('RPC failed · node='+node['hostname']+' · request='+state.get('id','unavailable')+' · method='+method+(' · offset='+str(service.last_rpc['offset']) if method==METHOD else '')+' · elapsed_ms='+str(elapsed)+' · '+error_summary(error))
@@ -131,7 +131,7 @@ class FeeService:
                     if elapsed>=2000:service.log('Slow RPC · node='+node['hostname']+' · request='+state.get('id','unavailable')+' · method='+method+' · elapsed_ms='+str(elapsed))
                     return state['result']
             self.log('Selected node='+node['hostname']+' · Agent='+str((node.get('agent') or {}).get('version') or 'not reported')+' · RPC deadline='+str(self.RPC_SECONDS)+'s · priority=background.')
-            chain=NodeChain(SelectedRPC(self.registry,priority=100),{'wallets':[]})
+            chain=NodeChain(SelectedRPC(self.registry,priority=10),{'wallets':[]})
             info=self.call(chain,'getblockchaininfo')
             if info.get('chain')!='main' or info.get('initialblockdownload') or info.get('blocks',0)<info.get('headers',0):raise FeeUnavailable('Wait for the connected mainnet node to synchronise.')
             self.log('Mainnet tip verified at height '+str(info['blocks'])+'. Reading mempool minimum and four confirmation targets.')
@@ -216,7 +216,7 @@ class FeeService:
     def track(self,txid):
         if not re.fullmatch('[0-9a-fA-F]{64}',str(txid)):raise ValueError('Enter a 64-character Bitcoin transaction ID.')
         if self.busy():raise FeeUnavailable('Tracking is waiting for the node to finish higher-priority work. Try again when that process completes.')
-        chain=NodeChain(RegistryRPC(self.registry,priority=100),{'wallets':[]});chain.raw(txid.lower());meta=chain.metadata[txid.lower()]
+        chain=NodeChain(RegistryRPC(self.registry,priority=10),{'wallets':[]});chain.raw(txid.lower());meta=chain.metadata[txid.lower()]
         if meta.get('blockhash') and int(meta.get('confirmations',1))>0:
             header=chain.header(blockhash=meta['blockhash'])
             return {'txid':txid.lower(),'status':'confirmed','block_height':header['height'],'block_hash':header['hash']}

@@ -17,6 +17,19 @@ function blockStyle(block,index,width=125){
  const free=100-(Number(block.weight||0)/4000000)*100;
  return {left:offset*index+'px',background:`linear-gradient(var(--secondary) ${Math.max(0,free)}%,var(--mainnet-alt) ${Math.max(0,free)}%,var(--primary) 100%)`};
 }
+function volumeGeometry(weight){
+ const fraction=weight===null||weight===undefined?null:Math.max(0,Math.min(1,Number(weight)/4000000));
+ const y=164-120*(fraction||0),back=y-24;
+ return {fraction,front:`28,${y} 148,${y} 148,164 28,164`,side:`8,${back} 28,${y} 28,164 8,140`,top:`8,${back} 128,${back} 148,${y} 28,${y}`};
+}
+function volume(el,weight){
+ const make=(tag,attrs)=>{if(typeof document==='undefined')return el(tag,attrs);const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))n.setAttribute(k,v);return n;};
+ const g=volumeGeometry(weight),svg=make('svg',{viewBox:'0 0 160 174',class:'block-volume','aria-hidden':'true'});
+ const poly=(points,cls)=>make('polygon',{points,class:cls});
+ svg.append(poly('8,20 128,20 148,44 28,44','cube-shell'),poly('8,20 28,44 28,164 8,140','cube-shell'),poly('28,44 148,44 148,164 28,164','cube-shell'));
+ if(g.fraction>0){const fill=make('g',{class:'cube-fill'});fill.append(poly(g.side,'cube-fill-side'),poly(g.front,'cube-fill-front'),poly(g.top,'cube-fill-top'));svg.append(fill);}
+ svg.append(make('path',{d:'M8 20H128L148 44V164H28L8 140V20L28 44H148M28 44V164',class:'cube-outline'}));return svg;
+}
 function markerIndex(blocks,height){return blocks.findIndex(b=>b.height===height);}
 function view({el,button,data,state,changed}){
  const section=el('section',{class:'node-block-panel','aria-label':'Pending and mined blocks'}),pending=data.projected_blocks||[],mined=data.recent_blocks||[],count=3,start=Math.min(state.offset,Math.max(0,mined.length-count));
@@ -24,7 +37,8 @@ function view({el,button,data,state,changed}){
  const content=el('div',{class:'node-block-track'}),future=el('div',{class:'node-block-half pending-blocks'}),past=el('div',{class:'node-block-half mined-blocks'});
  const create=(b,i,isPending)=>{
   const style=blockStyle(b,i),rate=b.median_rate,known=state.tracked,marked=known&&(isPending?known.status==='mempool'&&i===0:known.status==='confirmed'&&known.block_height===b.height);
-  const cube=el('div',{class:'bitcoin-block '+(isPending?'projected-block':'mined-block'),style:'background:'+style.background,'data-block-height':isPending?'pending-'+i:b.height,tabindex:0},el('strong',{class:'node-block-number'},isPending?'Next '+(i+1):Number(b.height).toLocaleString('en-AU')),el('span',{class:'node-block-main'},state.mode==='size'?(b.vsize?Math.round(b.vsize/1000)+' kvB':b.size?Math.round(b.size/1000)+' kB':'Size unavailable'):isPending?el('span',{class:'node-block-rate'},displayRate(rate)):new Date(b.timestamp*1000).toLocaleTimeString('en-AU',{timeZone:'UTC',hour:'2-digit',minute:'2-digit',hour12:false})+' UTC'),isPending&&state.mode!=='size'?el('span',{class:'node-block-rate-unit'},'sats/vB'):null,el('span',{class:'transaction-count'},b.tx_count!==null&&b.tx_count!==undefined?Number(b.tx_count).toLocaleString('en-AU')+' transactions':''),el('span',{class:'time-difference'},isPending?'~'+b.estimated_minutes+' minutes':new Date(b.timestamp*1000).toLocaleDateString('en-AU',{timeZone:'UTC'})));
+  const cube=el('div',{class:'bitcoin-block '+(isPending?'projected-block':'mined-block'),'data-block-height':isPending?'pending-'+i:b.height,tabindex:0},el('strong',{class:'node-block-number'},isPending?'Next '+(i+1):Number(b.height).toLocaleString('en-AU')),el('span',{class:'node-block-main'},state.mode==='size'?(b.vsize?Math.round(b.vsize/1000)+' kvB':b.size?Math.round(b.size/1000)+' kB':'Size unavailable'):isPending?el('span',{class:'node-block-rate'},displayRate(rate)):new Date(b.timestamp*1000).toLocaleTimeString('en-AU',{timeZone:'UTC',hour:'2-digit',minute:'2-digit',hour12:false})+' UTC'),isPending&&state.mode!=='size'?el('span',{class:'node-block-rate-unit'},'sats/vB'):null,el('span',{class:'transaction-count'},b.tx_count!==null&&b.tx_count!==undefined?Number(b.tx_count).toLocaleString('en-AU')+' transactions':''),el('span',{class:'time-difference'},isPending?'~'+b.estimated_minutes+' minutes':new Date(b.timestamp*1000).toLocaleDateString('en-AU',{timeZone:'UTC'})));
+  cube.append(volume(el,b.weight));
   if(marked)cube.append(el('span',{class:'node-track-marker',title:known.txid,'aria-label':'Tracked transaction'},'▼'));
   cube.title=isPending?'Estimated rate: '+rate+' sats/vB. Projected from ancestor packages in the local mempool; confirmation timing is uncertain.':b.hash;
   return cube;
@@ -43,5 +57,5 @@ function view({el,button,data,state,changed}){
  if(data.projection_error&&pending.length)section.append(el('p',{class:'subtle'},data.projection_error));
  return section;
 }
-const api={view,blockStyle,markerIndex,displayRate};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.WallabyNodeBlocks=api;
+const api={view,blockStyle,markerIndex,displayRate,volumeGeometry};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.WallabyNodeBlocks=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

@@ -61,7 +61,7 @@ def shared_history(config, catalog, discover, *, force=False, now=None, require_
                     snapshot = json.loads(payload)
                     if valid(snapshot, fingerprint, check_now) or allow_stale and snapshot.get("catalog_fingerprint")==fingerprint and all(k in snapshot for k in ("wallets","transactions","coverage","timestamp_basis","source","scanned_utc")):return snapshot, True
             except (OSError, ValueError, KeyError, TypeError):pass
-        if require_existing:raise ValueError('Run Load Node Wallets in Ownership and complete its blockchain tracing first.')
+        if require_existing:raise ValueError('Wait for automatic node wallet discovery and its history check to complete.')
         snapshot = discover()
         # Validate against completion time, since discovery can take several minutes.
         if not valid(snapshot, fingerprint, max(check_now, datetime.now(timezone.utc))):
@@ -89,3 +89,19 @@ def history_ready(config,catalog):
         value=json.loads(payload)
         return value.get('catalog_fingerprint')==fingerprint and all(k in value for k in ('wallets','transactions','coverage','timestamp_basis','source','scanned_utc'))
     except (OSError,ValueError,KeyError,TypeError):return False
+
+def publish_history(config,catalog,snapshot):
+    """Commit an already completed scan; no network work under the publish lock."""
+    fingerprint=DescriptorStore.fingerprint(catalog)
+    if not valid(snapshot,fingerprint,datetime.now(timezone.utc)):raise ValueError('Incomplete descriptor history was not published.')
+    root=data_directory(config)/'descriptor-history';root.mkdir(parents=True,exist_ok=True,mode=0o700)
+    payload=json.dumps(snapshot,ensure_ascii=True,separators=(',',':'))
+    envelope={'sha256':hashlib.sha256(payload.encode()).hexdigest(),'payload':payload}
+    temp=None
+    with exclusive(root/'scan.lock'):
+        try:
+            with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',dir=root,prefix='.scan-',delete=False) as f:
+                temp=Path(f.name);json.dump(envelope,f);f.flush();os.fsync(f.fileno())
+            os.replace(temp,root/(fingerprint+'.json'))
+        finally:
+            if temp:temp.unlink(missing_ok=True)

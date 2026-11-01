@@ -35,6 +35,7 @@ class ProfileFees(unittest.TestCase):
      with patch('launch_wallaby_bitcoin_dashboard.ProfileArchive.load'),patch('launch_wallaby_bitcoin_dashboard.ProfileArchive.replace'):
       out=request('/api/profile/'+endpoint,'POST',b'{}',session.token)
      self.assertTrue(out['reset']);self.assertTrue(original.closed);self.assertIsNot(made[-1],original);self.assertIsNone(made[-1].data);self.assertFalse(made[-1].closed)
+     self.assertFalse(sessions.discovery.stop.is_set());self.assertTrue(sessions.discovery.thread.is_alive())
      original=ready()
     self.assertEqual(len(made),3)
    finally:made[-1].close();sessions.close_all();server.shutdown();server.server_close();thread.join(3)

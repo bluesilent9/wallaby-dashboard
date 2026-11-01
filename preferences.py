@@ -182,8 +182,9 @@ class FamilyStore:
     @staticmethod
     def revision(data,revision):
         if type(revision) is not int or revision!=data['revision']:raise ValueError('Configuration changed in another browser. Refresh this page before saving.')
-    def save_user(self,name,colour,user_id=None,revision=None,gender=None):
+    def save_user(self,name,colour,user_id=None,revision=None,gender=None,date_of_birth=None):
         name=str(name).strip()
+        if date_of_birth is not None:date_of_birth=validate_birth_date(date_of_birth)
         if not name or len(name)>100 or any(ord(c)<32 for c in name):raise ValueError('Enter a user name of 1–100 characters without control characters.')
         if colour not in COLOURS:raise ValueError('Choose one of the supplied profile colours.')
         if gender is not None and gender not in ('male','female'):raise ValueError('Choose Male or Female.')
@@ -194,9 +195,10 @@ class FamilyStore:
                 user=next((u for u in data['users'] if u['id']==user_id),None)
                 if not user:raise ValueError('User no longer exists.')
                 user.update(name=name,colour=colour,gender=gender or user.get("gender","male"))
+                if date_of_birth is not None:user["date_of_birth"]=date_of_birth
             else:
                 if len(data['users'])>=128:raise ValueError('Maximum 128 family users.')
-                data['users'].append({'id':uuid.uuid4().hex,'name':name,'colour':colour,'gender':gender or 'male'})
+                data['users'].append({'id':uuid.uuid4().hex,'name':name,'colour':colour,'gender':gender or 'male',**({'date_of_birth':date_of_birth} if date_of_birth is not None else {})})
         return self.snapshot()
     def delete_user(self,user_id,revision):
         with self.transaction() as data:
@@ -282,3 +284,12 @@ def resolve_ownership(snapshot,inventory):
     names=[result[i['id']]['name'].casefold() for i in inventory if i['kind'] in ('descriptor','wallet','exchange')]
     if len(set(names))!=len(names) or 'bitaroo' in names:raise MissingOwnership(MISSING_OWNERSHIP)
     return result
+
+
+def validate_birth_date(value):
+    from datetime import datetime,date
+    try:
+        parsed=datetime.strptime(str(value),'%d/%m/%Y').date()
+        if parsed.strftime('%d/%m/%Y')!=value or parsed>date.today():raise ValueError()
+    except (ValueError,TypeError):raise ValueError('Enter a valid date of birth in DD/MM/YYYY format, not in the future.') from None
+    return value

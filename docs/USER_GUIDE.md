@@ -32,17 +32,17 @@ The Bitcoin Core CSV and historical-wallet ODS upload workflows have been replac
 
 ## Shared tracing behaviour
 
-- Ownership Stage 1 loads wallet names, complete public descriptors and legacy received-output metadata from every connected node. No manual descriptor/history paste workflow is shown.
+- Automatic idle-priority discovery loads wallet names, complete public descriptors and legacy received-output metadata from every connected node. No manual descriptor/history paste workflow is shown.
 - Wallet replicas are grouped by overlapping public locking descriptors, ignoring key-origin annotations and checksum spelling. Their descriptor ranges/cursors and received outputs are merged. Unrelated equal names are disambiguated for display, not combined.
 - Fixed-address `addr()` descriptors in private-key-disabled Core wallets are grouped by address label. The Core parent wallet name is retained for RPC requests; the group label identifies the historical wallet in Ownership. No historical-wallet ODS is requested.
-- Ownership reserves three left-aligned icon slots: funded vault evidence, extinct fossil and wallet, or the exchange symbol as applicable. A vault descriptor alone is insufficient: positive received-output history must establish funding of its locked address. Historical funding remains evidence after spending or expiry. The Vaults page remains a placeholder.
+- Ownership and wallet cards reserve four left-aligned icon slots for vault, extinct, wallet/exchange, multisig, watch-only and SMSF traits. The redundant base wallet symbol is omitted if needed to fit four traits. A vault descriptor alone is insufficient: positive received-output history must establish funding of its locked address. Historical funding remains evidence after spending or expiry. The Vaults page remains a placeholder.
 - Requests to different nodes run concurrently. Additional address ownership reads rotate among replicas, with read-only fallback. Per-node concurrency is bounded and consumed internal RPC results are released to avoid filling the broker.
 - All blockchain data is read through connected Agents. No public blockchain indexer or explorer API is queried. Price and FX feeds remain external. If indexation is required, supply the verified CPI file; CPI is no longer fetched externally.
 
 
 ## Retained V154 behaviour
 
-Terminal Activity is available only while a process is running or waiting for an answer, and is disabled in the sidebar while idle. Administration → Logs downloads the browser workspace's UTF-8 `Wallaby_Dashboard.log`, including earlier jobs/profile switches. Fee Estimates refreshes on every visit, then every two minutes. Vaults remains the Ownership-gated **No Vaults Detected** placeholder. Remembered node identities survive profile save/load; live connections and RPC requests/results do not. Duplicate hostname/MAC notices remain red, non-dismissible, and clear when the conflict ends.
+Terminal Activity is available only while a process is running or waiting for an answer, and is disabled in the sidebar while idle. Administration → Logs downloads the browser workspace's UTF-8 `Wallaby_Dashboard.log`, including earlier jobs/profile switches. Mempool refreshes on every visit, then every two minutes. Vaults remains the Ownership-gated **No Vaults Detected** placeholder. Remembered node identities survive profile save/load; live connections and RPC requests/results do not. Duplicate hostname/MAC notices remain red, non-dismissible, and clear when the conflict ends.
 
 ### Dashboard profile archives
 
@@ -109,7 +109,7 @@ A pruned node can still return transactions retained by its loaded wallets, even
 
 Historical address monitoring uses the loaded Core watch-only wallet's reconstructed history. Import all relevant addresses and complete the rescan; the Dashboard cannot discover unknown change addresses or recover arbitrary pruned blocks.
 
-## Fee Estimates
+## Mempool
 
 Fee and block observations use connected Bitcoin Core nodes via Agent, at the lowest broker priority. Ownership, Balance Trace and CGT work defer new fee requests. An RPC already executing cannot be interrupted; subsequent requests wait. While viewing the page, lightweight browser polling collects server snapshots; node refreshes occur at most every five seconds while idle. Deferred or stale results are labelled. BTC/AUD valuations use an external Kraken market quote.
 
@@ -174,7 +174,7 @@ Wallet Builder is available after login. Choose single signature, multisig, vaul
 
 Wallets hover details display the multisig threshold and distinct matching signing keys visible on connected Agents. Watch-only copies and duplicate copies of the same key are excluded; visibility does not guarantee a key can be unlocked or signing authorised.
 
-V1 Build 12 uses the non-dismissible shared process-age notices described above. Fee Estimates and Administration do not show those banners.
+V1 Build 12 uses the non-dismissible shared process-age notices described above. Mempool and Administration do not show those banners.
 
 
 ## Cancelling construction
@@ -240,7 +240,7 @@ For errors or uncertain results, inspect the selected Agent and Core before expl
 
 ## Build 14: fees, signer cards and retained diagnostics
 
-Open Fee Estimates to request a current refresh. The four priorities appear before optional block views finish. Rates refresh every two minutes while the page stays open; opening it again or choosing Refresh estimates requests a refresh immediately, with a five-second shared debounce. A failed/disconnected node produces an explanation rather than an endless estimation message. Recent-block details and the AUD quote can fail independently. Terminal Activity shows the current fee phase while it is running.
+Open Mempool to request a current refresh. The four priorities appear before optional block views finish. Rates refresh every two minutes while the page stays open; opening it again or choosing Refresh estimates requests a refresh immediately, with a five-second shared debounce. A failed/disconnected node produces an explanation rather than an endless estimation message. Recent-block details and the AUD quote can fail independently. Terminal Activity shows the current fee phase while it is running.
 
 Wallet Builder uses fixed-width, individually coloured signer cards; an incomplete final row keeps the same card size.
 
@@ -266,7 +266,7 @@ Discover connected Agents shows progress directly beside the button. Wait for th
 
 ## Build 17 navigation and setup
 
-Build 17 repairs Fee Estimates after clearing or loading a profile: the old background service is closed and replaced with a fresh service, so node-backed estimates can refresh without restarting Dashboard. Deferred updates are polled promptly; an empty mempool and an unavailable projection have explicit messages instead of an indefinite waiting label.
+Build 17 repairs Mempool after clearing or loading a profile: the old background service is closed and replaced with a fresh service, so node-backed estimates can refresh without restarting Dashboard. Deferred updates are polled promptly; an empty mempool and an unavailable projection have explicit messages instead of an indefinite waiting label.
 
 There is no separate Dashboard page. Use the sidebar to open tools; login, transaction completion/cancellation and finished activity return to Ownership. Historical ownership rows display **Extinct Wallet** as their source. The SMSF icon depicts a person leaning on a cane.
 
@@ -307,3 +307,14 @@ Use Cancel Wallet Creation or the transaction Cancel button, then confirm Yes. I
 Use Agent V2 Build 20 with Dashboard Build 21. Fee rates appear first while the Dashboard collects the local mempool in pages; the block view shows the received and expected transaction counts. Pending blocks appear only after the complete snapshot is checked. If a page fails or expires, the graph is discarded while rates and mined blocks remain available. Refresh to try a new capture, or wait for the two-minute refresh.
 
 Administration → Logs exports UTF-8 diagnostics with the Dashboard version, UTC export time, connected Agent versions and correlated refresh/RPC/page measurements. Byte counts described as observed_bytes_at_least are lower bounds. Logs retain at most seven UTC days and 1 MiB per day; no mempool payload or credentials are included.
+
+
+## Build 21 automatic discovery and profiles
+
+Connect a fully synchronised Agent/node with its Core wallets loaded. Wallaby automatically discovers public wallets while foreground work is idle; it never navigates to Terminal Activity on its own. Ownership stays disabled on a fresh profile until complete wallet history is available. Terminal Activity exposes live background progress while a check runs. Failed or missing history is logged and retried, never accepted as an empty balance.
+
+Ownership Stage 1 of 2 loads exchange records. Stage 2 of 2 confirms ownership and verifies balances. Later discoveries retain the uploaded records and existing assignments, adding unassigned rows for new wallets. The dismissible discovery notice links to Ownership; viewing Ownership marks only discovery notices read.
+
+Profiles require a name and date of birth. Enter DD/MM/YYYY or choose the date with the adjacent calendar. Birth dates remain in the Dashboard profile and its archive; they are not used in tax calculations at this stage. Existing imported profiles without a birth date need one when edited.
+
+Calculations → Mempool shows fee estimates, projected pending blocks, recent mined blocks and transaction tracking. Full cube outlines remain visible at every fill level. The coloured internal top surface meets both sides at the same fill height. Pending blocks pulse red; reduced-motion preferences disable the animation.

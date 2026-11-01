@@ -13,15 +13,15 @@ from labelled_wallets import expand
 REQUIRED={'listwallets','listwalletdir','getwalletinfo','listdescriptors','listsinceblock','getaddressinfo'}
 
 class NodeWalletLoader:
-    def __init__(self,registry,progress=print,cancel=None):
+    def __init__(self,registry,progress=print,cancel=None,*,priority=0,pause=lambda:None,nodes=None,tolerate_errors=False):
         self.registry=registry;self.progress=progress;self.cancel=cancel or threading.Event()
-        self.limits={};self.cursor={};self.lock=threading.Lock()
+        self.limits={};self.cursor={};self.lock=threading.Lock();self.priority=priority;self.pause=pause;self.nodes=nodes;self.tolerate_errors=tolerate_errors
     def check(self):
         if self.cancel.is_set():raise ValueError('Node wallet discovery cancelled.')
     def rpc(self,node,method,params=None,wallet=None):
-        self.check()
+        self.pause();self.check()
         with self.limits[node['id']]:
-            self.check();state=self.registry.rpc.call(node['id'],method,params,wallet,timeout_seconds=120,consume=True,cancel=self.cancel)
+            self.check();state=self.registry.rpc.call(node['id'],method,params,wallet,timeout_seconds=120,consume=True,cancel=self.cancel,priority=self.priority)
         self.check()
         if state['state']!='succeeded':
             error=state.get('error') or {}
@@ -178,13 +178,18 @@ class NodeWalletLoader:
         wallet['vault_evidence']=evidence;wallet['has_vault']=bool(evidence)
         return wallet
     def collect(self):
-        nodes=[n for n in self.registry.snapshot()['nodes'] if n['connected']]
+        nodes=self.nodes if self.nodes is not None else [n for n in self.registry.snapshot()['nodes'] if n['connected']]
         if not nodes:raise ValueError('Connect at least one Wallaby Agent before loading node wallets.')
         for node in nodes:
             missing=REQUIRED-set(node.get('rpc_methods',[]))
             if not node.get('rpc_ready') or missing:raise ValueError(node['hostname']+': resolve node conflicts or enable required Agent RPC methods: '+', '.join(sorted(missing)))
             self.limits[node['id']]=threading.BoundedSemaphore(4)
-        replicas=[r for batch in self.parallel([r for batch in self.parallel(nodes,self.discover_node) for r in batch],self.export) for r in batch]
+        def safe(fn,item):
+            try:return fn(item)
+            except (ValueError,OSError) as exc:
+                if not self.tolerate_errors:raise
+                self.progress('Node wallet read deferred: '+str(exc));return []
+        replicas=[r for batch in self.parallel([r for batch in self.parallel(nodes,lambda n:safe(self.discover_node,n)) for r in batch],lambda r:safe(self.export,r)) for r in batch]
         # Retirement preserves the original local wallet. Count its history through
         # the node's verified labelled archive only after all received addresses
         # are present there; unrelated historical wallets never hide live accounts.

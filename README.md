@@ -10,13 +10,17 @@
 
 - Australian CGT working papers, financial year totals and visual transaction histories for supplied family records.
 - Shared Ownership, Address Book and wallet balances.
-- Node-driven Fee Estimates, pending/mined blocks and transaction tracking, with Bitcoin Core unit conversions.
+- Node-driven Mempool fee estimates, pending/mined blocks and transaction tracking, with Bitcoin Core unit conversions.
 - Shared transaction templates, unsigned PSBT preparation and verified partial-signature collection. Private keys remain in Bitcoin Core; private signing remains local to the Agent and broadcast requires local Agent authorisation.
 - Node discovery through Wallaby Agent, querying every connected node and deduplicating wallet replicas by public descriptors.
 
 Vault monitoring uses public vault records and connected Core nodes. Reports depend on complete source records, ownership and pricing evidence; review the working papers before relying on them for tax reporting.
 
 ## This development update
+
+Build 21 also introduces automatic idle-priority public wallet discovery from every ready node. Ownership unlocks after a complete history check and now has two stages: load records, then confirm ownership. Existing uploads and assignments are retained when new wallets appear. Discovery notices link directly to Ownership and are already read when that page is open.
+
+The Mempool page now lives under Calculations. Its outlined 3D cubes show a consistent filled volume across all faces; pending cubes gently pulse red. Profile creation/editing requires a date of birth in DD/MM/YYYY, with a calendar picker. Vault and descriptor-derived multisig badges share up to four aligned icon slots.
 
 Build 21 fixes the Dashboard half of the missing pending-block estimates. The supplied Agent logs confirm that a roughly 38,000-transaction verbose mempool exceeded the 16 MiB remote response limit. With **Agent V2 Build 20**, Dashboard now collects a complete immutable mempool snapshot in validated 1,000-entry pages on the same node connection, then calculates the pending blocks. The ordinary transport limit remains unchanged. There is no oversized-response or public-explorer fallback.
 
@@ -81,7 +85,7 @@ python3 launch_wallaby_bitcoin_dashboard.py --no-browser
 
 The shell launcher also defaults to no browser. The browser service uses **38951** and the Agent HTTP/JSON interface uses **56443**. Both bind to IPv4/IPv6 loopback. Reach them through authorised SSH tunnels; client-side forwarded ports may differ. Open `http://[::1]:38951/` on the tunnel client. No Bitcoin Core installation is needed on the server.
 
-Create family users, connect Agents with the desired Core wallets loaded, then run Ownership → Load Node Wallets. This also reads fixed `addr()` policies from watch-only wallets and groups their addresses using Core labels. Upload each applicable profile's Bitaroo PDFs and the shared Exchanges ODS, then confirm ownership and select Verify Balances in Stage 3. The Extinct Wallets ODS is no longer uploaded. Wallets then becomes available. Generate the separate family CGT report for tax totals/history, which show the logged-in profile only.
+Create family users, connect Agents with the desired Core wallets loaded, then allow automatic wallet discovery to complete. This also reads fixed `addr()` policies from watch-only wallets and groups their addresses using Core labels. Upload each applicable profile's Bitaroo PDFs and the shared Exchanges ODS, then confirm ownership and select Verify Balances in Stage 2. The Extinct Wallets ODS is no longer uploaded. Wallets then becomes available. Generate the separate family CGT report for tax totals/history, which show the logged-in profile only.
 
 This is a trusted-family service behind SSH, not a public password-authenticated website. Node identity hints are not substitutes for SSH authentication. Core RPC cookies stay on the node computers.
 
@@ -121,11 +125,11 @@ After upgrading to Build 5, run Verify Balances again. Earlier balance-cost snap
 
 ## Build 7
 
-Extinct wallets now come from labelled fixed-address `addr()` descriptors in a Core wallet with private keys disabled. Labels group addresses into logical wallets, independently of the parent Core wallet's name. `Load Node Wallets` queries all connected nodes and merges matching replicas. The obsolete historical-wallet ODS upload is removed; exchange ODS input remains unchanged. Historical group labels are read-only in Ownership and cannot be used as receiving/payment destinations.
+Extinct wallets now come from labelled fixed-address `addr()` descriptors in a Core wallet with private keys disabled. Labels group addresses into logical wallets, independently of the parent Core wallet's name. Automatic discovery queries every ready connected node and merges matching replicas. The obsolete historical-wallet ODS upload is removed; exchange ODS input remains unchanged. Historical group labels are read-only in Ownership and cannot be used as receiving/payment destinations.
 
 A label `Earlier Wallet | LOST:DD/MM/YYYY HH:MM:SS UTC` declares irreversible loss of access at that time, without compensation. Build 7 records the affected retained outputs as a separate CGT event C1, consumes their quantity once, and calculates a loss from the traced reduced cost base using the existing proportional parcel convention. It does not use loss-date market value, indexation or a 50% loss discount. Existing annual loss application and carry-forward apply. The original blockchain outputs remain in the evidence graph. A label is a user declaration, not blockchain proof that a key was lost. Later receipts/spends conflicting with the declaration, missing history and unresolved acquisition cost require correction rather than an invented deduction.
 
-After upgrading, run **Load Node Wallets**, load the exchange statements and **Verify Balances**, then regenerate CGT reports. Older descriptor scans and balance costs do not unlock the revised workflow. Your node must have completed its relevant watch-wallet rescan.
+After upgrading, wait for automatic node wallet discovery, load the exchange statements and **Verify Balances**, then regenerate CGT reports. Older descriptor scans and balance costs do not unlock the revised workflow. Your node must have completed its relevant watch-wallet rescan.
 
 ## Licence
 

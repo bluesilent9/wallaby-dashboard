@@ -40,7 +40,7 @@ class Fees(unittest.TestCase):
    self.assertNotIn('getblock', [m for m,k in rpc.calls]);self.assertFalse(data['recent_blocks'])
   finally:rpc.gate.set();t.join(3)
   self.assertFalse(service.refreshing);self.assertEqual(len(service.data['recent_blocks']),1)
-  self.assertTrue(all(k['timeout_seconds']==15 and k['priority']==100 for m,k in rpc.calls))
+  self.assertTrue(all(k['timeout_seconds']==15 and k['priority']==10 for m,k in rpc.calls))
  def test_projection_and_quote_failures_leave_rates_visible(self):
   service,rpc=self.service();rpc.error='Mempool response exceeds its size limit';service.fx=lambda:(_ for _ in ()).throw(OSError('No quote connection'))
   service.refresh();self.assertEqual(len(service.data['rates']),4);self.assertIn('Mempool',service.data['projection_error']);self.assertIn('No quote',service.data['price_error']);self.assertFalse(service.refreshing)

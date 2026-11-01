@@ -20,13 +20,13 @@ class Loading(unittest.TestCase):
  def setUp(self):
     self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name);self.cfg=self.root/'config.cfg';store=FamilyStore(self.cfg);store.save_user('Example user','teal',revision=store.snapshot()['revision']);self.user=store.snapshot()['users'][0]['id'];self.server,self.pool=create_server(self.root/'runtime',0,self.cfg,ipv6=False);self.addCleanup(lambda:self.server.server_close())
     self.session=self.pool.create();self.session.select_user(self.user)
- def test_fast_failure_remains_available_to_ownership_even_after_terminal_locks(self):
-    with patch('launch_wallaby_bitcoin_dashboard.NodeWalletLoader.collect',side_effect=ValueError('Node / wallet · getwalletinfo: Requested wallet does not exist or is not loaded')):
-      self.session.start_node_wallets()
-      for _ in range(100):
-        if self.session.status=='error':break
-        time.sleep(.01)
-    self.assertEqual(self.session.status,'error');data=self.session.family();self.assertIn('Requested wallet',data['last_job_error']['message']);self.assertEqual(data['last_job_error']['mode'],'descriptors');self.assertFalse(data['process_active']);self.assertFalse(data['descriptors']['ready']);self.session.select_user(self.user);self.assertIsNone(self.session.last_job_error)
+ def test_background_failure_is_logged_without_navigating_or_unlocking_ownership(self):
+    from background_discovery import BackgroundDiscovery
+    discovery=BackgroundDiscovery(self.pool,start=False);self.addCleanup(discovery.close)
+    node={'id':'fixture','hostname':'Fixture','connected':True,'rpc_ready':True,'rpc_methods':list(METHODS),'blockchain':{'state':'ready'}}
+    with patch.object(discovery,'eligible',return_value=[node]),patch('background_discovery.NodeWalletLoader.collect',side_effect=ValueError('Requested wallet does not exist or is not loaded')):
+      with self.assertRaisesRegex(ValueError,'Requested wallet'):discovery.cycle()
+    self.assertFalse(discovery.activity()['active']);self.assertEqual(self.session.status,'idle');self.assertFalse(self.session.family()['descriptors']['ready'])
  def test_broker_limits_delivered_work_and_resumes_after_a_result(self):
     reg=self.pool.nodes.register('02:80:00:00:00:02','bounded',{'version':1,'methods':list(METHODS)});rpc=self.pool.nodes.rpc;token=reg['connection_token'];queued=[rpc.queue(reg['node_id'],'getblockchaininfo') for _ in range(3)]
     for row in queued[:2]:self.assertEqual(rpc.poll(token,0)['commands'][0]['id'],row['id']);rpc.ack(token,row['id'])
@@ -58,9 +58,12 @@ class Loading(unittest.TestCase):
         if any(n['connected'] for n in self.pool.nodes.snapshot()['nodes']):break
         if process.poll() is not None:self.fail(process.communicate()[1])
         time.sleep(.01)
-      with patch.object(Session,'start_descriptor_scan',scan):
-        self.session.start_node_wallets();self.assertTrue(done.wait(15),self.session.events)
-      saved=DescriptorStore(self.cfg).read()['wallets'];self.assertEqual(len(saved),12);self.assertEqual([w['name'] for w in saved if w.get('watch_only')],['sample_0']);self.assertEqual({n for m,n in seen if m=='getwalletinfo'},set(names));self.assertEqual(self.session.status,'complete');self.assertIsNone(self.session.last_job_error);self.assertEqual(process.poll(),None)
+      from background_discovery import BackgroundDiscovery
+      discovery=BackgroundDiscovery(self.pool,start=False);self.addCleanup(discovery.close)
+      deadline=time.monotonic()+15
+      while not discovery.eligible() and time.monotonic()<deadline:time.sleep(.02)
+      self.assertTrue(discovery.eligible());discovery.cycle()
+      saved=DescriptorStore(self.cfg).read()['wallets'];self.assertEqual(len(saved),12);self.assertEqual([w['name'] for w in saved if w.get('watch_only')],['sample_0']);self.assertEqual({n for m,n in seen if m=='getwalletinfo'},set(names));self.assertEqual(self.session.status,'idle');self.assertIsNone(self.session.last_job_error);self.assertEqual(process.poll(),None)
     finally:
       stop.touch()
       try:process.communicate(timeout=3)

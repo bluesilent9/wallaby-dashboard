@@ -1,0 +1,10 @@
+const fs=require('fs'),path=require('path'),assert=require('assert');
+const root=path.resolve(process.argv[2]),blocks=require(path.join(root,'node_blocks.js'));
+const empty=blocks.volumeGeometry(0),half=blocks.volumeGeometry(2000000),full=blocks.volumeGeometry(4000000);
+assert.equal(empty.fraction,0);assert.equal(half.fraction,.5);assert.equal(full.fraction,1);
+assert.equal(half.front,'28,104 148,104 148,164 28,164');assert.equal(half.side,'8,80 28,104 28,164 8,140');assert.equal(half.top,'8,80 128,80 148,104 28,104');
+assert.equal(full.top,'8,20 128,20 148,44 28,44','full volume reaches the outer top');assert.equal(blocks.volumeGeometry(null).fraction,null,'missing weight is not claimed full');assert.equal(blocks.volumeGeometry(5000000).fraction,1);
+const css=fs.readFileSync(path.join(root,'mempool_blocks.css'),'utf8');assert(css.includes('.cube-outline'));assert(css.includes('.cube-fill-top'));assert(css.includes('@media(prefers-reduced-motion:reduce)'));assert(css.includes('animation:pending-cube'));
+const app=fs.readFileSync(path.join(root,'app.js'),'utf8');assert(!app.includes('WallabyDescriptors.'));assert(app.includes('discoveryActivity.active'));assert(app.includes('family.descriptors_ready'));assert(app.includes('multisig:wallet.multisig'));
+const family=fs.readFileSync(path.join(root,'family.js'),'utf8');assert(family.includes('Stage 1 of 2 - Load your records'));assert(family.includes('Stage 2 of 2 - Confirm Ownership'));assert(!family.includes('Stage 3 of 3'));assert(family.includes("date_of_birth:birth.value"));assert(family.includes("id:'family-birth',type:'text',required:true"));
+console.log('PASS: coherent cube volume at zero/half/full, reduced motion, automatic discovery UI, two-stage ownership, multisig propagation and required Australian DOB.');

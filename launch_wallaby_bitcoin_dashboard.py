@@ -58,7 +58,7 @@ class Session:
         self.root=Path(root).expanduser().resolve();self.root.mkdir(parents=True,exist_ok=True)
         self.preferences_path=Path(preferences_path).expanduser().resolve() if preferences_path else self.root/'config.cfg'
         FamilyStore(self.preferences_path)
-        self.presence_seen=time.monotonic();self.presence_activity=self.presence_seen;self.presence_connected=False;self.token=secrets.token_urlsafe(32);self.lock=threading.RLock();self.events=[];self.pending=None
+        self.current_page='';self.presence_seen=time.monotonic();self.presence_activity=self.presence_seen;self.presence_connected=False;self.token=secrets.token_urlsafe(32);self.lock=threading.RLock();self.events=[];self.pending=None
         self.status='idle';self.process=None;self.report=None;self.uploads={};self.settings={};self.last_job_error=None
         self.workspace_dirty=False;self.workspace_stamp=None;self.report_generation=None
         self.session_dir=self.root/('session-'+secrets.token_hex(8));self.session_dir.mkdir(mode=0o700)
@@ -70,7 +70,7 @@ class Session:
     def sync_workspace(self,data):
         if not self.user_id or self.workspace_dirty or self.status in {'running','waiting'}:return
         meta=data.get('ownership_runs',{}).get(self.user_id)
-        stamp=meta.get('data_id') if meta else None
+        stamp=(meta.get('data_id'),meta.get('descriptor_fingerprint')) if meta else None
         if stamp==self.workspace_stamp:return
         self.inventory_ready=False;self.report=None;self.report_context=None;self.report_generation=None
         if not meta:self.workspace_stamp=None;return
@@ -108,7 +108,7 @@ class Session:
             elif saved is None:self.report=None;self.report_context=None
             self.report_generation=generation
         report_ready=ready and self.report is not None and self.report_context==context
-        return {'node_ready':bool(self.node_registry and self.node_registry.ready_for_builders()),'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
+        return {'discovery_revision':descriptors['fingerprint'],'node_ready':bool(self.node_registry and self.node_registry.ready_for_builders()),'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
     def invalidate_transaction_refresh(self):
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False
     def confirm_transaction_refresh(self):
@@ -132,7 +132,7 @@ class Session:
             user=FamilyStore(self.preferences_path).user(user_id) if user_id else None
             if user_id and not user:raise ValueError('User no longer exists.')
             if self.node_registry:self.node_registry.hub.clear_lease(self)
-            self.cancel();self.last_job_error=None;self.user_id=user_id;self.presence_seen=time.monotonic();self.presence_activity=self.presence_seen;self.presence_connected=bool(user_id);self.report=None;self.job_result=None;self.events=[];self.pending=None;self.status='idle';self.sequence=0;self.activity_started=False;self.inventory=[];self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
+            self.cancel();self.last_job_error=None;self.user_id=user_id;self.current_page='';self.presence_seen=time.monotonic();self.presence_activity=self.presence_seen;self.presence_connected=bool(user_id);self.report=None;self.job_result=None;self.events=[];self.pending=None;self.status='idle';self.sequence=0;self.activity_started=False;self.inventory=[];self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
             self.transaction_refresh_context=None;self.transaction_refresh_scanned=False;self.ownership_completed_utc=None;self.descriptor_fingerprint=None;self.bitaroo_as_of_date=None;self.restore_error='';self.uploads={};self.settings={};shutil.rmtree(self.input_dir,ignore_errors=True);self.input_dir.mkdir(parents=True,exist_ok=True)
             self.workspace_dirty=False;self.workspace_stamp=None;self.report_generation=None
             return self.family()
@@ -187,35 +187,11 @@ class Session:
     def worker_nodes(self):
         if self.node_bridge is None:self.node_bridge=NodeBridge(self.node_registry,lambda:self.closed or self.status not in {'running','waiting'})
         return self.node_bridge.settings()
-    def start_node_wallets(self):
-        with self.lock:
-            if self.closed:raise ValueError('This browser workspace is closed')
-            if not self.user():raise ValueError('Select a family user first.')
-            if self.status in {'running','waiting'}:raise ValueError('Wait for the active run before loading node wallets.')
-            if not self.node_load_lock.acquire(blocking=False):raise ValueError('Another browser is already loading node wallets.')
-            self.node_load_cancel=threading.Event();cancel=self.node_load_cancel;self.last_job_error=None
-            self.events=[];self.pending=None;self.activity_started=True;self.status='running';self.mode='descriptors';self.job_result=None
-            self.report=None;self.report_context=None;self.workspace_dirty=True;self.invalidate_transaction_refresh()
-        def load():
-            try:
-                loader=NodeWalletLoader(self.node_registry,lambda text:self.record_activity(text),cancel)
-                wallets=loader.collect()
-                with self.profile_gate.access():
-                    with self.lock:
-                        if cancel.is_set() or self.closed:return
-                        DescriptorStore(self.preferences_path).replace_node_wallets(wallets)
-                        self.status='idle';self.start_descriptor_scan(preserve_events=True)
-            except Exception as exc:
-                with self.lock:
-                    if not cancel.is_set() and not self.closed:self.emit({'type':'error','message':str(exc)})
-            finally:self.node_load_lock.release()
-        threading.Thread(target=load,daemon=True).start()
-
     def start_descriptor_scan(self,preserve_events=False):
         with self.lock:
             if self.status in {'running','waiting'}:raise ValueError('Wait for the active run before scanning descriptors.')
             ds=DescriptorStore(self.preferences_path)
-            if not self.user() or not ds.summary()['ready']:raise ValueError('Run Load Node Wallets in Ownership first.')
+            if not self.user() or not ds.summary()['ready']:raise ValueError('Wait for automatic node wallet discovery to complete.')
             self.workspace_dirty=True;self.invalidate_transaction_refresh()
             if not preserve_events:self.events=[]
             self.pending=None;self.activity_started=True;self.status='running';self.mode='descriptors';self.job_result=None
@@ -244,7 +220,7 @@ class Session:
             self.run_context=access['ownership_context']
             self.run_refresh=False
             descriptor_store=DescriptorStore(self.preferences_path)
-            if not descriptor_store.summary()['ready'] or not history_ready(self.preferences_path,descriptor_store.read()):raise ValueError('Wallet Descriptors must be run first before Ownership identification can be executed.')
+            if not descriptor_store.summary()['ready'] or not history_ready(self.preferences_path,descriptor_store.read()):raise ValueError('Wait for automatic node wallet discovery to complete before reviewing ownership.')
             window=matching_window(settings.get('matching_window',DEFAULT_WINDOW))
             refresh=settings.get('refresh_descriptor_history',False)
             if not isinstance(refresh,bool):raise ValueError('Descriptor refresh must be Yes or No.')
@@ -411,6 +387,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
     sessions=Sessions(state_dir,preferences_path,max_sessions,idle_seconds)
     configure_nodes(RegistryRPC(sessions.nodes),default=True)
     fee_service=FeeService(sessions.nodes,busy=lambda:any(s.status in {'running','waiting'} for s in list(sessions.sessions.values())))
+    from background_discovery import BackgroundDiscovery
+    discovery=BackgroundDiscovery(sessions,busy=lambda:fee_service.activity()['active'] or any(s.status in {'running','waiting'} or s.active_operations for s in list(sessions.sessions.values())))
+    sessions.discovery=discovery
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):pass
         def json(self,body,status=200):
@@ -513,7 +492,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_response(200);self.send_header('Content-Type','application/x-7z-compressed');self.send_header('Content-Disposition','attachment; filename="profile.7z"');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 if path=='/api/presence':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
-                    session.presence_seen=time.monotonic();session.presence_connected=True
+                    session.current_page=parse_qs(urlsplit(self.path).query).get('page',[''])[0];session.presence_seen=time.monotonic();session.presence_connected=True
                     # Heartbeats establish connectivity, not user interaction.
                     age=parse_qs(urlsplit(self.path).query).get('activity_age_ms',[None])[0]
                     if age is not None:
@@ -525,7 +504,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/state':
                     try:after=int(parse_qs(urlsplit(self.path).query).get('after',['0'])[0])
                     except ValueError:return self.json({'error':'Invalid event cursor'},400)
-                    with session.lock:return self.json({'fee_activity':fee_service.activity(),'last_job_error':session.last_job_error,'status':session.status,'events':[e for e in session.events if e['sequence']>after],
+                    with session.lock:return self.json({'discovery_activity':discovery.activity(),'fee_activity':fee_service.activity(),'last_job_error':session.last_job_error,'status':session.status,'events':[e for e in session.events if e['sequence']>after],
                                                         'pending':session.pending,**session.access(),'user':session.user(),'mode':session.mode,'job_ready':session.job_result is not None and (session.mode!='cgt' or session.access()['report_ready'])})
                 if path in ('/api/notifications','/api/transactions','/api/transaction','/api/transaction/psbt','/api/transaction/status'):
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
@@ -533,6 +512,8 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     try:
                         if path=='/api/notifications':
                             params=parse_qs(urlsplit(self.path).query)
+                            session.current_page=params.get('page',[''])[0]
+                            if session.current_page=='ownership':workflows.read_discovery(session.user_id)
                             workflows.sync_run_warning(session.user_id,params.get('local_date',[''])[0],params.get('timezone',['UTC'])[0],params.get('page',[''])[0])
                             if params.get('page',[''])[0]=='nodes':sessions.nodes.notifications(session.user_id,read=True)
                             return self.json(self.notices(session))
@@ -624,7 +605,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     manager=ProfileArchive(session.preferences_path)
                     if path=='/api/profile/load':manager.load(parse_qs(urlsplit(self.path).query).get('name',[''])[0],body)
                     else:manager.replace()
-                    fee_service.close();sessions.close_all();sessions.user_activity.clear();sessions.nodes.reset()
+                    discovery.reset();fee_service.close();sessions.close_all();sessions.user_activity.clear();sessions.nodes.reset()
                     fee_service=FeeService(sessions.nodes,busy=lambda:any(s.status in {'running','waiting'} for s in list(sessions.sessions.values())))
                     fee_service.log('Profile replaced; fee service reset and ready for new node connections.')
                     return self.json({'reset':True})
@@ -716,7 +697,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/login':return self.json(session.select_user(data.get('user_id')))
                 if path=='/api/logout':return self.json(session.select_user(None))
                 if path=='/api/users/save':
-                    store.save_user(data.get('name',''),data.get('colour','green'),data.get('id'),data.get('revision'),gender=data.get('gender'));return self.json(session.family())
+                    store.save_user(data.get('name',''),data.get('colour','green'),data.get('id'),data.get('revision'),gender=data.get('gender'),date_of_birth=__import__('preferences').validate_birth_date(data.get('date_of_birth')));return self.json(session.family())
                 if path in ('/api/users/delete','/api/config/reset'):
                     target=data.get('id')
                     if any(s.status in {'running','waiting'} and (path=='/api/config/reset' or s.user_id==target) for s in list(sessions.sessions.values())):raise ValueError('Cancel active jobs for affected users before deleting or resetting.')
@@ -728,28 +709,6 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if path=='/api/config/reset':DescriptorStore(session.preferences_path).path.unlink(missing_ok=True)
                     for s in list(sessions.sessions.values()):
                         if s.user_id and not s.user():s.select_user(None)
-                    return self.json(session.family())
-                if path=='/api/descriptors/nodes':
-                    session.start_node_wallets()
-                    return self.json(session.family())
-                if path=='/api/descriptors/load':
-                    if not session.user():raise ValueError('Select a family user first.')
-                    if session.status in {'running','waiting'}:raise ValueError('Wait for the active run before changing descriptors.')
-                    session.record_activity('Wallet Descriptors: validating public exports.',session.user_id)
-                    try:DescriptorStore(session.preferences_path).load(data.get('text',''))
-                    except Exception:
-                        session.record_activity('Wallet Descriptors: import failed.',session.user_id);raise
-                    session.report=None;session.report_context=None
-                    session.record_activity('Wallet Descriptors: public wallets saved.',session.user_id)
-                    if DescriptorStore(session.preferences_path).summary()['ready']:session.start_descriptor_scan()
-                    return self.json(session.family())
-                if path=='/api/descriptors/history':
-                    if not session.user():raise ValueError('Select a family user first.')
-                    if session.status in {'running','waiting'}:raise ValueError('Wait for the active run before changing wallet history.')
-                    DescriptorStore(session.preferences_path).load_history(data.get('wallet_id'),data.get('text',''))
-                    session.report=None;session.report_context=None
-                    session.record_activity('Wallet Descriptors: supplemental public history saved.',session.user_id)
-                    if DescriptorStore(session.preferences_path).summary()['ready']:session.start_descriptor_scan()
                     return self.json(session.family())
                 if path=='/api/transaction/complete':
                     if not session.user():raise ValueError('Select a family user first.')
@@ -856,7 +815,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
             for listener,thread in zip(listeners[1:],self.threads):
                 if thread.is_alive():listener.shutdown();thread.join(2)
             for listener in listeners:listener.server_close()
-            fee_service.close();sessions.close_all()
+            discovery.close();fee_service.close();sessions.close_all()
     server=ServerGroup()
     def reap():
         while not server.reaper_stop.wait(60):

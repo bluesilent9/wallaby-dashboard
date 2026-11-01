@@ -61,6 +61,25 @@ class WorkflowStore:
                 same=previous and previous.get('run_kind')==value['run_kind'] and previous.get('run_stamp')==value['run_stamp']
                 rows.append(dict(value,id=previous['id'] if same else uuid.uuid4().hex,created_utc=previous['created_utc'] if same else datetime.now(timezone.utc).isoformat()))
             if json.dumps(rows,sort_keys=True)!=before:self._write(state)
+    def discovered(self,users,wallet_ids,reading=()):
+        if not wallet_ids:return
+        with storage_lock(self.config):
+            data=self._read();before=json.dumps(data,sort_keys=True);seen=data.setdefault('discovered_wallets',{})
+            for user in users:
+                known=set(seen.get(user,[]));new=set(wallet_ids)-known
+                if new:
+                    data['notices'].setdefault(user,[]).append({'id':uuid.uuid4().hex,'kind':'wallet_discovery','target':'ownership','text':'Wallets have been discovered. Complete the Ownership process.','created_utc':datetime.now(timezone.utc).isoformat(),'read':user in reading})
+                    seen[user]=sorted(known|set(wallet_ids))
+                if user in reading:
+                    for notice in data['notices'].get(user,[]):
+                        if notice.get('kind')=='wallet_discovery':notice['read']=True
+            if json.dumps(data,sort_keys=True)!=before:self._write(data)
+    def read_discovery(self,user):
+        with storage_lock(self.config):
+            data=self._read();changed=False
+            for n in data['notices'].get(user,[]):
+                if n.get('kind')=='wallet_discovery' and not n['read']:n['read']=True;changed=True
+            if changed:self._write(data)
     def send_message(self,sender_id,target_id,text):
         snapshot=FamilyStore(self.config).snapshot();users={u['id']:u for u in snapshot['users']}
         if sender_id not in users or target_id not in users or sender_id==target_id:raise ValueError('Select another existing user to message.')

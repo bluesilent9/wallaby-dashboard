@@ -84,6 +84,7 @@ def validate(root):
     ids=set();names=set()
     for u in raw['users']:
         if not re.fullmatch('[0-9a-f]{32}',str(u.get('id',''))) or u['id'] in ids or not isinstance(u.get('name'),str) or not u['name'].strip() or len(u['name'])>100 or any(ord(c)<32 for c in u['name']) or u['name'].casefold() in names or u.get('colour') not in COLOURS or u.get('gender','male') not in ('male','female'):raise ValueError('Invalid user in profile.')
+        if 'date_of_birth' in u:__import__('preferences').validate_birth_date(u['date_of_birth'])
         ids.add(u['id']);names.add(u['name'].casefold())
     seen=set()
     for r in raw['ownership']:

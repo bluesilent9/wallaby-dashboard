@@ -20,6 +20,7 @@ def display_inventory(inventory,catalog):
         item=dict(item)
         if item['kind']=='descriptor':
             raw=sources.get(item['source'],item.get('source_name',item['name']))
+            item['multisig']=__import__('policy_accounts').multisig_summary(next((w.get('raw',{}) for w in catalog['wallets'] if w['id']==item['source']),{}))
             item.update(source_name=raw,name=raw if item.get('extinct') else suggest_wallet_name(raw),has_vault=vaults.get(item['source'],False),watch_only=watch.get(item['source'],False))
         result.append(item)
     return result
