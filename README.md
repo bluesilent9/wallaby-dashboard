@@ -2,7 +2,9 @@
 
 Bitcoin tools, wallet insights, Australian CGT working papers and shared family workflows.
 
-**V1 Build 22 — Development.** [Download the DEB](https://github.com/bluesilent9/wallaby-dashboard/raw/refs/heads/Development/dist/wallaby-dashboard_1.0.0~dev22_all.deb) · [Checksums](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) · [Development source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development) · [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/)
+**V1 Build 23 — Development.** [Download the DEB](https://github.com/bluesilent9/wallaby-dashboard/raw/refs/heads/Development/dist/wallaby-dashboard_1.0.0~dev23_all.deb) · [Checksums](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/dist/SHA256SUMS.txt) · [Development source](https://github.com/bluesilent9/wallaby-dashboard/tree/Development) · [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/)
+
+Build 23 separates personal and SMSF Bitaroo statements, calculates fund acquisition costs and unrealised gains for Wallets, and keeps funds out of personal CGT reports. Salary Builder adds a saved visual calculation diagram without signing or broadcasting. Calendar-only birth dates, paired-key multisig icons, graphical icon explanations and rounded Mempool rates improve the interface. Live watch-only badges follow connected signing replicas; background updates preserve edits, and node loss returns builders to Nodes with their public draft saved. Vault proposals arrive automatically. Authenticated Agent traffic now refreshes connection liveness; Agent-side recovery is handled separately.
 
 Build 22 now discovers public wallets automatically at idle priority across ready nodes, retaining uploaded records and ownership assignments as new wallets appear. Ownership has two stages and a dismissible discovery notification. Calculations contains the renamed Mempool page, with outlined 3D fill volumes and gently pulsing red pending blocks. Profile creation/editing requires a calendar-backed DD/MM/YYYY date of birth. Vault and descriptor-derived multisig badges fit four aligned icon slots.
 
@@ -38,7 +40,7 @@ Authoritative synchronization queues, signed public previews, labelled historica
 
 The DEB starts and enables the service on installation. Access remains through authorised SSH tunnels. [User guide](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/USER_GUIDE.md) · [Protocol](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/docs/AGENT_PROTOCOL.md) · [Validation](https://github.com/bluesilent9/wallaby-dashboard/blob/Development/VALIDATION.md).
 
-Validation: 196 Python tests, fourteen interface regression programs, actual Agent setup/completion and current-permission verification, four policy types independently accepted by isolated Bitcoin Core 31, and packaged IPv4/IPv6 startup checks. Real optical media, production local approvals and physical backup restoration require deployment testing. Tax working papers depend on complete supplied evidence and review.
+Validation: 247 Python tests, nineteen interface regression programs, actual Agent setup/completion and current-permission verification, four policy types independently accepted by isolated Bitcoin Core 31, and packaged IPv4/IPv6 startup checks. Real optical media, production local approvals and physical backup restoration require deployment testing. Tax working papers depend on complete supplied evidence and review.
 
 [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Report an issue](https://github.com/bluesilent9/wallaby-dashboard/issues). GNU AGPLv3; bundled components retain their notices. Application source remains on **Development**; this is not a Stable release.
 
