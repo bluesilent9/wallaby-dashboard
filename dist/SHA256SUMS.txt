@@ -1,1 +1,1 @@
-1bf3487683efd71932936da79ce1d93018356ab287131f5866a2f1b50ebfa2bd  wallaby-dashboard_1.0.0~dev25_all.deb
+0d28416455901a0b41ba9ce0de7786a89d29c376d9bf25f298a3a31fb537fe21  wallaby-dashboard_1.0.0~dev26_all.deb

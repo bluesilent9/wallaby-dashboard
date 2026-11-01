@@ -46,7 +46,6 @@ function view({el,button,data,state,changed}){
  const previous=button('←','outline',()=>{state.offset=Math.max(0,start-count);changed();}),next=button('→','outline',()=>{state.offset=Math.min(Math.max(0,mined.length-count),start+count);changed();}),mode=button(state.mode==='size'?'Show time / fees':'Show sizes','outline',()=>{state.mode=state.mode==='size'?'fees':'size';changed();});
  previous.disabled=start===0;previous.title='More recent mined blocks';next.disabled=start+count>=mined.length;next.title='Older mined blocks';
  const centre=el('div',{class:'node-block-divider'},el('div',{class:'block-controls'},previous,mode,next));content.append(future,centre,past);section.append(top,content);
- if(state.tracked?.status==='confirmed'&&!mined.slice(start,start+count).some(b=>b.height===state.tracked.block_height))section.append(el('div',{class:'info-banner fee-warning',role:'status'},'This is an older transaction outside the displayed recent blocks. Confirmed in block '+state.tracked.block_height+'.'));
  if(state.tracked?.status==='mempool')section.append(el('p',{class:'subtle'},'Tracked transaction is in the local mempool. The marker indicates the next block; inclusion in that block is not guaranteed.'));
  if(data.projection_error&&pending.length)section.append(el('p',{class:'subtle'},data.projection_error));
  return section;

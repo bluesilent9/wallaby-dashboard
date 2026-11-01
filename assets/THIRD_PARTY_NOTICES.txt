@@ -1,1 +1,7 @@
 Bundled public-key/transaction library: see vendor/README.txt and vendor/embit/LICENSE.
+
+Blockstream Esplora transaction views
+Copyright 2021 Blockstream Corp; MIT licence (vendor/esplora/LICENSE).
+Pinned source commit: 32756801de6f412da1d88a198772e75ee0fffa84
+https://github.com/Blockstream/esplora
+The compact node_explorer.js adapts output-selection and input/output presentation from tx.js, tx-vin.js and tx-vout.js. The originals are provided under vendor/esplora. All evidence is read from connected Core nodes; no public Esplora API is queried.

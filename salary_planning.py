@@ -40,11 +40,11 @@ def clean_inputs(value):
     result['frequency']=value.get('frequency','fortnightly')
     result['fund_phase']=value.get('fund_phase','accumulation')
     if result['frequency'] not in ('daily','weekly','fortnightly','monthly') or result['fund_phase'] not in ('accumulation','pension'):raise ValueError('Invalid salary planning option.')
-    for key,default,low,high in [('target_age',100,1,150),('access_age',65,60,100),('weekday',4,0,6),('monthday',1,1,31)]:result[key]=integer(value.get(key,default),key,low,high)
-    for key,default,low,high in [('price_aud','',ZERO,MAX_MONEY),('transition_price_aud','',ZERO,MAX_MONEY),('pay_multiplier','1',D('.01'),D(100)),('asset_multiple','10',ZERO,D(1000)),('other_income','0',ZERO,MAX_MONEY),('capital_losses','0',ZERO,MAX_MONEY),('cpi_percent','0',ZERO,D(100)),('medicare_percent','2',ZERO,D(10)),('medicare_threshold','0',ZERO,MAX_MONEY),('tax_adjustment','0',ZERO,MAX_MONEY),('network_fees_aud','0',ZERO,MAX_MONEY)]:
+    for key,default,low,high in [('target_age',100,1,150),('access_age',65,60,100),('weekday',4,0,6)]:result[key]=integer(value.get(key,default),key,low,high)
+    for key,default,low,high in [('price_aud','',ZERO,MAX_MONEY),('transition_price_aud','',ZERO,MAX_MONEY),('asset_multiple','10',ZERO,D(1000)),('other_income','0',ZERO,MAX_MONEY),('capital_losses','0',ZERO,MAX_MONEY),('cpi_percent','0',ZERO,D(100)),('medicare_percent','2',ZERO,D(10)),('medicare_threshold','0',ZERO,MAX_MONEY),('tax_adjustment','0',ZERO,MAX_MONEY),('network_fees_aud','0',ZERO,MAX_MONEY)]:
         raw=value.get(key,default)
         result[key]='' if raw=='' and key in ('price_aud','transition_price_aud') else str(number(raw,key,low,high))
-    for key,default in [('asset_enabled',False),('access_confirmed',False),('include_lito',True)]:
+    for key,default in [('asset_enabled',False),('access_confirmed',False),('include_lito',True),('schedule_set',False)]:
         item=value.get(key,default)
         if type(item) is not bool:raise ValueError('Invalid salary '+key+'.')
         result[key]=item
@@ -85,7 +85,7 @@ def paydays(start,end,inputs):
     if frequency=='monthly':
         result=[];y,m=start.year,start.month
         while date(y,m,1)<=end:
-            day=date(y,m,min(inputs['monthday'],monthrange(y,m)[1]))
+            day=date(y,m,1)
             if start<=day<=end:result.append(day)
             y,m=(y+1,1) if m==12 else (y,m+1)
         return result
@@ -194,7 +194,7 @@ def evaluate(ctx,value):
     age=age_at(born,start);years=inputs['target_age']-age
     if years<=0:raise ValueError('Target age must be greater than your age on 1 July of the next financial year.')
     days=paydays(start,end,inputs);count=len(days)
-    price=number(inputs['price_aud'] or ctx.get('price_aud') or '', 'Scenario BTC/AUD',SAT)
+    price=number(inputs['price_aud'] or '', 'Scenario BTC/AUD',SAT)
     transition=number(inputs['transition_price_aud'] or ctx.get('price_aud') or price,'Transition BTC/AUD',SAT)
     release=birthday(born,born.year+inputs['access_age']);catalog={w['id']:w for w in ctx['wallets']};users={u['id']:u for u in ctx['users']}
     selected=[];missing=[]
@@ -216,7 +216,7 @@ def evaluate(ctx,value):
         ident=inputs[field]
         if not ident:continue
         w=catalog.get(ident);owner=user['id']
-        if not w or w.get('owner_id')!=owner or w.get('smsf') or w.get('external'):raise ValueError('A selected distribution destination is no longer available for its chosen profile.')
+        if not w or w.get('extinct') or w.get('kind') in ('exchange','bitaroo'):raise ValueError('Choose an active Distributor Wallet. It may belong to any user.')
     pool=sum((w['value'] for w in selected if w['mode']=='lifetime'),ZERO)
     topups=sum((w['value'] for w in selected if w['mode']=='one_year'),ZERO)
     life_budget=(pool/years).quantize(CENT,rounding=ROUND_DOWN)

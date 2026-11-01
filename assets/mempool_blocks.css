@@ -9,13 +9,13 @@
 .block-volume{position:absolute;z-index:0;pointer-events:none;left:-24px;top:-24px;width:calc(100% + 36px);height:calc(100% + 38px);overflow:visible;filter:drop-shadow(0 8px 5px #142d2316)}
 .cube-shell{fill:#e4eee688;stroke:#53765d;stroke-width:1}
 .cube-outline{fill:none;stroke:#284f38;stroke-width:2.2;stroke-linejoin:round}
-.cube-fill-front{fill:#86b779}.cube-fill-side{fill:#4e7f51}.cube-fill-top{fill:#b1d39d;stroke:#48764a;stroke-width:1}
+.cube-fill-front{fill:#689957}.cube-fill-side{fill:#3c6840}.cube-fill-top{fill:#8fba78;stroke:#48764a;stroke-width:1}
 .projected-block .cube-shell{fill:#fae9e688;stroke:#ab615b}
 .projected-block .cube-outline{stroke:#783a35}
-.projected-block .cube-fill-front{fill:#d8766e}.projected-block .cube-fill-side{fill:#a84943}.projected-block .cube-fill-top{fill:#efa69c;stroke:#934f48}
+.projected-block .cube-fill-front{fill:#bd504a}.projected-block .cube-fill-side{fill:#82342f}.projected-block .cube-fill-top{fill:#d5756c;stroke:#934f48}
 .projected-block .block-volume{animation:pending-cube 2s ease-in-out infinite}
-@keyframes pending-cube{0%,100%{opacity:.85}50%{opacity:1}}
+@keyframes pending-cube{0%,100%{opacity:.64}50%{opacity:1}}
 @media(prefers-reduced-motion:reduce){.projected-block .block-volume{animation:none}}
-.node-block-main,.node-block-rate-unit,.transaction-count,.time-difference{text-shadow:0 1px 3px #fff,0 0 7px #ffffffdc}
+.node-block-main,.node-block-rate-unit,.transaction-count,.time-difference{color:#fff;text-shadow:0 1px 3px #172d20,0 0 4px #172d2066}
 
 .bitcoin-block>span,.bitcoin-block>strong{position:relative;z-index:1}.bitcoin-block>.node-block-number{position:absolute}.bitcoin-block>.node-track-marker{position:absolute}

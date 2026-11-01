@@ -27,12 +27,14 @@ def ctx(wallets=None):
 
 def inputs(**values):
  # Historical regression scenarios expressed through the new people graph.
- base=values.pop('base_pay','0');partner=values.pop('partner_id','');mode=values.pop('partner_mode','share');partner_pay=values.pop('partner_pay','0');share=values.pop('partner_percent','10')
+ rise=values.pop('pay_multiplier','1');base=values.pop('base_pay','0');partner=values.pop('partner_id','');mode=values.pop('partner_mode','share');partner_pay=values.pop('partner_pay','0');share=values.pop('partner_percent','10')
  people=[{'id':'a','target':base}];edges=[]
  if partner:
   people.append({'id':partner,'target':partner_pay})
   if mode=='share':edges.append({'from':'a','to':partner,'share':share})
- return dict({'sources':[{'id':'source','mode':'lifetime'}],'frequency':'weekly','weekday':4,'include_lito':False,'medicare_percent':'0','anchor':'2027-07-01','people':people,'allocations':edges,'asset_base_id':'a'},**values)
+ result=dict({'sources':[{'id':'source','mode':'lifetime'}],'frequency':'weekly','weekday':4,'include_lito':False,'medicare_percent':'0','anchor':'2027-07-01','people':people,'allocations':edges,'asset_base_id':'a','price_aud':'10000','schedule_set':True},**values)
+ for p in result['people']:p.setdefault('multiplier',rise)
+ return result
 
 class Schedules(unittest.TestCase):
  def test_actual_dates_include_leap_year_and_53_weekdays(self):
@@ -42,10 +44,10 @@ class Schedules(unittest.TestCase):
  def test_fortnight_anchor_can_precede_or_follow_year_without_changing_phase(self):
   start,end=date(2027,7,1),date(2028,6,30)
   a=paydays(start,end,clean_inputs({'anchor':'2027-07-01'}));b=paydays(start,end,clean_inputs({'anchor':'2028-07-13'}));self.assertEqual(a,b);self.assertEqual(len(a),27)
- def test_monthly_last_day_clamp(self):
-  rows=paydays(date(2027,7,1),date(2028,6,30),clean_inputs({'frequency':'monthly','monthday':31}));self.assertEqual(len(rows),12);self.assertIn(date(2028,2,29),rows);self.assertIn(date(2028,4,30),rows)
+ def test_monthly_has_twelve_first_of_month_paydays(self):
+  rows=paydays(date(2027,7,1),date(2028,6,30),clean_inputs({'frequency':'monthly','monthday':31}));self.assertEqual(len(rows),12);self.assertIn(date(2028,2,1),rows);self.assertIn(date(2028,4,1),rows);self.assertTrue(all(r.day==1 for r in rows))
  def test_reject_invalid_age_amounts_duplicate_sources_and_dates(self):
-  for value in [{'target_age':1.5},{'price_aud':'NaN'},{'pay_multiplier':'Infinity'},{'anchor':'2027-02-30'},{'frequency':'every minute'},{'sources':[{'id':'x','mode':'one_year'}]*2}]:
+  for value in [{'target_age':1.5},{'price_aud':'NaN'},{'people':[{'id':'x','target':'1','multiplier':'Infinity'}]},{'anchor':'2027-02-30'},{'frequency':'every minute'},{'sources':[{'id':'x','mode':'one_year'}]*2}]:
    with self.assertRaises(ValueError):clean_inputs(value)
 
 class Funding(unittest.TestCase):

@@ -165,15 +165,18 @@
     "people": [
       {
         "id": "a",
-        "target": "80000"
+        "target": "80000",
+        "multiplier": "1"
       },
       {
         "id": "b",
-        "target": "0"
+        "target": "0",
+        "multiplier": "1"
       },
       {
         "id": "c",
-        "target": "0"
+        "target": "0",
+        "multiplier": "1"
       }
     ],
     "allocations": [
@@ -190,6 +193,7 @@
     ],
     "asset_base_id": "a",
     "price_aud": "100000",
+    "schedule_set": true,
     "distribution_id": "distributor",
     "fee_edges": [
       {
@@ -253,7 +257,9 @@
           "name": "Profile A",
           "receiving": false,
           "target_aud": "80000.00",
+          "multiplier": "1",
           "share": null,
+          "effective_share": null,
           "parent_id": null,
           "incoming_aud": "80000.00",
           "retained_aud": "72000.00",
@@ -264,7 +270,9 @@
           "name": "Profile B",
           "receiving": true,
           "target_aud": null,
+          "multiplier": "1",
           "share": "10",
+          "effective_share": "10",
           "parent_id": "a",
           "incoming_aud": "8000.00",
           "retained_aud": "6000.00",
@@ -275,7 +283,9 @@
           "name": "Profile C",
           "receiving": true,
           "target_aud": null,
+          "multiplier": "1",
           "share": "25",
+          "effective_share": "25",
           "parent_id": "b",
           "incoming_aud": "2000.00",
           "retained_aud": "2000.00",
@@ -287,12 +297,14 @@
           "from": "a",
           "to": "b",
           "share": "10",
+          "effective_share": "10",
           "amount_aud": "8000.00"
         },
         {
           "from": "b",
           "to": "c",
           "share": "25",
+          "effective_share": "25",
           "amount_aud": "2000.00"
         }
       ],

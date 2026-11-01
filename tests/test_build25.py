@@ -22,7 +22,7 @@ class AllocationGraphs(unittest.TestCase):
  def test_zero_targets_share_remaining_after_fixed_targets(self):
   p=clean_inputs({'people':[{'id':'a','target':'100'},{'id':'b','target':'0'},{'id':'c','target':'0'}]});r=allocate(D('201.01'),p,self.context()['users']);self.assertEqual([D(x['retained_aud']) for x in r['people']],[D(100),D('50.51'),D('50.50')])
  def test_asset_is_a_multiplier_of_selected_independent_target(self):
-  p=clean_inputs({'people':[{'id':'a','target':'100'},{'id':'b','target':'200'}],'pay_multiplier':'1.5','asset_base_id':'b','asset_multiple':'2','asset_enabled':True});r=allocate(D(2000),p,self.context()['users']);self.assertEqual(r['asset_aud'],600);self.assertEqual(r['surplus_aud'],950)
+  p=clean_inputs({'people':[{'id':'a','target':'100','multiplier':'1.5'},{'id':'b','target':'200','multiplier':'1.5'}],'asset_base_id':'b','asset_multiple':'2','asset_enabled':True});r=allocate(D(2000),p,self.context()['users']);self.assertEqual(r['asset_aud'],600);self.assertEqual(r['surplus_aud'],950)
  def test_reject_cycles_two_parents_and_outgoing_shares_over_100(self):
   people=[{'id':i,'target':'0'} for i in 'abc']
   for edges in [[{'from':'a','to':'b','share':'1'},{'from':'b','to':'a','share':'1'}],[{'from':'a','to':'c','share':'1'},{'from':'b','to':'c','share':'1'}],[{'from':'a','to':'b','share':'80'},{'from':'a','to':'c','share':'21'}]]:

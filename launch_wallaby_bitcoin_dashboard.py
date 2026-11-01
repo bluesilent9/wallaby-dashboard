@@ -124,6 +124,8 @@ class Session:
         annotate_signers(balance_report,self.node_registry.hub if self.node_registry else None)
         from live_wallet_traits import annotate
         traits=annotate(balance_report,DescriptorStore(self.preferences_path).read(),self.node_registry)
+        from balance_evidence import annotate as balance_evidence
+        balance_evidence(balance_report,DescriptorStore(self.preferences_path).read(),data,self.preferences_path)
         result={'wallet_traits':traits,'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
                 'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':[dict(item,**source_suggestions(item,data['users'])) for item in display_inventory(self.inventory,DescriptorStore(self.preferences_path).read())] if user else [],'inventory_ready':self.inventory_ready if user else False,
                 **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
@@ -399,6 +401,8 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
     from background_discovery import BackgroundDiscovery
     discovery=BackgroundDiscovery(sessions,busy=lambda:fee_service.activity()['active'] or any(s.status in {'running','waiting'} or s.active_operations for s in list(sessions.sessions.values())))
     sessions.discovery=discovery
+    from node_explorer import NodeExplorer
+    explorer=NodeExplorer(sessions.nodes,sessions.preferences_path)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args):pass
         def json(self,body,status=200):
@@ -444,6 +448,10 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     except (ValueError,FeeUnavailable) as exc:return self.json({'error':str(exc)},400)
                 session=self.authorized()
                 if not session:return self.json({'error':'This browser workspace is not authorised'},403)
+                if path=='/api/explorer':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    try:return self.json(explorer.search(parse_qs(urlsplit(self.path).query).get('q',[''])[0]))
+                    except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/logs':
                     with session.lock:body=sessions.nodes.log_text().encode('utf-8')
                     self.send_response(200);self.send_header('Content-Type','text/plain; charset=utf-8');self.send_header('Content-Disposition','attachment; filename="Wallaby_Dashboard.log"');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.send_header('X-Content-Type-Options','nosniff');self.end_headers();self.wfile.write(body);return
@@ -572,7 +580,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/assets/salary_diagram.js':'assets/salary_diagram.js','/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/assets/node_explorer.js':'assets/node_explorer.js','/assets/salary_diagram.js':'assets/salary_diagram.js','/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)

@@ -1,3 +1,13 @@
+# V1 Build 26 validation
+
+302 Python regression tests and 23 JavaScript suites pass. New tests cover per-person multipliers, effective-share limits and cent conservation, another profile’s distributor, an explicitly confirmed schedule, and retaining acquisition records while presenting wallet-owned addresses/latest statements separately.
+
+Explorer tests use invented transactions and two independent fake nodes: pruned-first-node fallback, every-node attempts, discovering a newly connected wallet, deduplicating replicated unspent outputs, missing parents/unknown fees, null gettxout ambiguity, invalid inputs and invalid output indexes. Interface tests cover negative BTC amounts, click-through searches, old transactions without a block marker, exact half-up BTC/vB rounding and the automatic Ownership verification latch.
+
+Live browser QA uses an isolated local profile and invented balances, public parser fixtures and fabricated node responses. It covers the distributor list across owners, moving assumptions into Stage 1, monthly schedule gating, personal multiplier dialogs, diagram spacing, Mempool search placement and compact transaction details. No family nodes or source documents are involved.
+
+Debian package checks verify metadata, installed-source parity, exclusion of private/runtime inputs, source-download bundling, systemd enable/start instructions, and isolated IPv4/IPv6 web/Agent-health startup. The package is not installed on this machine. No Agent source, private wallet, signing request, transaction broadcast, SSH setting or production configuration is changed.
+
 # V1 Build 25 validation
 
 All 287 Python regression tests pass after network permission was restored, including the 15 previously blocked socket cases. New tests cover chained recipient shares, proportional shortfalls, automatic remainder targets, target restoration, card layouts, missing identities, cycles, duplicate parents, excessive shares and exact annual/payday conservation.

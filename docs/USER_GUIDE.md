@@ -1,3 +1,15 @@
+## Build 26 workflow updates
+
+Build 26 starts Balance Trace automatically when all ownership rows have owners. It opens Terminal Activity immediately, then returns to Wallets on completion. Reopening completed Ownership does not repeat the calculation; changing an assignment triggers verification again.
+
+Salary Builder puts the collapsed tax/SMSF assumptions inside Stage 1, and the pay schedule at the start of Stage 2. Confirm the schedule before configuring salary cards; changing it hides those cards until reconfirmed. Monthly means 12 payments, modelled on each month’s first day. Distributor choices include every active wallet, regardless of owner. Scenario BTC/AUD and target age remain at the top; the saved-quote control is removed. Each person’s card has its own pay-rise multiplier. For an independent target it multiplies salary; for a recipient it multiplies their incoming share, with combined effective shares limited to 100%.
+
+Wallets Sources now show balance/existence information: wallet-owned addresses and node names, or the latest supplied Bitaroo statement filenames. Cost provenance remains internal to the calculations and is not displayed as wallet identity.
+
+Mempool has darker green blocks and a stronger dark/light red pulse for pending blocks. BTC/vB rounds half up to a whole satoshi, with copied values matching the display. Search sits above the blocks and accepts a TXID, address or TXID:output_index. A compact input/output explorer below the blocks adapts Blockstream Esplora’s MIT-licensed presentation. Clicking an address or previous output searches in the same page. Only a pending transaction or one in the three latest blocks receives a block marker.
+
+Search uses connected Core nodes only, rotating requests and trying other nodes when a transaction is unavailable. Address searches check all connected nodes’ loaded wallets, including newly connected wallets not yet in the saved catalog. Replicated UTXOs are counted once. Core has no general address-history index: transaction lists reflect loaded wallet snapshots; a recognised wallet can provide current unspent outputs. Missing history, incomplete node checks and unknown fees are stated explicitly. Pruned or unindexed history is not treated as a zero balance, and no public explorer is contacted.
+
 > Current workflow: Ownership Stage 3 ends with Verify Balances. Wallets and its saved acquisition-cost provenance now come from Balance Trace, not the CGT report. The current README describes this update; historical feature notes below remain for context.
 
 # Wallaby Bitcoin Dashboard — V1 Build 18

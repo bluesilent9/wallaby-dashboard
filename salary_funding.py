@@ -7,6 +7,7 @@ D=Decimal;SAT=D('100000000')
 
 def funding_preview(result,inputs,catalog,coins):
     inputs=clean_inputs(inputs)
+    if not inputs['schedule_set']:raise ValueError('Set the pay schedule at the top of Stage 2 first.')
     cards={w['id']:w for w in catalog['wallets']};destination=inputs['distribution_id'];first=result['funding_paydays'][0]
     if not destination or destination not in cards or not cards[destination]['can_receive']:raise ValueError('Assign a Distributor Wallet with a verified receiving address.')
     if not inputs['people']:raise ValueError('Add at least one person in Stage 2 to calculate allocations.')
@@ -41,6 +42,8 @@ def funding_preview(result,inputs,catalog,coins):
 def calculate(session,ctx,value,check_node,force=False):
     inputs=clean_inputs(value);result=evaluate(ctx,inputs)
     result['funding_template']={'ready':False,'reason':'Assign a Distributor Wallet, add salary people, and connect Network Fee to estimate the first payday transaction.'}
+    if not inputs['schedule_set']:
+        result['funding_template']['reason']='Set the pay schedule at the top of Stage 2 first.';return result
     if not inputs['distribution_id'] or not inputs['fee_edges'] or not inputs['people']:return result
     try:
         check_node()
