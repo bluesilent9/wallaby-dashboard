@@ -304,12 +304,12 @@ Use Cancel Wallet Creation or the transaction Cancel button, then confirm Yes. I
 
 ## Fee projection progress and logs
 
-Use Agent V2 Build 20 with Dashboard Build 21. Fee rates appear first while the Dashboard collects the local mempool in pages; the block view shows the received and expected transaction counts. Pending blocks appear only after the complete snapshot is checked. If a page fails or expires, the graph is discarded while rates and mined blocks remain available. Refresh to try a new capture, or wait for the two-minute refresh.
+Use Agent V2 Build 20 with Dashboard Build 22. Fee rates appear first while the Dashboard collects the local mempool in pages; the block view shows the received and expected transaction counts. Pending blocks appear only after the complete snapshot is checked. If a page fails or expires, the graph is discarded while rates and mined blocks remain available. Refresh to try a new capture, or wait for the two-minute refresh.
 
 Administration → Logs exports UTF-8 diagnostics with the Dashboard version, UTC export time, connected Agent versions and correlated refresh/RPC/page measurements. Byte counts described as observed_bytes_at_least are lower bounds. Logs retain at most seven UTC days and 1 MiB per day; no mempool payload or credentials are included.
 
 
-## Build 21 automatic discovery and profiles
+## Build 22 automatic discovery and profiles
 
 Connect a fully synchronised Agent/node with its Core wallets loaded. Wallaby automatically discovers public wallets while foreground work is idle; it never navigates to Terminal Activity on its own. Ownership stays disabled on a fresh profile until complete wallet history is available. Terminal Activity exposes live background progress while a check runs. Failed or missing history is logged and retried, never accepted as an empty balance.
 

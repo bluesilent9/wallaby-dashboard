@@ -1,6 +1,6 @@
-# Dashboard Build 21 — complete paged mempool projections
+# Dashboard Build 22 — complete paged mempool projections
 
-Agent V2 Build 20 adds the read-only `wallaby_mempool_snapshot` adapter, advertised in the existing RPC registration method list. Dashboard Build 21 allows that method and uses it exclusively for Fee Estimates projections. There is no full-response fallback and no increase to the ordinary 16 MiB remote response limit.
+Agent V2 Build 20 adds the read-only `wallaby_mempool_snapshot` adapter, advertised in the existing RPC registration method list. Dashboard Build 22 allows that method and uses it exclusively for Fee Estimates projections. There is no full-response fallback and no increase to the ordinary 16 MiB remote response limit.
 
 The supplied logs identified `local_rpc_response_limit` for 37,963 transactions at 31 October 2026 21:32:40 UTC and 38,108 at 21:33:41 UTC. Core fee priorities, quotes and mined blocks succeeded. The Agent's local capture now has a separate 64 MiB/100,000-entry limit; its public pages remain subject to existing private-material and response-size checks.
 

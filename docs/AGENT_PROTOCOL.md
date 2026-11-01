@@ -1,4 +1,4 @@
-> Dashboard Build 21 uses the read-only paged mempool adapter from Agent Build 20. See [PAGED_MEMPOOL.md](PAGED_MEMPOOL.md) for exact page validation and diagnostic rules.
+> Dashboard Build 22 uses the read-only paged mempool adapter from Agent Build 20. See [PAGED_MEMPOOL.md](PAGED_MEMPOOL.md) for exact page validation and diagnostic rules.
 
 # Dashboard Build 20
 
