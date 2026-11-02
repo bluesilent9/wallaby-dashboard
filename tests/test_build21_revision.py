@@ -43,7 +43,7 @@ class Discovery(unittest.TestCase):
   catalog=DescriptorStore(self.config).read();self.assertTrue(DescriptorStore(self.config).summary()['loaded']);self.assertFalse(history_ready(self.config,catalog));self.assertFalse(self.service.activity()['active'])
  def test_read_on_ownership_delete_and_new_user_delivery(self):
   flow=WorkflowStore(self.config);flow.discovered([self.uid],['a'],[self.uid]);self.assertEqual(flow.notifications(self.uid)['unread_count'],0)
-  notice=flow.notifications(self.uid)['notifications'][0];flow.update_notifications(self.uid,delete=notice['id']);flow.discovered([self.uid],['a']);self.assertEqual(flow.notifications(self.uid)['notifications'],[])
+  notice=flow.notifications(self.uid)['notifications'][0];flow.update_notifications(self.uid,delete=notice['id']);flow.discovered([self.uid],['a']);self.assertEqual(len(flow.notifications(self.uid)['notifications']),1)
   flow.discovered(['other'],['a']);self.assertEqual(flow.notifications('other')['unread_count'],1);flow.read_discovery('other');self.assertEqual(flow.notifications('other')['unread_count'],0)
  def test_foreground_work_yields_until_cancelled(self):
   self.service.busy=lambda:True;self.service.stop.set()

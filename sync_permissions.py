@@ -1,14 +1,25 @@
 """Observe Agent-owned receive permissions. No Dashboard denial list or restore authority."""
-import re,secrets,time,threading
+import re,secrets,time,threading,json
+from functools import lru_cache
 from agent_hub import digest
 from setup_signatures import verify,fingerprint
 from node_wallets import NodeWalletLoader
 
 NAMESPACE='wallaby-sync-preferences-v1'
-def policy_id(raw):
+def _derive_policy(raw):
     from wallet_preview import policies
     policies(raw,allow_addresses=True)
     return digest(sorted({NodeWalletLoader.descriptor_key(r['desc']) for r in raw['descriptors']}))
+
+@lru_cache(maxsize=512)
+def _cached_policy(encoded):
+    return _derive_policy(json.loads(encoded))
+
+def policy_id(raw):
+    # Cache only exact validated public records, not mutable objects or names.
+    # Changed descriptors/metadata revalidate. Bound key size as well as count.
+    encoded=json.dumps(raw,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
+    return _cached_policy(encoded) if len(encoded)<=32768 else _derive_policy(raw)
 
 class Permissions:
     def __init__(self,hub):self.hub=hub;self.live={};self.lock=threading.RLock()
@@ -27,6 +38,17 @@ class Permissions:
         row=self.current(node)
         if not row or row.get('record') is None or time.monotonic()-row.get('checked',0)>45:return None
         return policy_id(raw) not in row['record']['policies']
+    def fresh(self,node):
+        row=self.current(node)
+        return bool(row and row.get('record') is not None and time.monotonic()-row.get('checked',0)<=45)
+    def allows_offer(self,node,raw):
+        current=self.permits(node,raw)
+        if current is not None:return current
+        # Public invitations are not operation authority. A polling delay must
+        # not withdraw locally reviewed work. Keep the last verified choice for
+        # this authenticated connection; the Agent also enforces its live list.
+        row=self.current(node);record=row.get('record') if row else None
+        return bool(record is not None and policy_id(raw) not in record['policies'])
     def proposals(self,node,token):
         if not self.supported(node):return []
         with self.lock:
@@ -74,7 +96,7 @@ class Permissions:
         fresh=bool(record is not None and time.monotonic()-row.get('checked',0)<=45)
         names={}
         from extinct_sync import containers
-        for inv in self.hub.inventories.values():
+        for inv in (self.hub.inventories.values() if record and record['policies'] else ()):
             try:grouped=containers(inv.get('wallets',[]))
             except ValueError:grouped=[] # Synchronisation reports its explicit error; keep Nodes readable.
             for w in [*inv.get('wallets',[]),*grouped]:

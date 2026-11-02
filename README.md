@@ -2,9 +2,19 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 32 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev32_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 33 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev33_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
+
+## Build 33
+
+- The reported MAC address continues to identify a node across hostname/IP changes. Changed direct-peer IPv6 routes now generate a fresh public invitation automatically for the same node identities, after current inventories and node readiness are checked. Original approvals/signatures are not reused; late delivery/recovery results remain authoritative and stop replacement invitations.
+- Delayed permission polling no longer withdraws already-offered reviews; current local Agent exclusions and approval remain authoritative. Wallet synchronisation stays independent of users and Ownership assignments. Nodes explicitly distinguishes blockchain readiness from wallet inventory, permission and outstanding-request checks.
+- Background discovery and restored/completed jobs no longer pull the browser back to Ownership. Explicitly followed foreground Ownership jobs still return to their correct stage. A dismissible yellow reminder reappears while discovered wallets lack ownership and clears when assignments are complete.
+- Nodes status processing reuses bounded, validated public-policy identities instead of repeatedly parsing the same descriptors under shared locks. The profiled three-node fixture improved from 4.65 seconds to 0.15 seconds per snapshot; changed records still revalidate.
+- Use **Agent V2 Build 29** for the matching authenticated-session revision reset and local request restoration fixes. No Agent source is changed by this Dashboard update.
+
+See [Build 33 coordination details](docs/BUILD33_SYNC_ROUTES.md).
 
 ## Build 32
 

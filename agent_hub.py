@@ -62,8 +62,8 @@ class AgentHub:
             os.replace(temp,self.path)
     def node_summary(self,node):
         with self.lock:
-            state=self.read();entry=state['nodes'].get(node,{})
-            return {'sync_permissions':self.permissions.summary(node),'ipv6':entry.get('ipv6'),'capabilities':sorted(self.caps.get(node,set())), 'inventory_ready':bool(self.inventories.get(node,{}).get('complete')),'inventory_error':self.inventories.get(node,{}).get('error'),'transfers':self.transfers.summaries(state,node),'version':next((c.get('agent_version') for c in self.registry.connections.values() if c['node_id']==node),None)}
+            state=self.read();entry=state['nodes'].get(node,{});transfers=self.transfers.summaries(state,node)
+            return {'sync_permissions':self.permissions.summary(node),'ipv6':entry.get('ipv6'),'capabilities':sorted(self.caps.get(node,set())), 'inventory_ready':bool(self.inventories.get(node,{}).get('complete')),'inventory_error':self.inventories.get(node,{}).get('error'),'synchronisation':__import__('sync_routes').summary(self,node,state,transfers),'transfers':transfers,'version':next((c.get('agent_version') for c in self.registry.connections.values() if c['node_id']==node),None)}
     def rpc(self,node,method,params=None,wallet=None):
         from wallet_transfers import SynchronisationBusy
         if self.transfers.is_busy(node):raise SynchronisationBusy('Wallet synchronisation is active; node reads resume after both Agents finish.')
@@ -155,7 +155,7 @@ class AgentHub:
                 from extinct_sync import containers,supersede_children
                 for wallet in containers(origin['wallets']):
                     if wallet.get('extinct'):supersede_children(state,target,wallet)
-                    if wallet.get('signing_only') or self.permissions.permits(target,wallet['raw']) is not True:continue
+                    if wallet.get('signing_only') or not self.permissions.allows_offer(target,wallet['raw']):continue
                     from wallet_retirement import suppress_sync
                     if suppress_sync(state,wallet['raw']):continue
                     try:
@@ -201,7 +201,7 @@ class AgentHub:
         if not isinstance(caps,list) or len(caps)>16 or any(not isinstance(k,str) or not re.fullmatch('[a-z0-9_]{1,64}',k) for k in caps):raise ValueError('Invalid Agent capability list.')
         unsupported=sorted(set(caps)-CAPS)
         if unsupported:
-            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 32; Agent '+str(c.get('agent_version','unknown'))+'.')
+            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 33; Agent '+str(c.get('agent_version','unknown'))+'.')
             raise ValueError('Unsupported Agent capabilities.')
         canonical(data)
         verified=[]

@@ -4,12 +4,14 @@ def reason(hub,state,rows):
     source=next((r for r in rows if r['direction']=='send'),None);target=next((r for r in rows if r['direction']=='receive'),None)
     if not source or not target:return 'invalid_pair','The paired request is incomplete; reconcile locally.'
     if target['state']=='complete':return None,None
+    from sync_routes import prior_in_progress
+    if prior_in_progress(hub.transfers,state,rows):return 'earlier_operation','An earlier operation reported wallet delivery or history recovery. Reconcile that result before reviewing a replacement invitation.'
     if any(r['state']=='recovery_required' for r in rows):return 'history_recovery','Wallet data was received; finish history recovery on the Agent. No file transfer will be repeated.'
     if any(r['state'] in ('denied','error') for r in rows):return 'local_outcome','A previous attempt was declined or failed. Reconcile both Agents before starting a new review.'
     if any(r.get('preview_notice') for r in rows):return 'preview_changed','The sender reported a different snapshot. Reconcile both Agents, then start a fresh review.'
     permission=hub.permissions.permits(target['node_id'],target['public_wallet'])
     if permission is False:return 'disabled','Incoming synchronisation is disabled on the receiving Agent.'
-    if permission is None:return 'permissions_pending','Waiting for the receiving Agent’s current signed synchronisation permissions.'
+    if permission is None and not hub.permissions.allows_offer(target['node_id'],target['public_wallet']):return 'permissions_pending','Waiting for the receiving Agent’s current signed synchronisation permissions.'
     live={c['node_id']:c for c in list(hub.registry.connections.values()) if hub.registry.rpc._unique(c)}
     if not {source['node_id'],target['node_id']}<=live.keys():return 'peer_offline','Waiting for both paired Agents to be connected without identity conflicts.'
     for row in rows:

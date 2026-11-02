@@ -1,3 +1,7 @@
+## Build 33 validation
+
+Targeted Dashboard/Agent 29 interoperability tests cover current network routes under stable MAC identities, new signed review bindings, preserving active local work, refusing parallel selection, late-result precedence, ownership-independent pairing and profile-clear queue revision rebasing. Browser tests verify background work does not steal navigation and unresolved ownership reminders regenerate. All 415 Python tests and 29 JavaScript suites passed against Agent V2 Build 29 source. The public-identity cache test confirms unchanged records reuse validation, renamed records retain policy identity, and corrupted descriptors revalidate and fail. Profiling results improved from 4.6505 s to 0.1507 s for the same three-node/13-wallet status fixture. Package verification results are recorded in the build review output.
+
 ## Build 32 validation
 
 Final tests use Agent V2 Build 28 source. New coverage applies actual Dashboard lists to three isolated companion stores and verifies an older genuinely signed snapshot with the real Agent request-bound verifier. Both receivers retain eleven missing wallet requests and the sender retains twenty-two, including after an empty withdrawal. Signatures, binding, future-time checks, local approval and live-fact validation remain required. Production nodes and wallets are untouched.

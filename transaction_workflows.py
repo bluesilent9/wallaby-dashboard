@@ -62,17 +62,16 @@ class WorkflowStore:
                 rows.append(dict(value,id=previous['id'] if same else uuid.uuid4().hex,created_utc=previous['created_utc'] if same else datetime.now(timezone.utc).isoformat()))
             if json.dumps(rows,sort_keys=True)!=before:self._write(state)
     def discovered(self,users,wallet_ids,reading=()):
-        if not wallet_ids:return
+        from preferences import resource_id
+        family=FamilyStore(self.config).snapshot();owners={r['id']:r for r in family['ownership']}
+        unassigned=[w for w in wallet_ids if not (owners.get(resource_id('descriptor',w),{}).get('external') or owners.get(resource_id('descriptor',w),{}).get('owner_id') in {u['id'] for u in family['users']})]
         with storage_lock(self.config):
-            data=self._read();before=json.dumps(data,sort_keys=True);seen=data.setdefault('discovered_wallets',{})
+            data=self._read();before=json.dumps(data,sort_keys=True)
             for user in users:
-                known=set(seen.get(user,[]));new=set(wallet_ids)-known
-                if new:
-                    data['notices'].setdefault(user,[]).append({'id':uuid.uuid4().hex,'kind':'wallet_discovery','target':'ownership','text':'Wallets have been discovered. Complete the Ownership process.','created_utc':datetime.now(timezone.utc).isoformat(),'read':user in reading})
-                    seen[user]=sorted(known|set(wallet_ids))
-                if user in reading:
-                    for notice in data['notices'].get(user,[]):
-                        if notice.get('kind')=='wallet_discovery':notice['read']=True
+                notices=data['notices'].setdefault(user,[]);current=next((n for n in notices if n.get('kind')=='wallet_discovery'),None)
+                notices[:]=[n for n in notices if n.get('kind')!='wallet_discovery' or n is current and unassigned]
+                if unassigned and current is None:
+                    notices.append({'id':uuid.uuid4().hex,'kind':'wallet_discovery','target':'ownership','severity':'yellow','text':'Wallets have been discovered. Complete the Ownership process.','created_utc':datetime.now(timezone.utc).isoformat(),'read':user in reading})
             if json.dumps(data,sort_keys=True)!=before:self._write(data)
     def read_discovery(self,user):
         with storage_lock(self.config):

@@ -17,10 +17,15 @@ def contains(wallets,raw):
 
 def schedule(transfers,state):
     hub=transfers.hub
+    from sync_routes import renew,prior_in_progress
+    renew(transfers,state)
     ready={c['node_id']:c for c in list(hub.registry.connections.values()) if hub.registry.rpc._unique(c)}
     for rows in transfers.pairs(state).values():
         if len(rows)!=2:continue
         if any(r.get('superseded_container') or r.get('superseded_attempt') for r in rows):
+            for row in rows:row['queue_visible']=False
+            continue
+        if prior_in_progress(transfers,state,rows):
             for row in rows:row['queue_visible']=False
             continue
         source=next(r for r in rows if r['direction']=='send');receiver=next(r for r in rows if r['direction']=='receive')
@@ -43,7 +48,7 @@ def schedule(transfers,state):
             for row in rows:
                 row.update(queue_v2=True,challenge=challenge,base_sent=0,active_pair=False)
         permission=hub.permissions.permits(receiver['node_id'],receiver['public_wallet'])
-        active=permission is True and nodes<=ready.keys() and all(modern(hub,n) and 'wallet_transfer' in hub.caps.get(n,set()) and state['nodes'].get(n,{}).get('ipv6') for n in nodes)
+        active=hub.permissions.allows_offer(receiver['node_id'],receiver['public_wallet']) and nodes<=ready.keys() and all(modern(hub,n) and 'wallet_transfer' in hub.caps.get(n,set()) and state['nodes'].get(n,{}).get('ipv6') for n in nodes)
         active=active and receiver['state']!='complete' and not any(r['state'] in ('denied','error') for r in rows)
         if active and not source.get('proposal'):
             active=all(hub.registry.health.status(ready[n]).get('state')=='ready' for n in nodes)
