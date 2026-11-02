@@ -57,6 +57,8 @@ class Renames(Setup):
   ident=self.start();o=self.q.read()['operations'][ident]
   with patch.object(self.q,'archives',return_value={'replacement':{'archive_id':'c'*64,'raw':self.wallet['raw'],'storage':'disc','node_id':None,'hostname':'Agent','wallet':'Renamed Wallet'}}):self.q.add_targets(o)
   self.assertEqual(len(o['targets']),2)
+ def test_agent_confirmed_destroyed_disc_is_not_renamed(self):
+  a=ArchiveQueue(self.hub);s=a.read();s['requests']['a'*64]={'state':'complete','request':{'kind':'archive_wallet','public_wallet':self.wallet['raw'],'wallet':self.wallet['name']},'result':{'archive_id':'e'*64}};s['requests']['b'*64]={'state':'complete','request':{'kind':'destroy_disc','archive_id':'e'*64},'result':{'destruction_confirmed_locally':True}};a.write(s);self.assertFalse(self.q.archives(self.wallet['raw']))
  def test_new_build_cannot_start_during_rename(self):
   self.start()
   with self.assertRaisesRegex(ValueError,'renames'):BuilderWorkspace(self.config).start(self.user,'transaction')

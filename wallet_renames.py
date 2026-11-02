@@ -49,8 +49,9 @@ class RenameQueue:
         return found
     def archives(self,raw):
         from archive_queue import ArchiveQueue
-        found={}
-        for row in ArchiveQueue(self.hub).read()['requests'].values():
+        found={};archive_rows=ArchiveQueue(self.hub).read()['requests'].values()
+        destroyed={r['request']['archive_id'] for r in archive_rows if r['request']['kind']=='destroy_disc' and r['state']=='complete' and r.get('result',{}).get('destruction_confirmed_locally') is True}
+        for row in archive_rows:
             p=row['request'];r=row.get('result',{})
             if p['kind']!='archive_wallet' or row['state']!='complete' or not matches(raw,{'raw':p['public_wallet'],'private_keys_enabled':True}):continue
             archive=r.get('archive_id')
@@ -78,7 +79,7 @@ class RenameQueue:
                 if not matches(raw,{'raw':account,'private_keys_enabled':True}):continue
                 if any(equivalent(v['raw'],account) for v in found.values()):continue
                 found['backup:'+digest({'session':setup['proposal']['session_id'],'role':role['id']})]={'archive_id':None,'raw':account,'storage':'disc','node_id':None,'hostname':'Any Agent — read the original signer archive','wallet':role['name']}
-        return found
+        return {key:value for key,value in found.items() if value.get('archive_id') not in destroyed}
     def add_targets(self,op):
         candidates={**self.holders(op['raw']),**self.archives(op['raw'])}
         for key,t in candidates.items():
@@ -153,7 +154,7 @@ class RenameQueue:
             s=self.read();o=s['operations'].get(ident)
             if not o:raise ValueError('Unknown rename.')
             if o['user_id']!=user:raise ValueError('Select the profile that started this rename.')
-            if o['locked']:raise ValueError('An Agent has already renamed this wallet. Finish the remaining requests; the rename cannot be cancelled.')
+            if o['locked']:raise ValueError('An Agent has already renamed this wallet or reported an uncertain attempt. Finish or reconcile the remaining requests; the rename cannot be cancelled.')
             o['state']='withdrawn';s['revision']+=1;self.write(s)
         return self.snapshot()
     def accept(self,node,envelope):
@@ -192,7 +193,7 @@ class RenameQueue:
         nodes={n['id']:n for n in self.hub.registry.snapshot()['nodes']}
         s=self.read();rows=[]
         for o in s['operations'].values():
-            rows.append({k:o[k] for k in ('id','old_name','new_name','created_utc','state')}|{'can_cancel':o['state']=='active' and not o['locked'],'targets':[{'id':i,'hostname':t['hostname'],'wallet':t['wallet'],'new_name':t['new_name'],'storage':t['storage'],'state':t['state'],'status':t['status'] if t['state']=='complete' or t.get('result') else ('Agent offline' if t['node_id'] and not nodes.get(t['node_id'],{}).get('rpc_ready') else t['status']),'needs_route':t['storage']=='disc' and t['request'] is None} for i,t in o['targets'].items()]})
+            rows.append({k:o[k] for k in ('id','resource_id','old_name','new_name','created_utc','state')}|{'can_cancel':o['state']=='active' and not o['locked'],'targets':[{'id':i,'hostname':t['hostname'],'wallet':t['wallet'],'new_name':t['new_name'],'storage':t['storage'],'state':t['state'],'status':t['status'] if t['state']=='complete' or t.get('result') else ('Agent offline' if t['node_id'] and not nodes.get(t['node_id'],{}).get('rpc_ready') else t['status']),'needs_route':t['storage']=='disc' and t['request'] is None} for i,t in o['targets'].items()]})
         return {'operations':rows,'agents':[{'id':n['id'],'hostname':n['hostname']} for n in nodes.values() if n.get('rpc_ready') and CAPABILITY in self.hub.caps.get(n['id'],set())]}
 
 def validate(s):

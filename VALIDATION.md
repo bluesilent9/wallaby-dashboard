@@ -1,6 +1,6 @@
 # V1 Build 29 validation
 
-362 Python regression tests and 27 JavaScript suites pass. Build 29 adds persistent descriptor-scoped rename coordination, signed Agent completion checks, local archive routing, uncertain-attempt/cancellation handling and profile validation. Regression tests cover private/watch replicas, identical descriptor copies on one node, late success after withdrawal, cancellation lock after partial completion, preventing stale builder routes, archived member evidence, local duplicate waiver proof, changed-name signature rejection and exact Agent Build 25 task validation in a separate interpreter.
+363 Python regression tests and 27 JavaScript suites pass. Build 29 adds persistent descriptor-scoped rename coordination, signed Agent completion checks, local archive routing, uncertain-attempt/cancellation handling and profile validation. Regression tests cover private/watch replicas, identical descriptor copies on one node, late success after withdrawal, cancellation lock after partial completion, preventing stale builder routes, archived member evidence, local duplicate waiver proof, changed-name signature rejection and exact Agent Build 25 task validation in a separate interpreter.
 
 JavaScript checks cover the pencil action, owner and active-wallet restrictions, status rows, cancellation availability and selection of an Agent with a loaded original disc. Existing UI suites remain included.
 
