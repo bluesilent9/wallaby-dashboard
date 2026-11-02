@@ -13,13 +13,14 @@ class StalledReviews(previous.PreviewTests):
   with self.hub.edit() as state:schedule(self.hub.transfers,state)
   self.hub.inventory_times={n['node_id']:time.monotonic() for n in (self.a,self.b)}
   return self.source['transfer_id']
- def test_empty_live_queue_still_has_explicit_expiry_and_recovery_action(self):
-  with self.registry.lock:self.registry._conflicts()
-  ident=self.expire()
-  with self.registry.lock:self.registry._conflicts()
-  self.assertTrue(any('Start fresh sync reviews' in w['text'] for w in self.registry.warnings.values()));state=self.hub.read();self.assertFalse(state['nodes'][self.b['node_id']]['sync_snapshot']);row=self.hub.transfers.summaries(state,self.b['node_id'])[0];self.assertEqual(row['blocked_code'],'preview_expired');self.assertIn('fresh review',row['blocked_reason']);self.assertTrue(row['fresh_review_available']);self.assertEqual(state['nodes'][self.b['node_id']]['sync_blockers'],{'preview_expired':1})
+ def test_visible_stale_queue_remains_available_without_restarting_a_transfer(self):
+  ident=self.expire();state=self.hub.read();row=self.hub.transfers.summaries(state,self.b['node_id'])[0]
+  self.assertEqual(len(state['nodes'][self.b['node_id']]['sync_snapshot']),1);self.assertIsNone(row['blocked_code']);self.assertTrue(row['review_available']);self.assertFalse(row['fresh_review_available']);self.assertEqual(state['nodes'][self.b['node_id']]['sync_blockers'],{})
  def test_confirmed_refresh_creates_fresh_requests_and_preserves_late_outcome(self):
-  ident=self.expire();before=copy.deepcopy(self.hub.read()['requests'])
+  ident=self.expire()
+  with self.hub.edit() as state:
+   next(r for r in state['requests'].values() if r['direction']=='send')['preview_notice']='Changed snapshot requires reconciliation.'
+  before=copy.deepcopy(self.hub.read()['requests'])
   with self.assertRaises(ValueError):self.hub.transfers.refresh_reviews([ident],False)
   self.assertEqual(before,self.hub.read()['requests']);result=self.hub.transfers.refresh_reviews([ident],True);self.assertEqual(result['created'],1);self.assertFalse(any(w['id']=='wallet-sync-'+ident for w in self.hub.sync_warnings()));state=self.hub.read();old=next(r for r in state['requests'].values() if r['direction']=='receive' and r['transfer_id']==ident);self.assertTrue(old['superseded_attempt']);self.assertEqual(old['state'],'pending')
   self.result(self.b,self.target,'complete');state=self.hub.read();self.assertEqual(next(r for r in state['requests'].values() if r['direction']=='receive' and r['transfer_id']==ident)['state'],'complete')
@@ -50,10 +51,12 @@ class BulkThreeNodes(Setup):
   for n,ip in ((self.a,'2001:db8::1'),(self.b,'2001:db8::2'),(third,'2001:db8::3')):self.exchange(n,caps=['wallet_transfer'],node_info={'ipv6':ip})
   with self.hub.edit() as state:
    # Scheduler fixture only; signature activation is covered separately by real
-   # SSH-signed tests. Expired public notices are never sent as live previews.
+   # SSH-signed tests. Changed snapshots require deliberate new attempts.
    for row in state['requests'].values():
-    if row['direction']=='send':row['signed_preview']={'preview':{'generated_at':int(time.time())-3600}}
+    if row['direction']=='send':row['signed_preview']={'preview':{'generated_at':int(time.time())-3600,'transfer_id':row['transfer_id']}}
    schedule(self.hub.transfers,state)
+   for row in state['requests'].values():
+    if row['direction']=='send':row['preview_notice']='Changed snapshot requires reconciliation.'
   old=set(self.hub.transfers.pairs(self.hub.read()));self.assertEqual(len(old),22)
   for n in (self.b,third):
    self.assertEqual(len([r for r in self.hub.transfers.summaries(self.hub.read(),n['node_id']) if r['fresh_review_available']]),11)

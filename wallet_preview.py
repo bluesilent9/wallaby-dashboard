@@ -45,7 +45,7 @@ def validate(payload,now=None,fresh=True):
     tip=p['node_tip']
     if not isinstance(tip,dict) or set(tip)!={'height','hash'} or type(tip['height']) is not int or not 0<=tip['height']<500000000 or not isinstance(tip['hash'],str) or not HEX.fullmatch(tip['hash']):raise ValueError('Invalid preview node tip.')
     stamp=p['generated_at'];now=time.time() if now is None else now
-    if type(stamp) is not int or not 0<=stamp<=4102444800:raise ValueError('Invalid preview timestamp.')
+    if type(stamp) is not int or not 0<stamp<=min(4102444800,now+120):raise ValueError('Invalid preview timestamp.')
     if fresh and not now-900<=stamp<=now+120:raise ValueError('Wallet preview expired or has a future timestamp. Reconcile Core and start a fresh attempt.')
     rows=p['funded_outputs'];seen=set();total=0
     if not isinstance(rows,list) or len(rows)>10000:raise ValueError('Invalid preview output count.')

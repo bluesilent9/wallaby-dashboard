@@ -18,8 +18,8 @@ class PreviewLifecycle(previous.PreviewTests):
   with self.hub.edit() as state:
    for row in state['requests'].values():row['queue_visible']=False;row['state']='denied'
   self.assertIn(self.item('wallet_transfer_preview',payload)['id'],self.send(payload)['accepted']);self.assertFalse(any(r.get('signed_preview') for r in self.hub.read()['requests'].values()))
- def test_expired_notice_does_not_create_live_preview(self):
-  p=copy.deepcopy(self.preview);p['generated_at']=int(time.time())-3600;payload=self.signed_preview(p);self.assertIn(self.item('wallet_transfer_preview',payload)['id'],self.send(payload)['accepted']);self.assertFalse(any(r.get('signed_preview') for r in self.hub.read()['requests'].values()))
+ def test_older_bound_notice_retains_immutable_public_review(self):
+  p=copy.deepcopy(self.preview);p['generated_at']=int(time.time())-3600;payload=self.signed_preview(p);self.assertIn(self.item('wallet_transfer_preview',payload)['id'],self.send(payload)['accepted']);self.assertTrue(any(r.get('signed_preview') for r in self.hub.read()['requests'].values()))
  def test_forged_changed_notice_is_still_rejected(self):
   payload=self.signed_preview();self.send(payload);payload['preview']['node_tip']['height']+=1
   with self.assertRaises(ValueError):self.send(payload)

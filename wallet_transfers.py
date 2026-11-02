@@ -63,9 +63,6 @@ class Transfers:
                 sender['preview_notice']='Changed preview acknowledged; original frozen snapshot retained. Reconcile locally before a fresh attempt.'
                 return sender['preview_notice']
             return
-        if not time.time()-900<=v['generated_at']<=time.time()+120:
-            for r in rows:r['message']='Signed preview expired. Reconcile the local Agents and request a deliberate fresh attempt.'
-            return 'Expired preview acknowledged without activating a snapshot'
         sender['signed_preview']=copy.deepcopy(wire);sender['preview_proof']=proof
     def accept_result(self,state,node,p):
         from agent_hub import digest

@@ -1,5 +1,4 @@
 """Explain why known sync work is absent from an Agent's live review list."""
-import time
 
 def reason(hub,state,rows):
     source=next((r for r in rows if r['direction']=='send'),None);target=next((r for r in rows if r['direction']=='receive'),None)
@@ -8,8 +7,6 @@ def reason(hub,state,rows):
     if any(r['state']=='recovery_required' for r in rows):return 'history_recovery','Wallet data was received; finish history recovery on the Agent. No file transfer will be repeated.'
     if any(r['state'] in ('denied','error') for r in rows):return 'local_outcome','A previous attempt was declined or failed. Reconcile both Agents before starting a new review.'
     if any(r.get('preview_notice') for r in rows):return 'preview_changed','The sender reported a different snapshot. Reconcile both Agents, then start a fresh review.'
-    preview=source.get('signed_preview',{}).get('preview')
-    if preview and not time.time()-900<=preview['generated_at']<=time.time()+120:return 'preview_expired','The earlier public preview expired. Reconcile both Agents, then start a fresh review; no wallet operation has been retried.'
     permission=hub.permissions.permits(target['node_id'],target['public_wallet'])
     if permission is False:return 'disabled','Incoming synchronisation is disabled on the receiving Agent.'
     if permission is None:return 'permissions_pending','Waiting for the receiving Agent’s current signed synchronisation permissions.'

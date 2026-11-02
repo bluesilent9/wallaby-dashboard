@@ -1,0 +1,11 @@
+# Build 32: review lifetime follows the paired request
+
+The supplied V1 Build 31 deployment log records `queued=0 · blockers=preview_expired:22`. All three Agents were present, with zero local exclusions, and all node inventories had been discovered. The Dashboard incorrectly expired the whole request list because its public review was older than fifteen minutes.
+
+A signed public review is not a wallet-operation authorisation. Build 32 retains the original snapshot for its exact pending request. Queue membership and preview delivery no longer expire after fifteen minutes. The Dashboard still verifies signatures and the exact transfer ID, challenge, source, peer endpoints and policy set, rejects future timestamps, and never replaces an original snapshot with changed data. It does not rotate challenges, retry wallet operations or fabricate outcomes.
+
+Matching Agent V2 Build 28 uses its request-bound verifier rather than a standalone fifteen-minute freshness check. Before any locally approved transfer, both peers still verify live Core facts against that immutable review. The signed receipt's timestamp is historical evidence, not a claim that the current balance was just checked. Local approvals and direct peer checks remain mandatory.
+
+Changed snapshots and changed peer addresses still need deliberate reconciliation and a fresh request through Nodes. The recovery control remains for those cases; simple passage of time needs no reset. Existing denial, offline-peer, rename, retirement and history-recovery gates remain. Old age-only generated diagnostic messages are cleared without changing actual operation outcomes.
+
+Regression coverage uses three isolated real Agent stores, eleven missing policies per receiver, an older empty-list withdrawal and restored requests. A separately signed one-day-old snapshot is delivered unchanged through Dashboard to the actual Agent 28 verifier. Incorrect signatures, wallet/peer/challenge changes, unknown requests and future timestamps remain rejected. These tests do not claim physical disc coverage or actual encrypted private-file copying; direct execution is covered separately by the Agent test cluster. Production nodes and wallets are untouched.

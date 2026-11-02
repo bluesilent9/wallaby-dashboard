@@ -1,5 +1,5 @@
 """Agent Build 8 authoritative public lists. Listing is never transfer authority."""
-import copy,re,secrets,time
+import copy,re,secrets
 from node_wallets import NodeWalletLoader
 
 
@@ -52,11 +52,12 @@ def schedule(transfers,state):
         # Frozen endpoints cannot silently change when a node reconnects elsewhere.
         if active:
             active=all(row.get('proposal') and row['proposal']['node_ipv6']==state['nodes'][row['node_id']]['ipv6'] and row['proposal']['peer']['ipv6']==state['nodes'][row['peer_id']]['ipv6'] for row in rows)
-        preview=source.get('signed_preview')
-        if preview and not time.time()-900<=preview['preview']['generated_at']<=time.time()+120 and not any(r['state']=='recovery_required' for r in rows):
-            active=False
-            for row in rows:row['message']='Signed preview expired. Reconcile the local Agents and request a deliberate fresh attempt.'
-        for row in rows:row['queue_visible']=bool(active)
+        # An immutable signed public review belongs to this paired request,
+        # not to a 15-minute session. Agent 28 re-verifies the exact binding and
+        # compares current Core facts before any locally authorised transfer.
+        for row in rows:
+            row['queue_visible']=bool(active)
+            if row['state']=='pending' and row.get('message')=='Signed preview expired. Reconcile the local Agents and request a deliberate fresh attempt.':row.pop('message')
         if receiver['state']=='complete':
             for row in rows:row['queue_visible']=False
             if not receiver.get('history_refresh_scheduled'):
@@ -94,7 +95,7 @@ def proposals(transfers,state,node):
         if not row:continue
         row['base_sent']=row.get('base_sent',0)+1
         sender=next(r for r in rows if r['direction']=='send');payload=sender.get('signed_preview')
-        if row['direction']=='receive' and row['state']=='pending' and payload and time.time()-900<=payload['preview']['generated_at']<=time.time()+120:
+        if row['direction']=='receive' and row['state']=='pending' and payload:
             previews.append({'kind':'wallet_transfer_preview',**copy.deepcopy(payload)})
     # Queue first, followed by a rotating bounded set of unchanged signed previews.
     if previews:

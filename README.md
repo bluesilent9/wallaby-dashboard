@@ -2,9 +2,17 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 31 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev31_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 32 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev32_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
+
+## Build 32
+
+- A fifteen-minute-old public preview no longer erases outstanding wallet-sync invitations or forces an unchanged review to restart. The original signature, paired request, challenge, peer addresses and wallet policy remain fixed.
+- Use **Agent V2 Build 28**. It verifies the retained public snapshot against the exact active request and compares live Core facts before any locally approved transfer. Changed wallet facts, altered signatures or bindings and future timestamps remain rejected. Changed snapshots/endpoints still need deliberate reconciliation via Nodes.
+- Three isolated companion Agent stores retain eleven missing wallet requests per receiver and twenty-two on the sender after an older empty withdrawal. A genuine older signed snapshot also passes through the Dashboard to the actual Agent 28 verifier without changing its hash or authorising an operation.
+
+See [sync-list visibility](docs/BUILD32_SYNC_VISIBILITY.md). Production wallet files are not touched by these tests; direct transfer execution is tested separately in the Agent chat.
 
 ## Build 31
 

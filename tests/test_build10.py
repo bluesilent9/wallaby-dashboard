@@ -48,9 +48,9 @@ class Queues(Setup):
     def test_wrong_peer_unrequested_results_rejected(self):
         with self.assertRaises(ValueError):self.result(self.b,self.source,'recovery_required')
         with self.assertRaises(ValueError):self.result(self.a,dict(self.source,transfer_id='d'*64),'complete')
-    def test_expired_preview_is_withdrawn_without_a_new_automatic_challenge(self):
+    def test_expired_preview_stays_listed_without_a_new_automatic_challenge(self):
         self.send(self.signed_preview());before=self.queue(self.b)
-        with patch('wallet_sync_queue.time.time',return_value=time.time()+1000):self.assertEqual(self.queue(self.b)['requests'],[])
+        with patch('time.time',return_value=time.time()+1000):self.assertEqual(self.queue(self.b)['requests'],before['requests'])
         rows=list(self.hub.read()['requests'].values());self.assertEqual({r['challenge'] for r in rows},{before['requests'][0]['preview_challenge']})
     def test_zero_balance_fixed_address_metadata_is_preserved_and_checked(self):
         a,b,_=addresses();preview=copy.deepcopy(self.preview);preview['public_wallet']={'wallet_name':'Old Group','descriptors':[fixed(a),fixed(b)]};preview['funded_outputs']=[];preview['address_labels']=[{'address':a,'label':'Old Group','is_change':False},{'address':b,'label':'Old Group | LOST:02/01/2020 00:00:00 UTC','is_change':True}]
