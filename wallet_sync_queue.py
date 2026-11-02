@@ -26,7 +26,10 @@ def schedule(transfers,state):
         source=next(r for r in rows if r['direction']=='send');receiver=next(r for r in rows if r['direction']=='receive')
         nodes={r['node_id'] for r in rows}
         from wallet_retirement import suppress_sync
-        if suppress_sync(state,source['public_wallet']):
+        from wallet_renames import RenameQueue
+        from agent_hub import equivalent
+        renaming=any(o['state']=='active' and equivalent(o['raw'],source['public_wallet']) for o in RenameQueue(hub).read()['operations'].values())
+        if renaming or suppress_sync(state,source['public_wallet']):
             for row in rows:row['queue_visible']=False
             continue
         if not all(modern(hub,n) for n in nodes):

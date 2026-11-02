@@ -1,5 +1,6 @@
 """Validate public Agent records before accepting a profile archive."""
 import base64,re
+from descriptor_store import clean_wallet
 from agent_hub import canonical,ipv6,digest
 from vault_records import public_vault
 from signed_psbt import decode
@@ -13,6 +14,17 @@ def validate(state,users,config=None):
         public_vault(row['public'])
         if ident!=digest(row['public']) or not isinstance(row['sources'],list):raise ValueError('Invalid saved vault identity.')
     for row in state['nodes'].values():
+        for w in row.get('known_wallets',{}).values():clean_wallet(w['raw'])
+        for w in row.get('known_archives',{}).values():
+            clean_wallet(w['raw'])
+            if not re.fullmatch('[0-9a-f]{64}',str(w.get('archive_id'))):raise ValueError('Invalid saved archive package identity.')
+        for archive,record in row.get('archive_inventory',{}).items():
+            m=record['message']
+            if archive!=m.get('archive_id') or record['envelope'].get('message')!=m or m.get('readback_verified') is not True or not re.fullmatch('[0-9a-f]{64}',archive):raise ValueError('Invalid saved public archive evidence.')
+            for member in m['members']:clean_wallet(member['public_wallet'])
+            if config:
+                from setup_signatures import verify
+                verify(config,record['envelope'],record['envelope']['public_key'])
         if row.get('ipv6'):ipv6(row['ipv6'])
         if 'sync_revision' in row:
             if type(row['sync_revision']) is not int or row['sync_revision']<0 or not isinstance(row.get('sync_snapshot'),list) or len(row['sync_snapshot'])>128:raise ValueError('Invalid saved synchronization list.')
@@ -33,7 +45,6 @@ def validate(state,users,config=None):
             p=row['proposal']
             if p.get('kind')!='wallet_policy_refresh' or p.get('request_id')!=ident or p.get('chain')!='main' or len(p.get('previous_descriptors',[]))!=2:raise ValueError('Invalid saved public policy refresh.')
             from builder_destinations import validate_record
-            from descriptor_store import clean_wallet
             clean_wallet({'wallet_name':p['wallet'],'descriptors':[{'desc':d,'range':[0,999],'active':False,'internal':bool(i%2)} for i,d in enumerate([*p['previous_descriptors'],p['receive_descriptor'],p['change_descriptor']])]})
         if row.get('kind')=='wallet_retire' and row.get('proposal',{}).get('version')==2:
             from wallet_retirement import result

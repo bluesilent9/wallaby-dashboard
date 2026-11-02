@@ -2,9 +2,19 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 28 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev28_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 29 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev29_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
+
+## Build 29
+
+- Wallet hover controls include a pencil **Rename** action. Requests follow verified descriptor identities across persistent private wallets, watch copies and distinct multisig signing accounts.
+- Every Agent approves locally. Cancellation is available until a verified rename or uncertain attempted mutation; partial completion remains visible and cannot be silently undone.
+- Known archive members enter the rename queue too. Read their original disc on any capable Agent, then select that Agent for local review. A verified replacement disc is required unless the Agent independently verifies an exact persistent duplicate signer and the user explicitly chooses the planned-extinction waiver.
+- Initial Wallet Builder archives and later multi-wallet archive inventories are retained as public evidence. Older discs without package evidence must be loaded once. Private wallet files never pass through Dashboard.
+- Watch-only names use `_watch`. Existing unrelated targets are never overwritten. Finish active builds and archival work before renaming, then complete the rename before starting new builds or extinction.
+
+Use matching **Agent V2 Build 25**. Physical disc writing/readback and filesystem renaming happen on the Agent; Dashboard only coordinates signed requests and outcomes. See [rename protocol](docs/BUILD29_RENAME_PROTOCOL.md).
 
 ## Build 28
 
@@ -117,9 +127,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev28`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev29`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev28_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev29_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 

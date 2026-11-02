@@ -181,3 +181,5 @@ body{min-width:1120px}.family-login h1,.family-admin h1{font-size:40px;font-weig
 @media(max-width:1250px){.salary-horizon{grid-template-columns:1fr 1fr}.salary-horizon>div:first-child{grid-column:1/-1}}
 @media(max-width:800px){.explorer-io-grid{grid-template-columns:1fr}.explorer-flow-arrow{display:none}.explorer-history-row{grid-template-columns:1fr}.salary-horizon{grid-template-columns:1fr}}
 .address-history-controls{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin:.6rem 0}.address-value.address-historical{color:#b32e2e}.address-history-warning{color:#a02929;font-size:.85rem;line-height:1.4}.archive-request{margin:.7rem 0}.archive-request.withdrawn,.archive-request.complete{opacity:.75}
+
+.rename-status{margin-top:2rem}.rename-status .card{margin:1rem 0;padding:1.25rem}.rename-target{display:flex;align-items:center;flex-wrap:wrap;gap:1rem;padding:.8rem 0;border-bottom:1px solid #d7dfd5}.rename-complete{color:#20734c}.rename-pending{color:#98620d}

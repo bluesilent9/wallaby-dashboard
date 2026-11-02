@@ -41,6 +41,8 @@ class ArchiveQueue:
         options={r['id']:r for r in self.options(resource)}
         if not isinstance(choices,list) or not choices or len(choices)!=len(set(choices)) or any(i not in options for i in choices):raise ValueError('Select a connected persistent private-key wallet. Watch-only, extinct and disc-loaded accounts cannot be archived from Dashboard.')
         selected=[options[i] for i in choices]
+        from wallet_renames import RenameQueue
+        if any(o['state']=='active' and any(equivalent(o['raw'],r['public_wallet']) or signing_account({'raw':r['public_wallet'],'private_keys_enabled':True},{'raw':o['raw']}) for r in selected) for o in RenameQueue(self.hub).read()['operations'].values()):raise ValueError('Finish the wallet rename before creating additional archives.')
         for r in selected:
             if not r['compatible']:raise ValueError('Install Agent Build 23 with wallet_archive_queue_v1 before requesting archival.')
             info=self.hub.rpc(r['node_id'],'getwalletinfo',[],r['wallet']);raw=self.hub.rpc(r['node_id'],'listdescriptors',[False],r['wallet'])
@@ -88,7 +90,20 @@ class ArchiveQueue:
     def followup(self,node,envelope):
         from wallet_policy_updates import verified
         p=verified(self.hub,node,envelope)
+        self.inventory(node,p,envelope)
         self.replacements(node,p,envelope)
+    def inventory(self,node,p,envelope):
+        if 'members' not in p:return
+        if p.get('version')!=1 or p.get('event') not in ('archive_verified','replacement_verified') or p.get('readback_verified') is not True or not re.fullmatch('[0-9a-f]{64}',str(p.get('archive_id'))) or not re.fullmatch('[0-9a-f]{64}',str(p.get('image_sha256'))) or not isinstance(p['members'],list) or not 1<=len(p['members'])<=128:raise ValueError('Invalid verified public archive inventory.')
+        for member in p['members']:
+            if not re.fullmatch('[0-9a-f]{64}',str(member.get('member_id'))):raise ValueError('Invalid archive member identity.')
+            __import__('descriptor_store').clean_wallet(member['public_wallet'])
+            for policy in member.get('related_policies',[]):
+                check=copy.deepcopy(policy)
+                for row in check['descriptors']:
+                    if '*' in row['desc'] and 'range' not in row:row['range']=[0,999]
+                __import__('descriptor_store').clean_wallet(check)
+        with self.hub.edit() as state:state['nodes'].setdefault(node,{}).setdefault('archive_inventory',{})[p['archive_id']]={'message':copy.deepcopy(p),'envelope':copy.deepcopy(envelope)}
     def replacements(self,node,p,envelope):
         if p.get('readback_verified') is not True or not re.fullmatch('[0-9a-f]{64}',str(p.get('image_sha256'))):raise ValueError('A replacement requires verified archive read-back.')
         if not isinstance(p.get('replacements',[]),list) or len(p.get('replacements',[]))>128:raise ValueError('Invalid replacement coverage.')

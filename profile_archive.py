@@ -113,6 +113,9 @@ def validate(root):
     if (root/'data/receiving-destinations.json').exists():
         from builder_destinations import validate as validate_destinations
         validate_destinations(json.loads((root/'data/receiving-destinations.json').read_text()),ids)
+    if (root/'data/wallet-renames.json').exists():
+        from wallet_renames import validate as validate_renames
+        validate_renames(json.loads((root/'data/wallet-renames.json').read_text()))
     if (root/'data/archive-queue.json').exists():
         from archive_queue import validate as validate_archive_queue
         validate_archive_queue(json.loads((root/'data/archive-queue.json').read_text()))

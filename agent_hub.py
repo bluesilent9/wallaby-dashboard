@@ -15,7 +15,7 @@ from agent_rpc import PRIVATE
 
 from builder_workspace import serialised,BuilderWorkspace
 
-CAPS={'archive_inventory_v1','wallet_archive_queue_v1','wallet_policy_refresh_v1','builder_cancellation_v1','node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2','wallet_retirement_cancel_v1'}
+CAPS={'wallet_rename_v1','archive_inventory_v1','wallet_archive_queue_v1','wallet_policy_refresh_v1','builder_cancellation_v1','node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2','wallet_retirement_cancel_v1'}
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
 def canonical(value):
     raw=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
@@ -88,6 +88,7 @@ class AgentHub:
                 if not isinstance(info.get('walletname'),str) or raw.get('wallet_name')!=info['walletname']:raise ValueError('Node wallet identity changed during discovery.')
                 checked=clean_wallet(raw)
                 item={'name':name,'signing_only':info['walletname']!=name,'id':checked['id'],'raw':checked['raw'],'private_keys_enabled':info.get('private_keys_enabled') is True,'scanning':bool(info.get('scanning'))}
+                if info.get('wallaby_storage')=='disc' and re.fullmatch('[0-9a-f]{64}',str(info.get('wallaby_archive_id'))):item['archive_id']=info['wallaby_archive_id']
                 from labelled_wallets import expand
                 replica={'wallet':checked,'private_keys_enabled':item['private_keys_enabled'],'history':{'transactions':[]}}
                 for child in expand(replica,lambda address:self.rpc(node,'getaddressinfo',[address],name)):
@@ -98,8 +99,11 @@ class AgentHub:
             with self.edit() as saved:
                 holder=saved['nodes'].setdefault(node,{})
                 known=holder.setdefault('known_wallets',{})
+                archives=holder.setdefault('known_archives',{})
                 for w in wallets:
-                    if not w.get('signing_only') and not w.get('extinct'):known[digest(sorted(NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors']))]={'raw':w['raw'],'name':w['name']}
+                    if w.get('archive_id') and w.get('private_keys_enabled'):
+                        archives[digest({'archive':w['archive_id'],'policy':sorted(NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors'])})]={'raw':w['raw'],'name':w['name'],'archive_id':w['archive_id']}
+                    if not w.get('signing_only') and not w.get('extinct'):known[digest(sorted(NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors']))]={'raw':w['raw'],'name':w['name'],'private_keys_enabled':w['private_keys_enabled']}
             from wallet_retirement import advance
             advance(self)
         except __import__('wallet_transfers').SynchronisationBusy:
@@ -197,7 +201,7 @@ class AgentHub:
         if not isinstance(caps,list) or len(caps)>16 or any(not isinstance(k,str) or not re.fullmatch('[a-z0-9_]{1,64}',k) for k in caps):raise ValueError('Invalid Agent capability list.')
         unsupported=sorted(set(caps)-CAPS)
         if unsupported:
-            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 28; Agent '+str(c.get('agent_version','unknown'))+'.')
+            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 29; Agent '+str(c.get('agent_version','unknown'))+'.')
             raise ValueError('Unsupported Agent capabilities.')
         canonical(data)
         verified=[]
@@ -210,7 +214,7 @@ class AgentHub:
             elif kind=='transaction_builder_psbt':
                 if not isinstance(p,dict) or set(p)!={'version','chain','psbt','transaction_hash','vault','review','stage','immutable'} or type(p['version']) is not int or p['version']!=1 or p['chain']!='main' or p['stage']!=2 or p['immutable'] is not True:raise ValueError('Invalid immutable Vault Builder export.')
                 public_vault(p['vault'])
-            elif kind not in ('partial_sign_result','broadcast_result','node_identity','sign_result','wallet_transfer_result','wallet_transfer_preview','wallet_retirement_result','wallet_setup_identity','wallet_setup_contribution','wallet_setup_ack','wallet_setup_inventory','wallet_sync_preferences','builder_cancel_receipt','archive_queue_result','archive_inventory','wallet_policy_refresh_result'):raise ValueError('Unsupported Agent outbox kind.')
+            elif kind not in ('partial_sign_result','broadcast_result','node_identity','sign_result','wallet_transfer_result','wallet_transfer_preview','wallet_retirement_result','wallet_setup_identity','wallet_setup_contribution','wallet_setup_ack','wallet_setup_inventory','wallet_sync_preferences','builder_cancel_receipt','archive_queue_result','archive_inventory','wallet_rename_result','wallet_policy_refresh_result'):raise ValueError('Unsupported Agent outbox kind.')
             verified.append(item)
         # Validate expensive PSBTs before taking the durable-store lock.
         exported={}
@@ -243,7 +247,9 @@ class AgentHub:
             if item['kind']=='wallet_setup_identity':self.permissions.identity_reply(node,item['payload'])
         for item in verified:
             if node+':'+item['id'] in previous['receipts']:continue
-            if item['kind']=='archive_queue_result':
+            if item['kind']=='wallet_rename_result':
+                __import__('wallet_renames').RenameQueue(self).accept(node,item['payload'])
+            elif item['kind']=='archive_queue_result':
                 __import__('archive_queue').ArchiveQueue(self).accept(node,item['payload'])
             elif item['kind']=='archive_inventory':
                 __import__('archive_queue').ArchiveQueue(self).followup(node,item['payload'])
@@ -282,7 +288,7 @@ class AgentHub:
                         if v['node_id']==node and v['user_id']==lease['user_id'] and v['draft_id']==lease['draft_id']:v['consumed']=True
                     state['exports'].setdefault(ident,dict(plan,outbox_id=item['id'],node_id=node,user_id=lease['user_id'],draft_id=lease['draft_id'],received_utc=self.utc()))
                 elif receipt in state['receipts']:accepted.append(item['id']);continue
-                elif kind.startswith('wallet_setup_') or kind in ('wallet_sync_preferences','builder_cancel_receipt','archive_queue_result','archive_inventory','wallet_policy_refresh_result'):pass
+                elif kind.startswith('wallet_setup_') or kind in ('wallet_sync_preferences','builder_cancel_receipt','archive_queue_result','archive_inventory','wallet_rename_result','wallet_policy_refresh_result'):pass
                 elif kind=='vault_public':
                     ident=digest(p);row=state['vaults'].setdefault(ident,{'public':p,'sources':[]})
                     if node not in row['sources']:row['sources'].append(node)
@@ -337,8 +343,9 @@ class AgentHub:
         others=[p for p in proposals if p['kind']!='wallet_sync_queue']
         cancellations=BuilderWorkspace(self.config).proposals(node) if 'builder_cancellation_v1' in caps else []
         archive=[__import__('archive_queue').ArchiveQueue(self).proposal(node)] if 'wallet_archive_queue_v1' in caps else []
+        renames=[__import__('wallet_renames').RenameQueue(self).proposal(node)] if 'wallet_rename_v1' in caps else []
         updates=__import__('wallet_policy_updates').proposals(self,node) if 'wallet_policy_refresh_v1' in caps else []
-        return {'version':1,'accepted':accepted,'proposals':(cancellations+setup_proposals+archive+updates+queues+others)[:16]}
+        return {'version':1,'accepted':accepted,'proposals':(cancellations+setup_proposals+renames+archive+updates+queues+others)[:16]}
     def transfer_proposal(self,state,row):
         peer=row['peer_id'];record=next((c for c in self.registry.connections.values() if c['node_id']==peer),{})
         proposal={'kind':'wallet_transfer','direction':row['direction'],'transfer_id':row['transfer_id'],'peer':{'node_id':peer,'hostname':record.get('hostname',''),'ipv6':state['nodes'][peer]['ipv6']},'public_wallet':row['public_wallet'],'source_has_private_keys':row['source_has_private_keys'],'earliest_timestamp':row['earliest_timestamp'],'requires_blockchain_redownload':row['requires_blockchain_redownload'],'preview_challenge':row['challenge'],'node_ipv6':state['nodes'][row['node_id']]['ipv6']}

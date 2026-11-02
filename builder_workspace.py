@@ -54,6 +54,8 @@ class BuilderWorkspace:
  @serialised
  def start(self,user,kind):
   if kind not in KINDS:raise ValueError('Unknown builder.')
+  renames=data_directory(self.config)/'wallet-renames.json'
+  if renames.exists() and any(o['state']=='active' for o in json.loads(renames.read_text())['operations'].values()):raise ValueError('Finish or cancel pending wallet renames before starting a build.')
   with storage_lock(self.config):
    s=self.read();row=s['workspaces'].get(kind)
    if row:

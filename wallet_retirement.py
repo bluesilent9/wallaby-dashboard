@@ -108,6 +108,8 @@ def propose(hub,session,wallet_id,node,confirmed):
     if not any(n['id']==node for n in options):raise ValueError('Update the Agent: verified retirement and deletion support is required.')
     owner=next(r for r in FamilyStore(hub.config).snapshot()['ownership'] if r['id']==wallet_id)
     wallet=next(w for w in DescriptorStore(hub.config).read()['wallets'] if w['id']==owner['source'])
+    from wallet_renames import RenameQueue
+    if any(o['state']=='active' and equivalent(o['raw'],wallet['raw']) for o in RenameQueue(hub).read()['operations'].values()):raise ValueError('Finish the wallet rename before making it extinct.')
     checked=zero_balances(hub,wallet['raw']);holders=known_holders(hub,wallet['raw'],wallet)
     ordered=sorted({o['id']:o for o in options}.values(),key=lambda o:(o['id']!=node,o['id']))
     proposals=[(o,_proposal(hub,owner['name'],o,wallet['raw'])) for o in ordered];root=digest(proposals[0][1])

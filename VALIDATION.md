@@ -1,3 +1,15 @@
+# V1 Build 29 validation
+
+362 Python regression tests and 27 JavaScript suites pass. Build 29 adds persistent descriptor-scoped rename coordination, signed Agent completion checks, local archive routing, uncertain-attempt/cancellation handling and profile validation. Regression tests cover private/watch replicas, identical descriptor copies on one node, late success after withdrawal, cancellation lock after partial completion, preventing stale builder routes, archived member evidence, local duplicate waiver proof, changed-name signature rejection and exact Agent Build 25 task validation in a separate interpreter.
+
+JavaScript checks cover the pencil action, owner and active-wallet restrictions, status rows, cancellation availability and selection of an Agent with a loaded original disc. Existing UI suites remain included.
+
+Bitcoin Core 31 isolated regtest repeats single-signature and multisig vault creation, expiry, two renewals and subsequent small/large deposits using current Agent Build 25 policy validation. This verifies existing vault behaviour remains intact. It does not test a physical disc burner or rename your production wallets. Agent filesystem changes are independently approved and verified locally; Dashboard never receives wallet files or private descriptors.
+
+Older disc receipts without encrypted-package identity stay pending until the exact signing archive is read locally. A disc route is not evidence of verified replacement burning. Archive waiver requires the Agent's independent local duplicate-signer check and explicit user approval. Initial and replacement public archive inventories are persisted for future requests.
+
+Package checks cover source parity, version, runtime/private-file exclusions, source bundling and isolated web/Agent service startup. The DEB enables and starts the service at installation; it is not installed on this development computer.
+
 # V1 Build 28 validation
 
 343 Python regression tests and 26 JavaScript suites pass with Agent V2 Build 24 source. New tests verify metadata/notification publication before a deliberately blocked history scan, readable Ownership while balances remain unavailable, and resuming automatic balance verification only after complete history. A 300-input synthetic exchange receipt requires one wallet-transaction read and no external-parent getrawtransaction fanout. Known wallet reads rotate across replicas and try another replica on failure; owned-send evidence remains strict and full-trace caches remain separate.
