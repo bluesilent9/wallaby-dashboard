@@ -71,6 +71,7 @@ def schedule(transfers,state):
         snapshot=[copy.deepcopy(r['proposal']) for r in rows]
         if snapshot!=entry.get('sync_snapshot'):
             entry['sync_revision']=entry.get('sync_revision',-1)+1;entry['sync_snapshot']=snapshot
+            hub.registry.diagnostic_log.append('Wallet sync','Queue updated · node='+node[:12]+' · revision='+str(entry['sync_revision'])+' · receiving='+str(sum(r['direction']=='receive' for r in rows))+' · sending='+str(sum(r['direction']=='send' for r in rows)))
         for row in rows:row['queue_revision']=entry['sync_revision']
 
 
@@ -89,7 +90,7 @@ def proposals(transfers,state,node):
     # Queue first, followed by a rotating bounded set of unchanged signed previews.
     if previews:
         cursor=entry.get('preview_cursor',0)%len(previews)
-        ordered=previews[cursor:]+previews[:cursor];result+=ordered[:15];entry['preview_cursor']=(cursor+15)%len(previews)
+        ordered=previews[cursor:]+previews[:cursor];result+=ordered[:15]
     return result
 
 

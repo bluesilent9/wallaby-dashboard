@@ -201,7 +201,7 @@ class AgentHub:
         if not isinstance(caps,list) or len(caps)>16 or any(not isinstance(k,str) or not re.fullmatch('[a-z0-9_]{1,64}',k) for k in caps):raise ValueError('Invalid Agent capability list.')
         unsupported=sorted(set(caps)-CAPS)
         if unsupported:
-            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 29; Agent '+str(c.get('agent_version','unknown'))+'.')
+            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 30; Agent '+str(c.get('agent_version','unknown'))+'.')
             raise ValueError('Unsupported Agent capabilities.')
         canonical(data)
         verified=[]
@@ -237,7 +237,7 @@ class AgentHub:
                 from wallet_preview import verify,validate
                 validate({k:payload[k] for k in ('preview','public_key','signature')},fresh=False)
                 obsolete=self.transfers.obsolete_preview(previous,node,payload)
-                previews[item['id']]=verify(self.config,{k:payload[k] for k in ('preview','public_key','signature')},fresh=not obsolete)
+                previews[item['id']]=verify(self.config,{k:payload[k] for k in ('preview','public_key','signature')},fresh=False)
                 if obsolete:obsolete_previews.add(item['id'])
         self.permissions.proposals(node,token)
         deferred_permissions=set()
@@ -303,7 +303,9 @@ class AgentHub:
                     if p.get('status')=='complete':self.transfers.refresh_nodes.add(node)
                 elif kind=='wallet_transfer_result':self.transfers.accept_result(state,node,p)
                 elif kind=='wallet_transfer_preview':
-                    if item['id'] not in obsolete_previews:self.transfers.accept_preview(state,node,p,previews[item['id']])
+                    if item['id'] not in obsolete_previews:
+                        notice=self.transfers.accept_preview(state,node,p,previews[item['id']])
+                        if notice:self.registry.diagnostic_log.append('Wallet sync',notice+' · node='+node[:12]+' · request='+p['request_hash'][:12])
                     else:self.registry.diagnostic_log.append('Agent protocol','Obsolete historical-wallet preview acknowledged; transfer outcomes were retained.')
                 # Legacy sign_result means already broadcast; never interpret it as a partial signature.
                 elif kind=='sign_result':raise ValueError('Legacy signing broadcasts immediately and cannot complete this partial-signing workflow.')
@@ -345,7 +347,14 @@ class AgentHub:
         archive=[__import__('archive_queue').ArchiveQueue(self).proposal(node)] if 'wallet_archive_queue_v1' in caps else []
         renames=[__import__('wallet_renames').RenameQueue(self).proposal(node)] if 'wallet_rename_v1' in caps else []
         updates=__import__('wallet_policy_updates').proposals(self,node) if 'wallet_policy_refresh_v1' in caps else []
-        return {'version':1,'accepted':accepted,'proposals':(cancellations+setup_proposals+renames+archive+updates+queues+others)[:16]}
+        notices=[p for p in others if p['kind']=='wallet_transfer_preview']
+        controls=[p for p in others if p['kind']!='wallet_transfer_preview']
+        selected=(cancellations+setup_proposals+renames+archive+updates+queues+controls)[:16]
+        delivered=notices[:16-len(selected)];selected+=delivered
+        if delivered:
+            with self.edit() as state:
+                entry=state['nodes'][node];entry['preview_cursor']=entry.get('preview_cursor',0)+len(delivered)
+        return {'version':1,'accepted':accepted,'proposals':selected}
     def transfer_proposal(self,state,row):
         peer=row['peer_id'];record=next((c for c in self.registry.connections.values() if c['node_id']==peer),{})
         proposal={'kind':'wallet_transfer','direction':row['direction'],'transfer_id':row['transfer_id'],'peer':{'node_id':peer,'hostname':record.get('hostname',''),'ipv6':state['nodes'][peer]['ipv6']},'public_wallet':row['public_wallet'],'source_has_private_keys':row['source_has_private_keys'],'earliest_timestamp':row['earliest_timestamp'],'requires_blockchain_redownload':row['requires_blockchain_redownload'],'preview_challenge':row['challenge'],'node_ipv6':state['nodes'][row['node_id']]['ipv6']}

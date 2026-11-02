@@ -49,11 +49,23 @@ class Transfers:
         if not isinstance(payload,dict) or set(payload)!={'request_hash','preview','public_key','signature'}:raise ValueError('Invalid wallet transfer preview outbox.')
         rows=next((rows for rows in self.pairs(state).values() if any(r.get('proposal') and digest(r['proposal'])==payload['request_hash'] for r in rows)),None)
         sender=next((r for r in rows or [] if r['direction']=='send' and r['node_id']==node),None)
-        if not sender or digest(sender.get('proposal',{}))!=payload['request_hash'] or not sender.get('base_sent') or not sender.get('queue_visible'):raise ValueError('Unsolicited preview or not the paired sending Agent.')
+        if not sender or digest(sender.get('proposal',{}))!=payload['request_hash'] or not sender.get('base_sent'):raise ValueError('Unsolicited preview or not the paired sending Agent.')
         wire={k:payload[k] for k in ('preview','public_key','signature')};v=wire['preview'];p=sender['proposal']
-        if sender.get('signed_preview') and sender['signed_preview']!=wire:raise ValueError('A frozen preview cannot be replaced. Cancel and start a fresh attempt.')
-        if sender['state']!='pending' or any(r['state'] in ('denied','error') for r in rows):raise ValueError('This transfer is closed or failed. Do not replay it.')
         if (v['transfer_id'],v['challenge'],v['sender_ipv6'],v['receiver_ipv6'])!=(p['transfer_id'],p['preview_challenge'],p['node_ipv6'],p['peer']['ipv6']) or v['version']!=2 or policies(v['public_wallet'],True)!=policies(p['public_wallet'],True):raise ValueError('Preview wallet, challenge or peer addresses differ from the frozen request.')
+        original=sender.get('signed_preview')
+        if original and original['public_key']!=wire['public_key']:raise ValueError('The sending Agent preview identity changed. Reconcile locally.')
+        # Authenticated public notices are not operation outcomes. A stale notice
+        # must not block fresh permissions/queues for every wallet in this batch.
+        if not sender.get('queue_visible') or sender['state']!='pending' or any(r['state'] in ('denied','error','complete') for r in rows):
+            return 'Late preview acknowledged without changing its inactive transfer'
+        if original:
+            if original!=wire:
+                sender['preview_notice']='Changed preview acknowledged; original frozen snapshot retained. Reconcile locally before a fresh attempt.'
+                return sender['preview_notice']
+            return
+        if not time.time()-900<=v['generated_at']<=time.time()+120:
+            for r in rows:r['message']='Signed preview expired. Reconcile the local Agents and request a deliberate fresh attempt.'
+            return 'Expired preview acknowledged without activating a snapshot'
         sender['signed_preview']=copy.deepcopy(wire);sender['preview_proof']=proof
     def accept_result(self,state,node,p):
         from agent_hub import digest
@@ -72,8 +84,8 @@ class Transfers:
         if confirmed is not True:raise ValueError('Confirm both Agents are closed and Core has been reconciled before a new attempt.')
         with self.hub.edit() as state:
             rows=self.pairs(state).get(transfer)
-            expired=bool(rows and all(r.get('message','').startswith('Signed preview expired.') for r in rows))
-            if not rows or len(rows)!=2 or any(r['state']=='recovery_required' for r in rows) or (not expired and any(r['state'] not in TERMINAL for r in rows)) or all(r['state']=='complete' for r in rows):raise ValueError('Resolve or cancel this attempt on both Agents before retrying.')
+            refresh_needed=bool(rows and (all(r.get('message','').startswith('Signed preview expired.') for r in rows) or any(r.get('preview_notice') for r in rows) and all(r['state']=='pending' for r in rows)))
+            if not rows or len(rows)!=2 or any(r['state']=='recovery_required' for r in rows) or (not refresh_needed and any(r['state'] not in TERMINAL for r in rows)) or all(r['state']=='complete' for r in rows):raise ValueError('Resolve or cancel this attempt on both Agents before retrying.')
             old=next(r for r in rows if r['direction']=='receive');inv=self.hub.inventories.get(old['node_id'],{})
             if not inv.get('complete') or time.monotonic()-self.hub.inventory_times.get(old['node_id'],0)>60:raise ValueError('Wait for the destination wallet inventory to refresh before retrying.')
             if self.contains([w for w in inv['wallets'] if not w.get('signing_only')],old['public_wallet']):raise ValueError('The destination already has this wallet. No retry is needed.')
@@ -101,5 +113,5 @@ class Transfers:
                 if permission is not True and r['state']=='pending':continue
                 terminal=all(x['state'] in TERMINAL for x in rows)
                 complete=any(x['direction']=='receive' and x['state']=='complete' for x in rows)
-                result.append({'transfer_id':ident,'wallet_name':r['public_wallet']['wallet_name'],'subwallets':r.get('subwallets',[]),'direction':r['direction'],'state':'complete' if complete else r['state'],'message':'Receiver verified wallet data and history.' if complete else r.get('message',''),'active':bool(r.get('active_pair')),'preview_ready':any(x.get('signed_preview') for x in rows),'retryable':(terminal or all(x.get('message','').startswith('Signed preview expired.') for x in rows)) and not any(x['state']=='recovery_required' for x in rows) and not any(x['direction']=='receive' and x['state']=='complete' for x in rows) and not any(x.get('retry_of')==ident for x in state['requests'].values())})
+                result.append({'transfer_id':ident,'wallet_name':r['public_wallet']['wallet_name'],'subwallets':r.get('subwallets',[]),'direction':r['direction'],'state':'complete' if complete else r['state'],'message':'Receiver verified wallet data and history.' if complete else r.get('preview_notice') or r.get('message',''),'active':bool(r.get('active_pair')),'preview_ready':any(x.get('signed_preview') for x in rows),'retryable':(terminal or all(x.get('message','').startswith('Signed preview expired.') for x in rows) or any(x.get('preview_notice') for x in rows) and all(x['state']=='pending' for x in rows)) and not any(x['state']=='recovery_required' for x in rows) and not any(x['direction']=='receive' and x['state']=='complete' for x in rows) and not any(x.get('retry_of')==ident for x in state['requests'].values())})
         return result

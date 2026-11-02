@@ -1,3 +1,11 @@
+# V1 Build 30 validation
+
+376 Python tests and 27 JavaScript suites pass. New real SSH-signed tests reproduce a changed frozen preview followed by a fresh permission response in the same batch: both notices are acknowledged and the original snapshot stays unchanged. Expired/late notices never become live snapshots. Wrong source, wallet, challenge or peer bindings, unknown requests and forged signatures still fail. Actual transfer and history-recovery outcomes remain recorded separately.
+
+A three-node fixture verifies that both empty receiving nodes get all eleven missing-wallet requests. A fifteen-preview fixture with mandatory archive/rename controls verifies delivery of every preview within bounded sixteen-message responses; only actually delivered previews advance rotation. Signed permission-disable/re-enable tests remain included. Logs now expose per-node queue revisions and directional counts without public-wallet contents, keys, tokens or documents.
+
+Package validation covers version/source parity, runtime-file exclusions, source bundling, service enable/start instructions and isolated IPv4/IPv6 browser/Agent-health startup. It is not installed here. Existing vault logic is unchanged; Build 29's isolated Core 31 vault/renewal checks are retained as prior evidence rather than claimed rerun in this patch. Family-node deployment needs retesting with Dashboard Build 30 and Agent V2 Build 26.
+
 # V1 Build 29 validation
 
 363 Python regression tests and 27 JavaScript suites pass. Build 29 adds persistent descriptor-scoped rename coordination, signed Agent completion checks, local archive routing, uncertain-attempt/cancellation handling and profile validation. Regression tests cover private/watch replicas, identical descriptor copies on one node, late success after withdrawal, cancellation lock after partial completion, preventing stale builder routes, archived member evidence, local duplicate waiver proof, changed-name signature rejection and exact Agent Build 25 task validation in a separate interpreter.
