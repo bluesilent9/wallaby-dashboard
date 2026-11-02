@@ -77,7 +77,7 @@ class VaultMonitor:
                     for n in active:
                         if hub.permissions.permits(n['id'],wallet['raw']) is False:continue
                         inv=hub.inventories.get(n['id'],{})
-                        if not any(equivalent(wallet['raw'],w['raw']) for w in inv.get('wallets',[])):g['issues'].append(n['hostname']+': public vault policy is awaiting local Agent synchronisation.')
+                        if not any(NodeWalletLoader.descriptor_key(row['desc']) in {NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors']} for w in inv.get('wallets',[])):g['issues'].append(n['hostname']+': public vault policy is awaiting local Agent synchronisation.')
                         if n.get('blockchain',{}).get('state')!='ready':g['issues'].append(n['hostname']+': node is downloading or its blockchain status is unavailable.')
                     ceremonies=getattr(hub,'wallet_builder',None)
                     if ceremonies:
@@ -115,12 +115,28 @@ class VaultMonitor:
                                 from multisig_psbt import witness_policy
                                 concrete=Descriptor.from_string(coin.get('desc',''));ws=concrete.witness_script();checked=witness_policy(ws.data)
                                 if concrete.script_pubkey().data.hex()!=coin['scriptPubKey']:raise ValueError('Coin differs from the concrete public policy.')
-                                matched=next((p for p in policies if p.get('ranged') and p['public']['height']==checked['height']),None)
+                                indices={k.origin.derivation[-1] for k in concrete.keys if k.origin and k.origin.derivation}
+                                matched=None
+                                if not concrete.is_wildcard:
+                                    matched=next((p for p in policies if p.get('ranged') and not Descriptor.from_string(p['public']['descriptor']).is_wildcard and Descriptor.from_string(p['public']['descriptor']).script_pubkey().data==concrete.script_pubkey().data),None)
+                                if len(indices)==1:
+                                    index=next(iter(indices))
+                                    for candidate in policies:
+                                        if not candidate.get('ranged'):continue
+                                        expected=Descriptor.from_string(candidate['public']['descriptor'])
+                                        if expected.derive(index).script_pubkey().data==concrete.script_pubkey().data:matched=candidate;break
                             except (ValueError,AttributeError,TypeError):matched=None
                         if matched:matched['funds']+=int(value);group['vault_sats']+=int(value)
                         elif contains_source:group['outside_sats']+=int(value)
             if tip is None:group['issues'].append('No connected, synchronised Bitcoin node is available.')
             if not successful:group['issues'].append('The node could not establish the current vault balance.')
+            if source:
+                for request in state['requests'].values():
+                    if request.get('kind')!='wallet_policy_refresh' or request.get('state') not in ('pending','recovery_required','error','denied'):continue
+                    old={NodeWalletLoader.descriptor_key(d) for d in request['proposal']['previous_descriptors']}
+                    if old & {NodeWalletLoader.descriptor_key(r['desc']) for r in source['raw']['descriptors']}:
+                        host=next((n['hostname'] for n in active if n['id']==request['node_id']),None)
+                        if host:group['issues'].append(host+': public vault policy '+('needs blockchain history recovery' if request['state']=='recovery_required' else 'awaits local approval or reconciliation')+'.')
             balance_verified=successful and tip is not None and not group['issues']
             ready_to_fund=balance_verified and not group['vault_sats'] and not group['outside_sats']
             if group['outside_sats']:group['issues'].append('Bitcoin remains outside the vault policy: '+str(group['outside_sats'])+' sats.')
@@ -139,5 +155,7 @@ class VaultMonitor:
                 except (ValueError,AttributeError,TypeError):continue
             group.update(balance_available=successful,balance_verified=balance_verified,stale=False,checked_utc=checked_utc,last_verified_utc=checked_utc if balance_verified else previous.get(group['id'],{}).get('last_verified_utc'),signatures=[{'required':m,'total':n} for m,n in sorted(signatures)],funding_status='ready_to_fund' if ready_to_fund else 'needs_attention' if group['issues'] else 'unlocked' if seconds==0 else 'locked')
             if ready_to_fund:group['countdown']='Not funded'
+            from live_wallet_traits import disc_flags
+            group['disc_only']=bool(source and disc_flags(catalog,self.registry).get(source['id']))
             group.pop('outpoints');group.pop('source_wallet')
         return {'wallets':sorted(groups.values(),key=lambda w:w['name'].casefold()),'loading':False,'height':tip,'checked_utc':checked_utc,'stale':False}

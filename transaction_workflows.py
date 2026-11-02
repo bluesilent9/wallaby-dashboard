@@ -88,6 +88,11 @@ class WorkflowStore:
         with storage_lock(self.config):
             data=self._read();data['notices'].setdefault(target_id,[]).append(notice);self._write(data)
         return {'sent':True}
+    def vault_warning(self,user,text):
+        notice={'id':uuid.uuid4().hex,'kind':'vault_spend_warning','target':'builder','text':text,'created_utc':datetime.now(timezone.utc).isoformat(),'read':True,'dismissible':True,'severity':'yellow'}
+        with storage_lock(self.config):
+            data=self._read();data['notices'].setdefault(user,[]).append(notice);self._write(data)
+        return notice
     def notifications(self,user,scope=None):
         with storage_lock(self.config):
             state=self._read();rows=[dict(n,cancelled=state['jobs'].get(n.get('job_id'),{}).get('cancelled',False),cancel_reason=state['jobs'].get(n.get('job_id'),{}).get('cancel_reason')) for n in state['notices'].get(user,[])]

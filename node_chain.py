@@ -168,10 +168,29 @@ class NodeChain:
         rows=[{'txid':r['txid'],'vout':r['vout'],'value':satoshis(r['amount']),'status':{'confirmed':True,'block_height':r['height']}} for r in result['unspents']]
         return rows,'Connected Core UTXO set (confirmed outputs)'
     def wallet_unspent(self,wallet):
-        sources=wallet.get('node_sources',[]);nodes={n['id'] for n in self.nodes()};errors=[]
-        with self.lock:at=self.cursor%max(1,len(sources));self.cursor+=1
-        for s in sources[at:]+sources[:at]:
-            if s['node_id'] not in nodes:continue
-            try:return self.rpc.call(s['node_id'],'listunspent',[1,9999999,[],True],s['wallet_name'])
-            except (ValueError,OSError) as exc:errors.append(str(exc))
-        raise NodeDataUnavailable('No connected replica can provide current UTXOs for '+wallet['name']+'. '+'; '.join(errors))
+        # Generations of one logical wallet can live in distinct Core monitors.
+        # Query every connected source, not just the first empty old monitor.
+        from concurrent.futures import ThreadPoolExecutor
+        from node_wallets import NodeWalletLoader
+        nodes={n['id'] for n in self.nodes()};sources=list({(r['node_id'],r['wallet_name']):r for r in wallet.get('node_sources',[]) if r['node_id'] in nodes}.values())
+        errors=[];coins={};coverage=set();succeeded=False
+        registry=getattr(self.rpc,'registry',None);hub=getattr(registry,'hub',None)
+        def query(source):
+            try:return source,self.rpc.call(source['node_id'],'listunspent',[1,9999999,[],True],source['wallet_name']),None
+            except (ValueError,OSError) as exc:return source,None,str(exc)
+        with ThreadPoolExecutor(max_workers=max(1,min(4,len(sources)))) as pool:
+            for source,rows,error in pool.map(query,sources):
+                if error:errors.append(error);continue
+                if not isinstance(rows,list):raise NodeDataUnavailable('Core returned an invalid unspent-output list.')
+                succeeded=True
+                if hub:
+                    inv=hub.inventories.get(source['node_id'],{})
+                    for account in inv.get('wallets',[]) if inv.get('complete') else []:
+                        if account['name']==source['wallet_name']:coverage.update(NodeWalletLoader.descriptor_key(r['desc']) for r in account['raw']['descriptors'])
+                for row in rows:
+                    key=(row['txid'],row['vout'])
+                    if key in coins and (Decimal(str(coins[key]['amount']))!=Decimal(str(row['amount'])) or coins[key]['scriptPubKey']!=row['scriptPubKey']):raise NodeDataUnavailable('Connected monitors disagree about an unspent output. No balance was accepted.')
+                    if key not in coins:coins[key]=row
+        required={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet.get('raw',{}).get('descriptors',[])}
+        if not succeeded or hub and not required<=coverage:raise NodeDataUnavailable('Connected nodes cannot verify every policy generation for '+wallet['name']+'. Load its complete monitors; missing coverage is not a zero balance. '+'; '.join(errors))
+        return list(coins.values())

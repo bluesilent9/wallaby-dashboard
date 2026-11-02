@@ -48,6 +48,13 @@ def builder_catalog(session,price=None):
             uid=entry.get('owner_id') or entry['source'].removesuffix(':smsf');rows=store.get('ownership_runs',{}).get(uid,{}).get('bitaroo_smsf_data' if entry.get('smsf') else 'bitaroo_data',{}).get('btc_rows',[])
             last=max(enumerate(rows),key=lambda x:(x[1]['utc'],x[0]))[1] if rows else None
             add(ident,'bitaroo','Bitaroo Exchange',last['balance'] if last else None)
+    for row in cards.values():
+        if row['kind']=='descriptor':
+            uid=next((w['id'] for w in chain['wallets'] if resource_id('descriptor',w['id'])==row['id']),None)
+            row['disc_only']=family.get('wallet_disc_traits',{}).get(uid,False)
+            row['watch_only']=family.get('wallet_traits',{}).get(uid,False)
+            evidence=next((w for w in public_store['wallets'] if w['id']==uid),{})
+            row['has_vault']=evidence.get('has_vault',False);row['multisig']=__import__('policy_accounts').multisig_summary(evidence.get('raw',{'descriptors':[]}))
     from unsigned_psbt import public_change_candidate
     for w in chain['wallets']:
         if w.get('extinct'):continue

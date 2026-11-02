@@ -1,3 +1,17 @@
+Vault spending: finish a payment arrow to check the source against connected Core nodes. A fully locked vault cannot connect. A wallet with unlocked funds can connect and spend that available portion, with fees reserved from it. Send maximum and manually using the available balance warn when other funds remain locked. These yellow UTC-timestamped notices are immediately read, appear above the diagram and can be deleted from Notifications. A failed node check does not create an unchecked arrow. Final coin selection and Agent review remain authoritative.
+
+## Build 27 workflow
+
+In a wallet tooltip, **Archive this Wallet** queues a local Agent approval for persistent signing accounts; **Make Extinct** remains restricted to empty wallets. An archive request does not delete the source. Several approved wallets can share a physical archive through Agent Disc Operations. Only the Agent can confirm physical destruction of a fully replaced old disc; Dashboard can withdraw the request. Offline Agents retain their last-known tasks until a valid reconnect snapshot.
+
+Add the same active wallet twice in Transaction Builder to create a receive-only **New Address** card. Draw a payment from its original card to this new card. In the line editor, **Vault** opens the linked Wallet Builder, which preserves existing signing keys/threshold and lets you calculate a later unlock height. **Send to Transaction Builder** returns the public destination and starts locally approved policy additions. Wait for those approvals before preparing the PSBT. Cancelling the linked editor leaves the payment unchanged; clearing Vault removes the binding without deleting existing policies. Original creation still uses **Request local Agent approvals**. Wallet Builder discovers Agent identities automatically and keeps incomplete actions disabled.
+
+An AUD line amount obtains a current quote and selects the shortest BTC decimal within 0.01%, capped at AUD0.50 (with the unavoidable half-satoshi precision floor). The quoted value and resulting amount are shown; enter BTC directly if you prefer. Amounts always use whole satoshis.
+
+Archive refresh preserves every previous policy. For a loaded disc, approve the new policy and use local Agent Disc Operations to refresh the archive. Dashboard cannot silently move private disc keys to a persistent node wallet. Perform such a local import on the Agent first.
+
+Address Book starts with the latest receiving address. Use its arrows to view older known addresses; red text and a warning identify historical entries. This only changes the address being viewed. Confirm custodian addresses independently before using them.
+
 ## Build 26 workflow updates
 
 Build 26 starts Balance Trace automatically when all ownership rows have owners. It opens Terminal Activity immediately, then returns to Wallets on completion. Reopening completed Ownership does not repeat the calculation; changing an assignment triggers verification again.

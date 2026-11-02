@@ -63,12 +63,15 @@ class BackgroundDiscovery:
             # Match locking policies, not Core names (or key origin annotations).
             for w in fresh:
                 keys={loader.descriptor_key(r['desc']) for r in w['raw']['descriptors']}
-                matches=[uid for uid,known in merged.items() if keys & {loader.descriptor_key(r['desc']) for r in known['raw']['descriptors']}]
+                from policy_lineage import related
+                matches=[uid for uid,known in merged.items() if keys & {loader.descriptor_key(r['desc']) for r in known['raw']['descriptors']} or related(self.registry.hub,w['raw'],known['raw'])]
                 for uid in matches:
                     known=merged.pop(uid)
                     live={n['id'] for n in nodes}
                     w['node_sources'] += [r for r in known.get('node_sources',[]) if r['node_id'] not in live and r not in w['node_sources']]
                     prior_keys={loader.descriptor_key(r['desc']):r for r in known['raw']['descriptors']}
+                    if not set(prior_keys)<=keys:raise ValueError('Earlier policies of a refreshed wallet are missing from connected nodes. Load its prior policy monitors or complete archive on an Agent. Saved history has been retained; no partial replacement was published.')
+                    w['name']=known['name'];w['raw']['wallet_name']=known['name']
                     if keys==set(prior_keys):
                         # Reuse the established export spelling for equivalent
                         # origin annotations. Preserve the durable identity.
@@ -108,6 +111,8 @@ class BackgroundDiscovery:
                 if DescriptorStore.fingerprint(store.read())!=DescriptorStore.fingerprint(old):raise ValueError('Wallet catalog changed; discovery will retry.')
                 publish_history(self.config,catalog,snapshot)
                 store.replace_node_wallets(wallets)
+                from builder_identity import migrate
+                migrate(self.config,superseded)
                 fp=DescriptorStore.fingerprint(catalog)
                 with FamilyStore(self.config).transaction() as data:
                     for record in data['ownership']:

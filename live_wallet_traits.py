@@ -20,8 +20,21 @@ def watch_flags(catalog,registry):
     return result
 
 def annotate(report,catalog,registry):
-    flags=watch_flags(catalog,registry)
+    flags=watch_flags(catalog,registry);discs=disc_flags(catalog,registry)
     if report:
         for row in report.get('balances',{}).get('wallets',[]):
             if row.get('descriptor_id') in flags:row['watch_only']=flags[row['descriptor_id']]
+            row['disc_only']=discs.get(row.get('descriptor_id'),False)
     return flags
+
+def disc_flags(catalog,registry):
+    """Temporary aliases do not establish a persistent node copy."""
+    if registry is None:return {}
+    active={n['id'] for n in registry.snapshot()['nodes'] if n.get('connected') and n.get('rpc_ready')}
+    inventories=[w for node,inv in list(registry.hub.inventories.items()) if node in active and inv.get('complete') for w in inv.get('wallets',[])]
+    result={}
+    for wallet in catalog['wallets']:
+        keys={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet['raw']['descriptors']}
+        matches=[w for w in inventories if keys & {NodeWalletLoader.descriptor_key(r['desc']) for r in w['raw']['descriptors']} or signing_account(w,{'raw':wallet['raw']})]
+        result[wallet['id']]=bool(matches) and all(w.get('signing_only') for w in matches)
+    return result

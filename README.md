@@ -2,9 +2,23 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 26 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev26_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 27 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev27_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
+
+## Build 27
+
+- Parallel-key multisig badges, disc-only source badges, and cautious owner suggestions from original node wallet names.
+- Wallet hover controls request locally approved archival of persistent private-key wallets. Dashboard maintains the archive/destruction queue; only the Agent confirms physical destruction. An authoritative empty queue after reconnect withdraws stale tasks.
+- Duplicate transaction cards are receive-only fresh addresses; balances and UTXOs are never duplicated. Payment lines accept a live-quoted AUD amount with bounded, whole-satoshi rounding.
+- Same-wallet vault renewal opens a linked Wallet Builder, reuses the existing keys/quorum, and requests locally approved additive public policies. Prior vault generations remain available. The funded PSBT is created only after the diagram advances; its vault outputs are bound to descriptor, index, address, amount and independently approved policy hash.
+- Drawing a payment checks current vault spendability before creating its arrow. Locked-only sources are blocked; mixed wallets can spend only available inputs. Maximum/manual-full-available reminders are timestamped, immediately read and dismissible.
+- UTXO reads combine every connected policy monitor and deduplicate replicas. Missing policy coverage is an explicit error, not a zero balance.
+- Address Book arrows browse known addresses from oldest to latest, defaulting to the latest at the far right. Historical addresses are red and warned; browsing does not change builder destinations.
+
+Use the matching **Agent V2 Build 23** for archive queues and public-policy refreshes. Existing disc accounts are refreshed locally in Agent Disc Operations; Dashboard never receives their private wallet files. A disc key cannot be moved into persistent node storage through Dashboard: perform that local operation on the Agent first. Physical drive/burn verification remains a hardware test.
+
+See [Build 27 integration](docs/BUILD27_AGENT_CONTRACT.md) and [validation](VALIDATION.md).
 
 ## What it does
 
@@ -18,7 +32,7 @@ Vault monitoring uses public vault records and connected Core nodes. Reports dep
 
 ## This development update
 
-Build 26 starts Balance Trace automatically when all ownership rows have owners. It opens Terminal Activity immediately, then returns to Wallets on completion. Reopening completed Ownership does not repeat the calculation; changing an assignment triggers verification again.
+Build 27 starts Balance Trace automatically when all ownership rows have owners. It opens Terminal Activity immediately, then returns to Wallets on completion. Reopening completed Ownership does not repeat the calculation; changing an assignment triggers verification again.
 
 Salary Builder puts the collapsed tax/SMSF assumptions inside Stage 1, and the pay schedule at the start of Stage 2. Confirm the schedule before configuring salary cards; changing it hides those cards until reconfirmed. Monthly means 12 payments, modelled on each month’s first day. Distributor choices include every active wallet, regardless of owner. Scenario BTC/AUD and target age remain at the top; the saved-quote control is removed. Each person’s card has its own pay-rise multiplier. For an independent target it multiplies salary; for a recipient it multiplies their incoming share, with combined effective shares limited to 100%.
 
@@ -91,9 +105,9 @@ This is a trusted-family service behind SSH, not a public password-authenticated
 
 ## DEB installation
 
-The package is `wallaby-dashboard`, version `1.0.0~dev26`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
+The package is `wallaby-dashboard`, version `1.0.0~dev27`, architecture `all`. Its installation creates the dedicated `wallaby-dashboard` service user, starts `wallaby-dashboard.service` immediately and enables it at boot. Application files go under `/usr/lib/wallaby-dashboard`; private durable records go under `/var/lib/wallaby-dashboard`; temporary workspace files use `/var/cache/wallaby-dashboard`.
 
-The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev26_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
+The installer does **not** remove an older manually installed service. For the first DEB installation, retire the exact legacy manual service before installing to avoid port conflicts. For an existing Dashboard DEB, install the new DEB with `sudo apt install ./wallaby-dashboard_1.0.0~dev27_all.deb`; it preserves records and restarts the service. [Clean-install instructions](docs/CLEAN_INSTALL.md) apply only to the older manual installation.
 
 ## Source checks and build
 

@@ -71,6 +71,11 @@ class BuilderWorkspace:
   with storage_lock(self.config):
    row=self.owned(user,kind,data.get('id'));s=self.read();row=s['workspaces'][kind]
    if row['revision']!=data.get('revision'):raise ValueError('Builder changed in another browser. Reload it before editing.')
+   if kind=='wallet' and row.get('renewal'):
+    prior=row['draft'];r=row['renewal']
+    if any(clean.get(k)!=prior.get(k) for k in ('name','type','threshold','count')) or len(clean.get('roles',[]))!=len(r['roles']):raise ValueError('Renewal preserves the existing wallet name, quorum and signing roles.')
+    for proposed,fixed in zip(clean['roles'],r['roles']):
+     if proposed.get('name')!=fixed['name'] or fixed['node_locked'] and proposed.get('node_id')!=fixed['node_id']:raise ValueError('The existing signing role cannot be replaced during a vault refresh.')
    row['draft']=clean;row['revision']+=1;row['updated_utc']=stamp();self.write(s);return copy.deepcopy(row)
  @serialised
  def attach(self,user,kind,operation):
@@ -113,6 +118,8 @@ class BuilderWorkspace:
   else:
    for key,r in requests.items():
     if r.get('job_id') in row['operations'] and r.get('delivered'):add(r['node_id'],r['job_id'],key)
+   for key,r in requests.items():
+    if r.get('workspace_id')==row['id'] and r.get('kind')=='wallet_policy_refresh' and r.get('delivered'):add(r['node_id'],r['destination_id'].removeprefix('receive-'),digest(r['proposal']))
    imported=row.get('draft',{}).get('imported_id')
    if imported and imported in exports:add(exports[imported]['node_id'],imported)
    # Include imported proposals incorporated in any prepared job.
@@ -144,6 +151,14 @@ class BuilderWorkspace:
   for ident,batch in self.read()['cancellations'].items():
    if batch.get('withdrawn'):continue
    operations=batch.get('operations',[]);user=batch['owner_id']
+   if batch['kind']=='transaction':
+    from builder_destinations import Destinations
+    destinations=Destinations(self.config)
+    with storage_lock(self.config):
+     state=destinations.read()
+     for d in state['destinations'].values():
+      if d.get('workspace_id')==batch['workspace_id']:d['policy_requests_started']=False
+     if state['destinations']:destinations.write(state)
    if batch['kind']=='wallet':
     with hub.wallet_builder.edit() as state:
      for operation in operations:
@@ -156,7 +171,7 @@ class BuilderWorkspace:
      if job and not job.get('completed') and not job.get('cancelled'):store.cancel(user,operation,reason='cancelled')
     with hub.edit() as state:
      for request in state['requests'].values():
-      if request.get('job_id') in operations and request.get('state')=='pending':request.update(state='cancelled',message='Dashboard build cancelled; local Agent cleanup requires authorisation.')
+      if (request.get('job_id') in operations or request.get('workspace_id')==batch['workspace_id']) and request.get('state')=='pending':request.update(state='cancelled',message='Dashboard build cancelled; local Agent cleanup requires authorisation.')
     for key,lease in list(hub.leases.items()):
      if lease['user_id']==user:hub.leases.pop(key,None)
    with storage_lock(self.config):

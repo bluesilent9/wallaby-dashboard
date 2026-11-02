@@ -15,7 +15,7 @@ from agent_rpc import PRIVATE
 
 from builder_workspace import serialised,BuilderWorkspace
 
-CAPS={'builder_cancellation_v1','node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2','wallet_retirement_cancel_v1'}
+CAPS={'archive_inventory_v1','wallet_archive_queue_v1','wallet_policy_refresh_v1','builder_cancellation_v1','node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2','wallet_retirement_cancel_v1'}
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
 def canonical(value):
     raw=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
@@ -165,6 +165,8 @@ class AgentHub:
                     if wallet.get('private_keys_enabled') and own and any(own<={e['message'][f].split(']')[-1].replace("'",'h') for f in ('receive_key','change_key')} for setup in setups for e in setup['contributions'].values()):continue
                     policy_keys={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet['raw']['descriptors']}
                     if any(policy_keys=={NodeWalletLoader.descriptor_key(d) for d in setup.get('descriptors',[])} and (setup.get('workspace_id') in active_setups or setup['state']!='ready' or not set(setup['routes'].values())<=set(setup.get('completion_confirmed',{}))) for setup in setups):continue
+                    from policy_lineage import related
+                    if any(related(self,wallet['raw'],w['raw']) for w in dest['wallets'] if not w.get('signing_only')):continue
                     if self.transfers.contains([w for w in dest['wallets'] if not w.get('signing_only')],wallet['raw']):continue
                     # One canonical source per missing public wallet, independent of names/private-key flags.
                     if any(r.get('kind')=='wallet_transfer' and r.get('direction')=='receive' and r['node_id']==target and equivalent(r['public_wallet'],wallet['raw']) for r in state['requests'].values()):continue
@@ -202,7 +204,7 @@ class AgentHub:
             elif kind=='transaction_builder_psbt':
                 if not isinstance(p,dict) or set(p)!={'version','chain','psbt','transaction_hash','vault','review','stage','immutable'} or type(p['version']) is not int or p['version']!=1 or p['chain']!='main' or p['stage']!=2 or p['immutable'] is not True:raise ValueError('Invalid immutable Vault Builder export.')
                 public_vault(p['vault'])
-            elif kind not in ('partial_sign_result','broadcast_result','node_identity','sign_result','wallet_transfer_result','wallet_transfer_preview','wallet_retirement_result','wallet_setup_identity','wallet_setup_contribution','wallet_setup_ack','wallet_setup_inventory','wallet_sync_preferences','builder_cancel_receipt'):raise ValueError('Unsupported Agent outbox kind.')
+            elif kind not in ('partial_sign_result','broadcast_result','node_identity','sign_result','wallet_transfer_result','wallet_transfer_preview','wallet_retirement_result','wallet_setup_identity','wallet_setup_contribution','wallet_setup_ack','wallet_setup_inventory','wallet_sync_preferences','builder_cancel_receipt','archive_queue_result','archive_inventory','wallet_policy_refresh_result'):raise ValueError('Unsupported Agent outbox kind.')
             verified.append(item)
         # Validate expensive PSBTs before taking the durable-store lock.
         exported={}
@@ -226,9 +228,19 @@ class AgentHub:
                 previews[item['id']]=verify(self.config,{k:payload[k] for k in ('preview','public_key','signature')})
         self.permissions.proposals(node,token)
         deferred_permissions=set()
+        # Authenticate current connection identities before processing results
+        # that may appear earlier in the same durable Agent outbox.
+        for item in verified:
+            if item['kind']=='wallet_setup_identity':self.permissions.identity_reply(node,item['payload'])
         for item in verified:
             if node+':'+item['id'] in previous['receipts']:continue
-            if item['kind']=='builder_cancel_receipt':BuilderWorkspace(self.config).receipt(node,item['payload'])
+            if item['kind']=='archive_queue_result':
+                __import__('archive_queue').ArchiveQueue(self).accept(node,item['payload'])
+            elif item['kind']=='archive_inventory':
+                __import__('archive_queue').ArchiveQueue(self).followup(node,item['payload'])
+            elif item['kind']=='wallet_policy_refresh_result':
+                __import__('wallet_policy_updates').accept(self,node,item['payload'])
+            elif item['kind']=='builder_cancel_receipt':BuilderWorkspace(self.config).receipt(node,item['payload'])
             elif item['kind']=='wallet_sync_preferences':
                 if self.permissions.accept(node,item['payload'],item['id']) is None:deferred_permissions.add(item['id'])
             elif item['kind']=='wallet_setup_identity' and self.permissions.identity_reply(node,item['payload']):pass
@@ -261,7 +273,7 @@ class AgentHub:
                         if v['node_id']==node and v['user_id']==lease['user_id'] and v['draft_id']==lease['draft_id']:v['consumed']=True
                     state['exports'].setdefault(ident,dict(plan,outbox_id=item['id'],node_id=node,user_id=lease['user_id'],draft_id=lease['draft_id'],received_utc=self.utc()))
                 elif receipt in state['receipts']:accepted.append(item['id']);continue
-                elif kind.startswith('wallet_setup_') or kind in ('wallet_sync_preferences','builder_cancel_receipt'):pass
+                elif kind.startswith('wallet_setup_') or kind in ('wallet_sync_preferences','builder_cancel_receipt','archive_queue_result','archive_inventory','wallet_policy_refresh_result'):pass
                 elif kind=='vault_public':
                     ident=digest(p);row=state['vaults'].setdefault(ident,{'public':p,'sources':[]})
                     if node not in row['sources']:row['sources'].append(node)
@@ -313,7 +325,9 @@ class AgentHub:
         queues=[p for p in proposals if p['kind']=='wallet_sync_queue']
         others=[p for p in proposals if p['kind']!='wallet_sync_queue']
         cancellations=BuilderWorkspace(self.config).proposals(node) if 'builder_cancellation_v1' in caps else []
-        return {'version':1,'accepted':accepted,'proposals':(cancellations+queues+setup_proposals+others)[:16]}
+        archive=[__import__('archive_queue').ArchiveQueue(self).proposal(node)] if 'wallet_archive_queue_v1' in caps else []
+        updates=__import__('wallet_policy_updates').proposals(self,node) if 'wallet_policy_refresh_v1' in caps else []
+        return {'version':1,'accepted':accepted,'proposals':(cancellations+setup_proposals+archive+updates+queues+others)[:16]}
     def transfer_proposal(self,state,row):
         peer=row['peer_id'];record=next((c for c in self.registry.connections.values() if c['node_id']==peer),{})
         proposal={'kind':'wallet_transfer','direction':row['direction'],'transfer_id':row['transfer_id'],'peer':{'node_id':peer,'hostname':record.get('hostname',''),'ipv6':state['nodes'][peer]['ipv6']},'public_wallet':row['public_wallet'],'source_has_private_keys':row['source_has_private_keys'],'earliest_timestamp':row['earliest_timestamp'],'requires_blockchain_redownload':row['requires_blockchain_redownload'],'preview_challenge':row['challenge'],'node_ipv6':state['nodes'][row['node_id']]['ipv6']}

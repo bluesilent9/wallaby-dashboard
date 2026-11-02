@@ -47,7 +47,7 @@ def output_metadata(derived,has_origin):
     return b''.join(record(k,v) for k,v in sorted(fields))+b'\x00'
 
 
-def encode_psbt(result,change):
+def encode_psbt(result,change,receiving=None):
     inputs=[];input_maps=[];used=set();total=0
     for uid in sorted(result['selected']):
         for coin in result['selected'][uid]:
@@ -60,7 +60,7 @@ def encode_psbt(result,change):
             for k,v in sorted(coin.get('psbt_fields',{}).items()):fields+=record(bytes.fromhex(k),bytes.fromhex(v))
             input_maps.append(fields+b'\x00')
     from vendor.embit.script import address_to_scriptpubkey
-    outputs=[TransactionOutput(value,address_to_scriptpubkey(address)) for address,value in sorted(result['outputs'].items())];maps=[b'\x00' for _ in outputs]
+    outputs=[TransactionOutput(value,address_to_scriptpubkey(address)) for address,value in sorted(result['outputs'].items())];maps=[output_metadata(receiving[o.script_pubkey.data.hex()],True) if receiving and o.script_pubkey.data.hex() in receiving else b'\x00' for o in outputs]
     for uid,value in sorted(result['changes'].items()):
         spk,derived,key,index,origin=change[uid];outputs.append(TransactionOutput(value,spk));maps.append(output_metadata(derived,origin))
     tx=Transaction(version=2,vin=inputs,vout=outputs,locktime=max((c.get('height',0) for rows in result['selected'].values() for c in rows),default=0))
@@ -99,6 +99,10 @@ def construct(session,catalog,edges,reserved,fixed=None):
         reserved[key]=index+1;change[uid]=choice
     result=plan(edges,catalog,coins,{u:v[0] for u,v in change.items()},details=True,fixed=fixed)
     if not result['can_continue']:raise ValueError(result['validation_message'])
-    psbt,tx=encode_psbt(result,change)
+    from vendor.embit.descriptor import Descriptor
+    receiving={d.script_pubkey().data.hex():d for w in catalog['wallets'] if w.get('output_descriptor') for d in [Descriptor.from_string(w['output_descriptor']).derive(w['output_index'])]}
+    psbt,tx=encode_psbt(result,change,receiving)
     summary={k:v for k,v in result.items() if k not in ('selected','changes','outputs','resolved_edges')}
-    return {'input_wallets':[uid for uid in sorted(result['selected']) for _ in result['selected'][uid]],'outpoints':[[c['txid'],c['vout']] for rows in result['selected'].values() for c in rows],'psbt':psbt,'unsigned_txid':tx.txid().hex(),'estimate':summary,'edges':result['resolved_edges'],'change':[{'wallet_id':u,'address':change[u][0].address(),'sats':str(n)} for u,n in result['changes'].items()]}
+    output_policies=[{'policy_hash':w['output_policy_hash'],'descriptor':w['output_descriptor'],'index':w['output_index'],'address':w['address'],'amount_sats':str(result['outputs'][w['address']])} for w in catalog['wallets'] if w.get('vault_destination') and w['address'] in result['outputs']]
+    if len(output_policies)>16:raise ValueError('At most 16 refreshed vault outputs can be independently reviewed in one transaction.')
+    return {'output_policies':output_policies,'input_wallets':[uid for uid in sorted(result['selected']) for _ in result['selected'][uid]],'outpoints':[[c['txid'],c['vout']] for rows in result['selected'].values() for c in rows],'psbt':psbt,'unsigned_txid':tx.txid().hex(),'estimate':summary,'edges':result['resolved_edges'],'change':[{'wallet_id':u,'address':change[u][0].address(),'sats':str(n)} for u,n in result['changes'].items()]}

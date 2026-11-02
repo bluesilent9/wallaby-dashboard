@@ -1,3 +1,5 @@
+> Dashboard Build 27: [archive queue and public-policy renewal contract](docs/BUILD27_AGENT_CONTRACT.md). Requires matching Agent V2 Build 23.
+
 # Wallaby Agent protocol — v1 with RPC capability v1 (V156)
 
 Dashboard is the hub. Wallaby Agent initiates every connection through its authorised SSH tunnel, polls for commands, calls its local Bitcoin Core, and posts results. No server-initiated connection to a laptop is required. The production Agent application is **not** bundled with this Dashboard; the server contract is implemented and integration-tested with the actual Agent client and a simulated Core HTTP endpoint.

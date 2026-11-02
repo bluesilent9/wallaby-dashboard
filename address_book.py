@@ -57,6 +57,10 @@ def build_address_book(core,wallets,reports,other,user,client=None):
             address=saved.get('receiving_address')
             if address:entry.update(status='available',addresses=[{'address':address,'observed_utc':core.DESCRIPTOR_SNAPSHOT['scanned_utc'],'txid':None}],observed_utc=core.DESCRIPTOR_SNAPSHOT['scanned_utc'],address_basis='Latest observed receiving address, or active descriptor next_index when unused. Check Bitcoin Core before sending.')
             else:entry['reason']='No active receiving descriptor with a next address was supplied.'
+            history=[]
+            for row in rows:
+                if row.incoming and valid_address(row.address):history.append({'address':row.address,'observed_utc':iso(row),'txid':txid(row)})
+            entry['address_history']=ordered_history(history,entry['addresses'])
             entries.append(entry);continue
         receipts=[r for r in rows if r.incoming]
         try:
@@ -78,7 +82,7 @@ def build_address_book(core,wallets,reports,other,user,client=None):
         except (ValueError,RuntimeError,OSError,KeyError) as exc:entry['reason']=str(exc)
         entries.append(entry)
 
-    def bitaroo_entry(source,receipts):
+    def bitaroo_entry(source,receipts,include_history=True):
         kind='bitaroo'
         entry={'id':resource_id(kind,source),'kind':kind,'source':source,'addresses':[],'status':'unavailable'}
         if not receipts:
@@ -128,6 +132,12 @@ def build_address_book(core,wallets,reports,other,user,client=None):
             if len(destinations)!=1:raise ValueError('Multiple destinations share the latest deposit timestamp; a single latest receiving address cannot be established. Older addresses are not substituted.')
             entry.update(status='available',addresses=destinations)
         except (ValueError,RuntimeError,OSError,KeyError) as exc:entry['reason']=str(exc)
+        if include_history and entry['status']=='available':
+            older=[]
+            for deposit in sorted(receipts,key=stamp):
+                if stamp(deposit)==latest:continue
+                older.extend(bitaroo_entry(source,[deposit],False)['addresses'])
+            entry['address_history']=ordered_history(older,entry['addresses'])
         return entry
     if reports.btc_rows:
         print('Address Book: identifying the latest Bitaroo Bitcoin deposit destination',flush=True)
@@ -145,3 +155,13 @@ def shared_address_book(snapshot,local=None):
         entries.append(dict(entry,owner_id=user_id.removesuffix(':smsf'),smsf=user_id.endswith(':smsf'),shared=True));checked.append(entry.get('checked_utc') or '')
     if not entries and not local:return None
     return {'entries':entries,'generated_utc':max(checked) or None}
+
+
+def ordered_history(older,latest):
+    """Old-to-new, one entry per address; authoritative latest stays at right."""
+    by_address={}
+    for row in sorted(older,key=lambda r:(r.get('observed_utc') or '',r['address'])):
+        if valid_address(row.get('address')):by_address[row['address']]=row
+    for row in latest:
+        by_address.pop(row['address'],None);by_address[row['address']]=row
+    return list(by_address.values())

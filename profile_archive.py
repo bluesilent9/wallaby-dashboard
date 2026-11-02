@@ -107,6 +107,15 @@ def validate(root):
     if (root/'data/builder-workspaces.json').exists():
         from builder_workspace import validate as validate_workspaces
         validate_workspaces(json.loads((root/'data/builder-workspaces.json').read_text()),ids)
+    if (root/'data/builder-resource-aliases.json').exists():
+        aliases=json.loads((root/'data/builder-resource-aliases.json').read_text())
+        if not isinstance(aliases,dict) or len(aliases)>100000 or any(a==b or not isinstance(b,str) or any(not isinstance(v,str) or len(v)>250 or not v.startswith('[\"descriptor\",') for v in (a,b)) for a,b in aliases.items()):raise ValueError('Invalid saved builder wallet identity mapping.')
+    if (root/'data/receiving-destinations.json').exists():
+        from builder_destinations import validate as validate_destinations
+        validate_destinations(json.loads((root/'data/receiving-destinations.json').read_text()),ids)
+    if (root/'data/archive-queue.json').exists():
+        from archive_queue import validate as validate_archive_queue
+        validate_archive_queue(json.loads((root/'data/archive-queue.json').read_text()))
     if (root/'data/resident-tax-tables.json').exists():
         from resident_tax_tables import validate as validate_rates
         validate_rates(json.loads((root/'data/resident-tax-tables.json').read_text()))

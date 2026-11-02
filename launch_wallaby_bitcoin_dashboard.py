@@ -27,7 +27,7 @@ from reporting import export_html,render_html,select_report_year
 from report_store import ReportStore,signature as report_signature
 from profile_archive import ProfileArchive,ProfileGate
 from nodes import NodeRegistry,create_agent_server,DEFAULT_AGENT_PORT
-from preferences import FamilyStore,MISSING_OWNERSHIP,MissingOwnership,resolve_ownership
+from preferences import resource_id,FamilyStore,MISSING_OWNERSHIP,MissingOwnership,resolve_ownership
 from address_book import shared_address_book
 from fees import FeeService,FeeUnavailable
 from diagnostic_log import DiagnosticLog
@@ -124,16 +124,26 @@ class Session:
         annotate_signers(balance_report,self.node_registry.hub if self.node_registry else None)
         from live_wallet_traits import annotate
         traits=annotate(balance_report,DescriptorStore(self.preferences_path).read(),self.node_registry)
+        from live_wallet_traits import disc_flags
+        discs=disc_flags(DescriptorStore(self.preferences_path).read(),self.node_registry)
+        from archive_queue import ArchiveQueue
+        archive=ArchiveQueue(self.node_registry.hub) if self.node_registry else None
+        if balance_report and archive:
+            for row in balance_report.get('balances',{}).get('wallets',[]):
+                resource=resource_id('descriptor',row['descriptor_id']) if row.get('descriptor_id') else ''
+                row['archive_sources']=[{k:v for k,v in item.items() if k not in ('public_wallet','related_policies')} for item in archive.options(resource)]
         from balance_evidence import annotate as balance_evidence
         balance_evidence(balance_report,DescriptorStore(self.preferences_path).read(),data,self.preferences_path)
-        result={'wallet_traits':traits,'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
+        result={'archive_queue':archive.snapshot() if archive else {'requests':[]},'wallet_disc_traits':discs,'wallet_traits':traits,'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
                 'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':[dict(item,**source_suggestions(item,data['users'])) for item in display_inventory(self.inventory,DescriptorStore(self.preferences_path).read())] if user else [],'inventory_ready':self.inventory_ready if user else False,
                 **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
                 'restore_error':self.restore_error,'settings':self.settings if user else {},'loaded_slots':{slot:([p.name for p in sorted(path.rglob('*')) if p.is_file()] if path.is_dir() else [path.name]) for slot,path in self.uploads.items()} if user else {}}
         for row in result['inventory']:
             if row.get('source') in traits:row['watch_only']=traits[row['source']]
+            row['disc_only']=discs.get(row.get('source'),False)
         for row in result['descriptors']['wallets']:
             if row['id'] in traits:row['watch_only']=traits[row['id']]
+            row['disc_only']=discs.get(row['id'],False)
         return result
     def select_user(self,user_id):
         with self.lock:
@@ -466,6 +476,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/vaults':
                     if not session.access()['ownership_ready']:return self.json({'error':'Complete Ownership first.'},400)
                     return self.json(sessions.nodes.vaults.snapshot())
+                if path=='/api/wallets/archive-queue':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    return self.json(__import__('archive_queue').ArchiveQueue(sessions.nodes.hub).snapshot())
                 if path=='/api/wallets/retirements':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from wallet_retirement import snapshot
@@ -568,7 +581,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if not session.access()['templates_ready']:return self.json({'error':'Complete Ownership and save all assignments first.'},400)
                     try:price=fee_service.snapshot().get('price')
                     except FeeUnavailable:price=None
-                    return self.json(builder_catalog(session,price))
+                    row=BuilderWorkspace(session.preferences_path).read()['workspaces'].get('transaction',{})
+                    ids=[n['id'] for n in row.get('draft',{}).get('nodes',[])] if row.get('owner_id')==session.user_id else []
+                    return self.json(__import__('builder_destinations').Destinations(session.preferences_path).enrich(builder_catalog(session,price),ids,sessions.nodes.hub))
                 if path=='/api/family':return self.json(session.family())
                 if path=='/api/job':return self.json((session.report if session.mode=='cgt' else session.job_result) if session.job_result is not None and (session.mode!='cgt' or session.access()['report_ready']) else {},200 if session.job_result is not None and (session.mode!='cgt' or session.access()['report_ready']) else 404)
                 if path=='/api/report':return self.json(session.report if session.access()['report_ready'] else {},200 if session.access()['report_ready'] else 404)
@@ -580,7 +595,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/assets/node_explorer.js':'assets/node_explorer.js','/assets/salary_diagram.js':'assets/salary_diagram.js','/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/assets/address_history.js':'assets/address_history.js','/assets/ownership_hints.js':'assets/ownership_hints.js','/assets/wallet_archives.js':'assets/wallet_archives.js','/assets/node_explorer.js':'assets/node_explorer.js','/assets/salary_diagram.js':'assets/salary_diagram.js','/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
@@ -674,14 +689,19 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     return self.json(workspace.snapshot(session.user_id,kind,sessions.nodes))
                 if path.startswith('/api/wallet-builder/'):
                     if not session.user():raise ValueError('Select a family user first.')
-                    if not path.endswith('/cancel'):self.require_builder_node(session)
+                    if not path.endswith(('/cancel','/renewal-cancel')):self.require_builder_node(session)
                     workspace=BuilderWorkspace(session.preferences_path);workspace.owned(session.user_id,'wallet')
                     setup=sessions.nodes.hub.wallet_builder
+                    if path.endswith('/renewal-cancel'):
+                        return self.json(__import__('vault_refresh').cancel(sessions.nodes.hub,session.user_id))
+                    if path.endswith('/renewal-finish'):
+                        return self.json(__import__('vault_refresh').finish(sessions.nodes.hub,session.user_id,data.get('height')))
                     if path.endswith('/estimate'):
                         from vault_estimator import from_nodes
                         return self.json(from_nodes(sessions.nodes,data.get('date'),data.get('timezone')))
                     if path.endswith('/discover'):return self.json(setup.discover())
                     if path.endswith('/create'):
+                        if workspace.owned(session.user_id,'wallet').get('renewal'):raise ValueError('Return this public vault policy to Transaction Builder; do not create replacement signing keys.')
                         if workspace.owned(session.user_id,'wallet')['operations']:raise ValueError('A wallet ceremony is already active. Finish or cancel it before starting another.')
                         result=setup.start(session.user_id,data,workspace.owned(session.user_id,'wallet')['id']);created=next(reversed(setup.read()['sessions']));workspace.attach(session.user_id,'wallet',created);return self.json(result)
                     raise ValueError('Unknown Wallet Builder operation.')
@@ -708,14 +728,15 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         hub.inventory_times[connection['node_id']]=0
                         threading.Thread(target=hub.refresh_inventory,args=(connection['node_id'],connection['token']),daemon=True).start()
                     return self.json({'queued':True})
+                if path in ('/api/wallets/archive','/api/wallets/archive-cancel'):
+                    if not session.user():raise ValueError('Select a family user first.')
+                    queue=__import__('archive_queue').ArchiveQueue(sessions.nodes.hub)
+                    if path.endswith('archive-cancel'):return self.json(queue.cancel(session.user_id,data.get('id')))
+                    return self.json(queue.create(session.user_id,data.get('wallet_id'),data.get('sources')))
                 if path=='/api/wallets/retirement-cancel':
                     if not session.user():raise ValueError('Select a family user first.')
                     from wallet_retirement import cancel
                     return self.json(cancel(sessions.nodes.hub,session.user_id,data.get('request_hash'),data.get('confirmed')))
-                if path=='/api/wallets/retirement-discs':
-                    if not session.user():raise ValueError('Select a family user first.')
-                    from wallet_retirement import confirm_discs
-                    return self.json(confirm_discs(sessions.nodes.hub,session.user_id,data.get('request_hash'),data.get('status')))
                 if path=='/api/wallets/retire':
                     from wallet_retirement import propose
                     return self.json(propose(sessions.nodes.hub,session,data.get('wallet_id'),data.get('node_id'),data.get('confirmed')))
@@ -772,6 +793,31 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     if path.endswith('/read'):sessions.nodes.notifications(session.user_id,read=True)
                     workflows.update_notifications(session.user_id,data.get('id') if path.endswith('/delete') else None)
                     return self.json(self.notices(session))
+                if path in ('/api/builder/vault-renewal','/api/builder/vault-remove'):
+                    self.require_builder_node(session,ownership=True)
+                    import vault_refresh
+                    if path.endswith('/vault-remove'):return self.json(vault_refresh.remove(sessions.nodes.hub,session.user_id,data.get('target')))
+                    return self.json(vault_refresh.start(sessions.nodes.hub,session.user_id,data.get('source'),data.get('target')))
+                if path=='/api/builder/new-address':
+                    self.require_builder_node(session,ownership=True)
+                    BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
+                    from builder_destinations import Destinations
+                    destinations=Destinations(session.preferences_path);resource=data.get('wallet_id')
+                    if str(resource).startswith('receive-'):
+                        prior=destinations.get(resource)
+                        if prior['height']:raise ValueError('A vault policy cannot be reused from a template. Build a new vault policy explicitly.')
+                        resource=prior['base']
+                    new=destinations.create(sessions.nodes,session.user_id,resource)
+                    return self.json(next(w for w in destinations.enrich(builder_catalog(session),[new['id']])['wallets'] if w['id']==new['id']))
+                if path=='/api/builder/aud-amount':
+                    self.require_builder_node(session,ownership=True)
+                    from fiat_amount import convert
+                    return self.json(convert(data.get('aud'),fee_service.fx()))
+                if path=='/api/builder/spendability':
+                    self.require_builder_node(session,ownership=True)
+                    BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
+                    from vault_spending import check
+                    return self.json(check(session,data))
                 if path in ('/api/builder/estimate','/api/builder/prepare'):
                     self.require_builder_node(session,ownership=True)
                     BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')
@@ -783,7 +829,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     for edge in edges:
                         if not isinstance(edge,dict) or not all(isinstance(edge.get(k),str) for k in ('from','to','amount_sats','fee_rate')):raise ValueError('Invalid planned connection.')
                         if not re.fullmatch(r'[0-9]{1,16}',edge['amount_sats']) or not re.fullmatch(r'[0-9]{1,12}(?:\.[0-9]{1,8})?',edge['fee_rate']):raise ValueError('Invalid payment amount or fee contribution.')
-                    catalog=builder_catalog(session)
+                    catalog=__import__('builder_destinations').Destinations(session.preferences_path).enrich(builder_catalog(session),[e['to'] for e in edges],sessions.nodes.hub,require_policy=True)
                     allowed={w['id'] for w in catalog['wallets'] if w['can_send']}
                     for edge in edges:
                         if type(edge.get('max',False)) is not bool or edge['to']=='network-fee' and edge.get('max'):raise ValueError('Maximum is available only for Bitcoin payments.')
@@ -795,7 +841,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         with session.lock:
                             # Ownership or profile may have changed during catalogue loading.
                             if not session.access()['templates_ready']:raise ValueError('Ownership changed. Complete Ownership and save all assignments before preparing it.')
-                            workflow=WorkflowStore(session.preferences_path);created=workflow.create(session,builder_catalog(session),diagram,BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')['id'])
+                            workflow=WorkflowStore(session.preferences_path);created=workflow.create(session,catalog,diagram,BuilderWorkspace(session.preferences_path).owned(session.user_id,'transaction')['id'])
                             BuilderWorkspace(session.preferences_path).attach(session.user_id,'transaction',created['id'])
                             return self.json(workflow.public_job(session.user_id,created['id']))
                     return self.json(estimate_fee_plan(edges,catalog,live_coins(session,catalog,sources)))

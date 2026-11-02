@@ -11,6 +11,11 @@ from address_book import valid_address
 
 _CACHE={};_LOCK=threading.Lock()
 
+class LiveCoins(dict):
+    """Coin-selection inputs plus verified locked-value information for the UI."""
+    def __init__(self):super().__init__();self.availability={}
+
+
 def known_scripts(chain):
     result={w['id']:set() for w in chain['wallets']}
     if 'wallet_outputs' in chain:
@@ -151,6 +156,7 @@ def plan(edges,catalog,coins,change_scripts=None,details=False,fixed=None):
     if sum(outputs.values())+sum((fixed or {}).get('payments',{}).values())>2100000000000000:ready,message=False,'Payment outputs exceed Bitcoin’s maximum supply.'
     if size>100000:ready,message=False,'The transaction exceeds the standard size limit. Reduce its inputs or outputs.'
     result={'can_continue':ready,'validation_message':message,'vbytes':size,'total_fee_sats':str(sum(shares.values())),'wallet_fees_sats':{uid:str(n) for uid,n in shares.items()},'maximum_amounts':maximum_amounts,'confirmed_balances_sats':{u:str(sum(c['value'] for c in ordered[u])) for u in sources},'combined_rate':str(sum(rates.values(),Decimal(0))),'input_count':sum(len(c) for c in selected.values()),'change_outputs':len(changes),'estimated':True,'basis':'Confirmed public UTXOs; conservative signed input sizes. Maximum spends every confirmed spendable input and has no change.'}
+    result['availability']=getattr(coins,'availability',{})
     if details:result.update(selected=selected,changes=changes,outputs=outputs,resolved_edges=edges)
     return result
 
@@ -164,12 +170,12 @@ def live_coins(session,catalog,source_ids,force=False):
         if not force and cached and time.monotonic()-cached[0]<30:return cached[1]
     from node_chain import NodeChain,RegistryRPC,satoshis
     client=NodeChain(RegistryRPC(session.node_registry),store.read())
-    result={};seen=set()
+    result=LiveCoins();seen=set()
     for uid in source_ids:
         wallet=by_resource.get(uid)
         if not wallet:raise ValueError('Only descriptor wallets can fund this transaction.')
         wallet['node_sources']=raw_wallets[wallet['id']].get('node_sources',[])
-        utxos=[]
+        utxos=[];locked=0;tip=None
         for row in client.wallet_unspent(wallet):
             if int(row.get('confirmations',0))<1 or not row.get('safe',True):continue
             txid=row['txid'];vout=row['vout'];value=satoshis(row['amount']);raw=row['scriptPubKey'];keyout=(txid,vout)
@@ -197,8 +203,11 @@ def live_coins(session,catalog,source_ids,force=False):
                 if d.is_wildcard or d.script_pubkey().data.hex()!=raw or not d.witness_script():raise ValueError('Core must provide the concrete public descriptor for this input.')
                 ws=d.witness_script().data;p=witness_policy(ws)
                 if p['height']:
-                    tips=[client.rpc.call(r['node_id'],'getblockchaininfo',[]).get('blocks',0) for r in wallet['node_sources'] if r['node_id'] in {n['id'] for n in client.nodes()}]
-                    if not tips or max(tips)<p['height']:continue
+                    if tip is None:
+                        tips=[client.rpc.call(r['node_id'],'getblockchaininfo',[]).get('blocks',0) for r in wallet['node_sources'] if r['node_id'] in {n['id'] for n in client.nodes()}]
+                        if not tips:raise ValueError('No connected node can verify the current vault height.')
+                        tip=max(tips)
+                    if tip<p['height']:locked+=value;continue
                 fields={b'\x05'.hex():ws.hex()}
                 for k in d.keys:
                     if k.origin:fields[(b'\x06'+k.get_public_key().sec()).hex()]=(k.origin.fingerprint+b''.join(i.to_bytes(4,'little') for i in k.origin.derivation)).hex()
@@ -207,6 +216,7 @@ def live_coins(session,catalog,source_ids,force=False):
             else:weight,witness=input_weight(raw)
             utxos.append({'txid':txid,'vout':vout,'value':value,'weight':weight,'witness':witness,'script':raw,'raw_tx':tx.serialize().hex(),**extra})
         result[uid]=utxos
+        result.availability[uid]={'available_sats':str(sum(c['value'] for c in utxos)),'locked_sats':str(locked)}
     with _LOCK:
         if len(_CACHE)>64:_CACHE.clear()
         _CACHE[key]=(time.monotonic(),result)

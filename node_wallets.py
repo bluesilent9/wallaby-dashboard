@@ -216,7 +216,12 @@ class NodeWalletLoader:
         if not replicas:raise ValueError('The connected nodes have no loaded descriptor wallets.')
         groups=[]
         for replica in replicas:
-            keys=self.keys(replica);matches=[g for g in groups if any(keys & self.keys(r) for r in g)]
+            keys=self.keys(replica)
+            hub=getattr(self.registry,'hub',None)
+            if hub:
+                from policy_lineage import expanded
+                keys=expanded(hub,replica['wallet']['raw'])
+            matches=[g for g in groups if any(keys & (expanded(hub,r['wallet']['raw']) if hub else self.keys(r)) for r in g)]
             merged=[replica]
             for group in matches:groups.remove(group);merged=group+merged
             groups.append(merged)

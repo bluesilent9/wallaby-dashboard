@@ -1,0 +1,11 @@
+/* Historical viewing never changes the receiving destination used by builders. */
+window.WallabyAddressHistory=(()=>{
+function view({el,button,toast,humanDate,entry}){
+ const known=new Map();for(const r of [...(entry.address_history||[]),...entry.addresses]){known.delete(r.address);known.set(r.address,r);}const rows=[...known.values()],latest=new Set(entry.addresses.map(r=>r.address));let index=rows.length-1;
+ const code=el('code',{class:'address-value'}),observed=el('p',{class:'subtle'}),evidence=el('div'),count=el('span',{class:'subtle',role:'status'}),warning=el('p',{class:'address-history-warning',role:'note',hidden:true},'Historical address — this is not the latest receiving address. Verify it independently before sending Bitcoin.'),wrap=el('div',{class:'address-history'});
+ const copy=button('Copy address','outline address-copy',async()=>{try{await navigator.clipboard.writeText(rows[index].address);toast(latest.has(rows[index].address)?'Address copied.':'Historical address copied — verify before use.');}catch{toast('Copy unavailable. Select the address and copy it manually.');}},'copy');
+ const left=button('←','small outline',()=>{if(index>0){index--;paint();}}),right=button('→','small outline',()=>{if(index<rows.length-1){index++;paint();}});left.setAttribute('aria-label','Previous receiving address');right.setAttribute('aria-label','Next receiving address');
+ function paint(){const row=rows[index],old=!latest.has(row.address);code.textContent=row.address;code.className='address-value'+(old?' address-historical':'');code.title=old?'Historical receiving address. This is not the latest address; verify independently before sending.':'';warning.hidden=!old;left.disabled=index===0;right.disabled=index===rows.length-1;count.textContent=(index+1)+' / '+rows.length+(old?' · Historical':' · Latest');observed.textContent='Observed '+humanDate(row.observed_utc);evidence.replaceChildren(...(row.txid?[el('a',{href:'https://blockstream.info/tx/'+row.txid,target:'_blank',rel:'noopener noreferrer',class:'address-evidence'},'View transaction')]:[]));}
+ wrap.append(code,el('div',{class:'address-history-controls'},left,count,right),copy,warning,observed,evidence);paint();return wrap;
+}
+return {view};})();

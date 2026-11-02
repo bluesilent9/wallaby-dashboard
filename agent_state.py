@@ -26,9 +26,15 @@ def validate(state,users,config=None):
         if len(doc['inputs'])!=len(row['input_wallets']):raise ValueError('Invalid saved vault funding assignments.')
         if any(any(k[0] in (2,7,8,19,20) for k in f) for f in doc['inputs']):raise ValueError('A composable vault proposal must remain unsigned.')
     for ident,row in state['requests'].items():
-        if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction','wallet_retire') or row.get('state') not in ('pending','complete','denied','error','recovery_required','cancelled'):raise ValueError('Invalid saved Agent request.')
-        if row.get('state')=='cancelled' and row.get('kind') not in ('wallet_retire','sign_psbt_partial','broadcast_transaction'):raise ValueError('Invalid cancelled request kind.')
+        if row.get('kind') not in ('wallet_transfer','sign_psbt_partial','broadcast_transaction','wallet_retire','wallet_policy_refresh') or row.get('state') not in ('pending','complete','denied','error','recovery_required','cancelled'):raise ValueError('Invalid saved Agent request.')
+        if row.get('state')=='cancelled' and row.get('kind') not in ('wallet_retire','sign_psbt_partial','broadcast_transaction','wallet_policy_refresh'):raise ValueError('Invalid cancelled request kind.')
         if row.get('proposal'):canonical(row['proposal'])
+        if row.get('kind')=='wallet_policy_refresh':
+            p=row['proposal']
+            if p.get('kind')!='wallet_policy_refresh' or p.get('request_id')!=ident or p.get('chain')!='main' or len(p.get('previous_descriptors',[]))!=2:raise ValueError('Invalid saved public policy refresh.')
+            from builder_destinations import validate_record
+            from descriptor_store import clean_wallet
+            clean_wallet({'wallet_name':p['wallet'],'descriptors':[{'desc':d,'range':[0,999],'active':False,'internal':bool(i%2)} for i,d in enumerate([*p['previous_descriptors'],p['receive_descriptor'],p['change_descriptor']])]})
         if row.get('kind')=='wallet_retire' and row.get('proposal',{}).get('version')==2:
             from wallet_retirement import result
             p=row['proposal'];body=dict(p);request_id=body.pop('request_id',None)

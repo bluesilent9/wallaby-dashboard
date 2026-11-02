@@ -1,3 +1,17 @@
+# V1 Build 27 validation
+
+328 Python regression tests and 25 JavaScript suites pass. New coverage includes whole-satoshi AUD conversion bounds, receive-only aliases, immutable linked renewal fields, approved descriptor lineage, resource-ID migration, live disc traits, archive queue protocol, signed replacement coverage/withdrawal, cautious owner suggestions and historical address browsing.
+
+Vault spending checks reject locked-only arrows at destination selection, permit mixed wallets, reject manual amounts above available funds, and fail closed on node-verification errors. Maximum/full-available reminders have UTC timestamps, are immediately read and remain dismissible. Real Core 31 confirms a mixed wallet has 200,000 available sats and 100,000 locked sats, with locked inputs excluded from selection.
+
+Isolated Bitcoin Core 31 regtest tests exercise single-signature and 2-of-3 vaults through creation and two successive expiry/refresh cycles. Actual Agent Build 23 reviews and approves public-policy transitions, authenticates their receipts and independently reviews bound PSBT destinations. Spending is rejected before each height and accepted afterwards. A separate larger payment to the third-generation address is locked identically to the small deposit. Dashboard's actual monitor and UTXO reader verify green/red/new-green states, retained older history and merged balances across old empty/new funded monitors. This uses regtest test coins, not public testnet or production transactions.
+
+13 Agent Build 23 interoperability tests pass, including a multi-wallet encrypted archive, 3-of-5 archived-key signing through two refreshes, rebuilt replacement coverage and queue withdrawal. A further 15 archive/security tests pass: corrupted headers/payload copies, recoverable damage, all-copies-damaged rejection without output, wrong password retry, direct readback/salvage, multiple signing discs and malicious signing-policy requests. Physical optical-media burning/readback remains untested; file-backed xorriso streaming is not a hardware guarantee. No Agent source was changed.
+
+Live browser QA uses an isolated local profile and invented data. Address Book arrows start at latest/right, move to older red/warned addresses, and never alter authoritative builder destinations. Wallet Builder entry and multisig-vault controls were inspected. No family nodes, source documents or production wallets are used.
+
+The DEB is checked for installed-source parity, absence of private/runtime inputs, source-download bundling, systemd enable/start instructions and isolated IPv4/IPv6 browser/Agent-health startup. It is not installed here. Agent-local approval and independent address/policy review remain required; no claim of bug-free software or physical-disc verification is made.
+
 # V1 Build 26 validation
 
 302 Python regression tests and 23 JavaScript suites pass. New tests cover per-person multipliers, effective-share limits and cent conservation, another profile’s distributor, an explicitly confirmed schedule, and retaining acquisition records while presenting wallet-owned addresses/latest statements separately.
