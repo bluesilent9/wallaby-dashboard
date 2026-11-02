@@ -1,3 +1,15 @@
+# V1 Build 28 validation
+
+343 Python regression tests and 26 JavaScript suites pass with Agent V2 Build 24 source. New tests verify metadata/notification publication before a deliberately blocked history scan, readable Ownership while balances remain unavailable, and resuming automatic balance verification only after complete history. A 300-input synthetic exchange receipt requires one wallet-transaction read and no external-parent getrawtransaction fanout. Known wallet reads rotate across replicas and try another replica on failure; owned-send evidence remains strict and full-trace caches remain separate.
+
+Grouped sync tests cover two extinct children in one watch-only transfer, per-child ownership retention, complete replicas with different names, partial destination coverage, withdrawn child queues, full-group retries, rejected private-key historical imports and bounded capability diagnostics. Real SSH-signed tests accept an expired superseded preview notice, reject forged notices and preserve late history-recovery results. This cleanup never treats a preview as operation completion.
+
+The actual Dashboard Build 28 queue and signed-preview handlers interoperate with Agent Build 24 in separate interpreters. Agent Build 24's 11 focused tests pass, including real Core 31 grouped reception into one watch-only archive, retaining existing addresses/labels, rejecting label conflicts before mutation, canonical source selection and persistent local denial cleanup after a simulated reboot. No Agent source is changed in this Dashboard task.
+
+Real Core 31 isolated regtest checks repeat single-signature and 2-of-3 vault creation, two expiry/refresh cycles, separate small/large deposits to the same third address, locked/mixed availability and monitor balance aggregation. Test coins only; no production nodes, real funds, personal financial documents, SSH settings or installed services are changed. Physical optical-media testing remains a separate hardware check.
+
+The DEB is checked for package version/source parity, exclusion of runtime/private inputs, source-download bundling, systemd enable/start instructions and isolated IPv4/IPv6 web/Agent-health startup. It is not installed on this machine. Actual family-node deployment still needs retesting with both matching builds.
+
 # V1 Build 27 validation
 
 328 Python regression tests and 25 JavaScript suites pass. New coverage includes whole-satoshi AUD conversion bounds, receive-only aliases, immutable linked renewal fields, approved descriptor lineage, resource-ID migration, live disc traits, archive queue protocol, signed replacement coverage/withdrawal, cautious owner suggestions and historical address browsing.

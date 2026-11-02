@@ -27,7 +27,7 @@ class NodeWalletLoader:
             error=state.get('error') or {}
             target=node['hostname']+(' / '+(wallet or 'Default Core Wallet') if wallet is not None else '')
             message=str(error.get('message',state['state']))
-            if str(error.get('code'))=='-18':message+=' Update Wallaby Agent to V2 Development Build 4 or later; earlier builds append a slash to the wallet RPC endpoint.'
+            if str(error.get('code'))=='-18':message+=' Load the wallet in Bitcoin Core and let automatic discovery retry.'
             raise ValueError(target+' · '+method+': '+message)
         return state.get('result')
     def parallel(self,items,fn):

@@ -44,7 +44,7 @@ def address(script):
 
 class NodeChain:
     def __init__(self,rpc,catalog):
-        self.rpc=rpc;self.catalog=catalog;self.raws={};self.metadata={};self.txs={};self.headers={};self.spends={};self.cursor=0;self.lock=threading.RLock();self.targets=None;self.hints={};self.unavailable=set();self.history_complete=bool(catalog.get('wallets')) and all('node_history' in w for w in catalog.get('wallets',[]))
+        self.rpc=rpc;self.catalog=catalog;self.raws={};self.metadata={};self.txs={};self.wallet_txs={};self.headers={};self.spends={};self.cursor=0;self.wallet_cursor=0;self.lock=threading.RLock();self.targets=None;self.hints={};self.unavailable=set();self.history_complete=bool(catalog.get('wallets')) and all('node_history' in w for w in catalog.get('wallets',[]))
         for w in catalog.get('wallets',[]):
             for row in w.get('node_history',[]):
                 txid=row.get('txid')
@@ -88,19 +88,25 @@ class NodeChain:
         if txid in self.unavailable:raise NodeDataUnavailable('Historical transaction unavailable from connected nodes: '+txid)
         errors=[];raw=None;meta=self.metadata.get(txid,{})
         params=[txid,2]+([meta['blockhash']] if meta.get('blockhash') else [])
-        try:
-            reply=self.call('getrawtransaction',params);raw=reply['hex'];self.metadata[txid]=dict(reply)
-        except (ValueError,OSError,KeyError) as exc:errors.append(str(exc))
-        if raw is None:
-            hinted=list(dict.fromkeys((r['node_id'],r['wallet_name']) for r in self.hints.get(txid,[])))
-            targets=hinted or ([] if self.history_complete else self.replicas())
-            at=self.cursor%max(1,len(targets));self.cursor+=1
+        # Known wallet transactions are available via gettransaction even on a
+        # pruned, non-txindex node. Query their actual wallet replicas first.
+        hinted=list(dict.fromkeys((r['node_id'],r['wallet_name']) for r in self.hints.get(txid,[])))
+        def from_wallets(targets):
+            with self.lock:
+                at=self.wallet_cursor%max(1,len(targets));self.wallet_cursor+=1
             for node,name in targets[at:]+targets[:at]:
                 try:
                     reply=self.rpc.call(node,'gettransaction',[txid,True,True],name)
                     if int(reply.get('confirmations',0))<0:raise NodeDataUnavailable('Transaction is conflicted: '+txid)
-                    raw=reply['hex'];self.metadata[txid]=dict(reply);break
+                    self.metadata[txid]=dict(reply);return reply['hex']
                 except (ValueError,OSError,KeyError) as exc:errors.append(str(exc))
+            return None
+        if hinted:raw=from_wallets(hinted)
+        if raw is None:
+            try:
+                reply=self.call('getrawtransaction',params);raw=reply['hex'];self.metadata[txid]=dict(reply)
+            except (ValueError,OSError,KeyError) as exc:errors.append(str(exc))
+        if raw is None and not hinted and not self.history_complete:raw=from_wallets(self.replicas())
         if raw is None:
             self.unavailable.add(txid)
             raise NodeDataUnavailable('Bitcoin transaction '+txid+' is unavailable from every connected node. A pruned node cannot supply arbitrary old transactions unless retained in its wallet. Load/rescan the relevant watch-only wallet or use a node with the required indexed history. No public explorer was queried. '+(errors[0] if errors else ''))
@@ -119,8 +125,11 @@ class NodeChain:
             if int(row.get('confirmations',0))<0:raise NodeDataUnavailable('History changed during the run; refresh node wallets.')
             self.headers[blockhash]=row
         return self.headers[blockhash]
-    def tx(self,txid):
-        if txid in self.txs:return self.txs[txid]
+    def wallet_tx(self,txid):
+        return self.tx(txid,resolve_inputs=False)
+    def tx(self,txid,resolve_inputs=True):
+        cache=self.txs if resolve_inputs else self.wallet_txs
+        if txid in cache:return cache[txid]
         tx=self.transaction(txid);meta=self.metadata.get(txid,{});status={'confirmed':bool(meta.get('blockhash')) and int(meta.get('confirmations',1))>0}
         if status['confirmed']:
             h=self.header(blockhash=meta['blockhash']);status.update(block_hash=h['hash'],block_height=h['height'],block_time=h['time'])
@@ -131,7 +140,9 @@ class NodeChain:
             if v.txid==b'\0'*32:inputs.append({'is_coinbase':True});continue
             row={'txid':v.txid.hex(),'vout':v.vout};prev=None
             try:
-                parent=self.transaction(v.txid.hex());o=parent.vout[v.vout];prev={'value':o.value,'scriptpubkey':o.script_pubkey.data.hex(),'scriptpubkey_address':address(o.script_pubkey.data.hex())}
+                parent_id=v.txid.hex()
+                if not resolve_inputs and parent_id not in self.hints and parent_id not in self.raws:raise NodeDataUnavailable('External ancestry is deferred until tracing needs it.')
+                parent=self.transaction(parent_id);o=parent.vout[v.vout];prev={'value':o.value,'scriptpubkey':o.script_pubkey.data.hex(),'scriptpubkey_address':address(o.script_pubkey.data.hex())}
             except NodeDataUnavailable:
                 p=provided[i].get('prevout') if i<len(provided) else None
                 if p and 'value' in p:
@@ -144,7 +155,7 @@ class NodeChain:
         if fee is not None and fee<0:raise ValueError('Node transaction inputs do not reconcile')
         result={'txid':txid,'status':status,'vin':inputs,'vout':outputs,'source':'Connected Bitcoin Core nodes'}
         if fee is not None:result['fee']=fee
-        self.txs[txid]=result;return result
+        cache[txid]=result;return result
     def seed_wallet_history(self):
         for w in self.catalog.get('wallets',[]):
             for row in w.get('node_history',[]):

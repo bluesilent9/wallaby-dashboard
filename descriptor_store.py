@@ -77,7 +77,7 @@ class DescriptorStore:
         # Replica availability and private/watch role are live presentation
         # metadata. They must not discard verified balances or tax reports.
         wallets=[{k:v for k,v in w.items() if k not in ('watch_only','node_sources')} for w in data.get('wallets',[])]
-        return hashlib.sha256(json.dumps({'history_algorithm':8,'wallets':wallets},sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        return hashlib.sha256(json.dumps({'history_algorithm':9,'wallets':wallets},sort_keys=True,separators=(',',':')).encode()).hexdigest()
     def summary(self):
         data=self.read();pending=[w for w in data['wallets'] if needs_history(w) and not w.get('public_history')]
         return {'ready':bool(data['wallets']) and not pending,'loaded':bool(data['wallets']),'fingerprint':self.fingerprint(data),'loaded_utc':data.get('loaded_utc'),'wallets':[{'id':w['id'],'name':w['name'],'extinct':bool(w.get('extinct')),'records':len(w['raw']['descriptors']),'has_vault':bool(w.get('has_vault')),'watch_only':bool(w.get('watch_only')),'multisig':__import__('policy_accounts').multisig_summary(w['raw']),'node_sources':w.get('node_sources',[]),'needs_public_history':needs_history(w),'public_history_loaded':bool(w.get('public_history')),'public_history_utc':w.get('public_history',{}).get('exported_utc')} for w in data['wallets']]}

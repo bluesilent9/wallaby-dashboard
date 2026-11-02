@@ -1,3 +1,5 @@
+Build 28: [public discovery and grouped Extinct synchronisation](BUILD28_DISCOVERY_AND_SYNC.md). Use matching Agent V2 Build 24.
+
 > Dashboard Build 27: [archive queue and public-policy renewal contract](BUILD27_AGENT_CONTRACT.md). Requires matching Agent V2 Build 23.
 
 > Dashboard Build 22 uses the read-only paged mempool adapter from Agent Build 20. See [PAGED_MEMPOOL.md](PAGED_MEMPOOL.md) for exact page validation and diagnostic rules.

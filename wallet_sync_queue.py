@@ -20,6 +20,9 @@ def schedule(transfers,state):
     ready={c['node_id']:c for c in list(hub.registry.connections.values()) if hub.registry.rpc._unique(c)}
     for rows in transfers.pairs(state).values():
         if len(rows)!=2:continue
+        if any(r.get('superseded_container') for r in rows):
+            for row in rows:row['queue_visible']=False
+            continue
         source=next(r for r in rows if r['direction']=='send');receiver=next(r for r in rows if r['direction']=='receive')
         nodes={r['node_id'] for r in rows}
         from wallet_retirement import suppress_sync
@@ -91,6 +94,7 @@ def warnings(hub):
     state=hub.read();result=[]
     names={n['id']:n['hostname'] for n in hub.registry._read()['nodes']}
     for ident,rows in hub.transfers.pairs(state).items():
+        if any(r.get('superseded_container') for r in rows) and all(r['state']=='pending' for r in rows):continue
         if any(r['direction']=='receive' and r['state']=='complete' for r in rows):continue
         recovery=any(r['state']=='recovery_required' for r in rows)
         if not recovery and not any(r['state']=='pending' for r in rows):continue

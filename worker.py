@@ -180,7 +180,7 @@ def run(config):
                 client=HistoryClient(core,str(Path(config['cache']).with_name('descriptor-chain.sqlite3')))
                 try:return scan(config['descriptor_catalog'],client)
                 finally:client.close()
-            chain,reused=shared_history(config['preferences'],config['descriptor_catalog'],discover,force=settings.get('refresh_descriptor_history',False),require_existing=not settings.get('refresh_descriptor_history',False),allow_stale=True)
+            chain,reused=shared_history(config['preferences'],config['descriptor_catalog'],discover,force=settings.get('refresh_descriptor_history',False),require_existing=False,allow_stale=True)
             print(('Reusing shared descriptor blockchain history from ' if reused else 'Descriptor blockchain history refreshed at ')+chain['scanned_utc'])
         else:
             chain=saved_history(config['preferences'],config['descriptor_catalog'])

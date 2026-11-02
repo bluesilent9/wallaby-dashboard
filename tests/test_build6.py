@@ -69,7 +69,7 @@ class NodeEvidence(unittest.TestCase):
  def test_fresh_unconfirmed_reply_replaces_stale_saved_confirmation_metadata(self):
     rpc=CoreFixture();original=rpc.call;txid=rpc.send.txid().hex()
     def call(node,method,params=None,wallet=None):
-      if method=='getrawtransaction' and params[0]==txid:return {'hex':rpc.send.serialize().hex(),'txid':txid}
+      if method in ('getrawtransaction','gettransaction') and params[0]==txid:return {'hex':rpc.send.serialize().hex(),'txid':txid,'confirmations':0}
       return original(node,method,params,wallet)
     rpc.call=call;chain=NodeChain(rpc,{'wallets':rpc.wallets})
     self.assertFalse(chain.tx(txid)['status']['confirmed']);self.assertNotIn('blockhash',chain.metadata[txid])

@@ -73,8 +73,11 @@ class Permissions:
         row=self.current(node);record=row.get('record') if row else None
         fresh=bool(record is not None and time.monotonic()-row.get('checked',0)<=45)
         names={}
+        from extinct_sync import containers
         for inv in self.hub.inventories.values():
-            for w in inv.get('wallets',[]):
+            try:grouped=containers(inv.get('wallets',[]))
+            except ValueError:grouped=[] # Synchronisation reports its explicit error; keep Nodes readable.
+            for w in [*inv.get('wallets',[]),*grouped]:
                 try:names.setdefault(policy_id(w['raw']),w['raw']['wallet_name'])
                 except ValueError:continue
         return {'ready':fresh,'fingerprint':fingerprint(row['identity']) if row and row.get('identity') else None,'disabled':[{'policy_id':p,'wallet_name':names.get(p,'Public policy '+p[:16])} for p in record['policies']] if fresh else [],'text':'Synchronization permissions are controlled on this Agent.' if fresh else 'Checking this Agent’s synchronization permissions…'}

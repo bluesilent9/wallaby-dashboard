@@ -29,7 +29,10 @@ def dashboard_state(monitors,history,expected_sats,expected_state,outside_sats=0
  class RPC:
   def __init__(self):self.registry=registry
   def nodes(self):return [node]
-  def call(self,n,m,p=None,w=None):return rpc(r,m,p,w)
+  def call(self,n,m,p=None,w=None):
+   from node_chain import NodeDataUnavailable
+   try:return rpc(r,m,p,w)
+   except RuntimeError as exc:raise NodeDataUnavailable(str(exc)) from exc
  coins=NodeChain(RPC(),{'wallets':[logical]}).wallet_unspent(logical);assert sum(int(round(c['amount']*100000000)) for c in coins)==expected_sats
  with patch('vault_monitor.DescriptorStore.read',return_value={'wallets':[logical]}):
   status=VaultMonitor(registry).compute()['wallets'][0]

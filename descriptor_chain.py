@@ -42,7 +42,7 @@ def scan(catalog,client,progress=print):
         # Core's wallet ledger includes every known received output, including
         # change. It is authoritative even for hardened legacy policies.
         for row in history:
-            ident=row['txid'];tx=chain.tx(ident);status=tx['status'];height=status.get('block_height',0)
+            ident=row['txid'];tx=chain.wallet_tx(ident);status=tx['status'];height=status.get('block_height',0)
             if ident in histories and histories[ident]!=height:raise ValueError('Wallet replicas disagree on confirmation state; refresh node wallets.')
             histories[ident]=height
             if row.get('category') not in ('receive','generate','immature') or Decimal(str(row.get('amount',0)))<=0:continue
@@ -77,12 +77,14 @@ def scan(catalog,client,progress=print):
         visiting.remove(ident);visited.add(ident);ordered.append(ident)
     for ident in sorted(histories,key=lambda ident:(histories[ident] if histories[ident]>0 else 2**32,ident)):visit(ident)
     tx_order={ident:n for n,ident in enumerate(ordered)}
-    for ident in ordered:
+    for number,ident in enumerate(ordered,1):
+        if number==1 or number%25==0 or number==len(ordered):progress(f'Verifying wallet transaction {number:,} of {len(ordered):,}; external purchase ancestry is deferred to tracing.')
         height=histories[ident]
         tx=client.tx(ident);inputs=[];coinbase=False
+        described=chain.tx(ident) if ident in sending_ids else chain.wallet_tx(ident)
         for vin in tx.vin:
             if vin.txid==b'\x00'*32:coinbase=True;continue
-            evidence=chain.tx(ident)['vin'][len(inputs)].get('prevout')
+            evidence=described['vin'][len(inputs)].get('prevout')
             if evidence is None:
                 # Missing external ancestry cannot affect an incoming output's
                 # value; preserve unknown inputs instead of fabricating a fee.

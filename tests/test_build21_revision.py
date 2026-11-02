@@ -37,10 +37,10 @@ class Discovery(unittest.TestCase):
   with FamilyStore(self.config).transaction() as data:data['ownership_runs']={self.uid:{'inventory':[{'id':'exchange','kind':'exchange','name':'Example','source':'Example'}],'files':[{'name':'keep.ods'}],'data_id':'kept','descriptor_fingerprint':old}}
   self.nodes=self.nodes[:1];self.cycle([self.core.wallets[1]])
   catalog=DescriptorStore(self.config).read();self.assertEqual(len(catalog['wallets']),2);meta=FamilyStore(self.config).snapshot()['ownership_runs'][self.uid];self.assertEqual(meta['files'],[{'name':'keep.ods'}]);self.assertEqual(meta['data_id'],'kept');self.assertEqual(len(meta['inventory']),3);self.assertEqual(meta['descriptor_fingerprint'],DescriptorStore.fingerprint(catalog))
- def test_failed_history_does_not_publish_or_unlock_partial_wallets(self):
+ def test_failed_history_keeps_public_metadata_but_never_publishes_partial_ledger(self):
   with patch('background_discovery.NodeWalletLoader.collect',return_value=self.core.wallets),patch('background_discovery.scan',side_effect=ValueError('missing history')):
    with self.assertRaisesRegex(ValueError,'missing history'):self.service.cycle()
-  self.assertFalse(DescriptorStore(self.config).summary()['loaded']);self.assertFalse(self.service.activity()['active'])
+  catalog=DescriptorStore(self.config).read();self.assertTrue(DescriptorStore(self.config).summary()['loaded']);self.assertFalse(history_ready(self.config,catalog));self.assertFalse(self.service.activity()['active'])
  def test_read_on_ownership_delete_and_new_user_delivery(self):
   flow=WorkflowStore(self.config);flow.discovered([self.uid],['a'],[self.uid]);self.assertEqual(flow.notifications(self.uid)['unread_count'],0)
   notice=flow.notifications(self.uid)['notifications'][0];flow.update_notifications(self.uid,delete=notice['id']);flow.discovered([self.uid],['a']);self.assertEqual(flow.notifications(self.uid)['notifications'],[])

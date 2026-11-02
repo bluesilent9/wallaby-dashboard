@@ -1,7 +1,8 @@
 """Cooperative, server-owned public wallet discovery. Never navigates a browser.
 
-Only complete history is published. Offline replicas remain in the catalog; a
-missing historical transaction defers publication rather than accepting a partial ledger.
+Public wallet metadata is published before the slower history check so Ownership
+can open immediately. Only complete ledgers enter the history store; a failed scan
+never becomes a zero balance or a partial ledger.
 """
 import copy,json,threading,time
 from collections import deque
@@ -52,7 +53,6 @@ class BackgroundDiscovery:
     def cycle(self):
         nodes=self.eligible()
         if not nodes:return
-        with getattr(self.registry,'lock',self.lock):claims=set(getattr(self.registry,'connections',{}))
         epoch=self.epoch
         self.pause();store=DescriptorStore(self.config);old=store.read()
         with self.lock:self.active=True
@@ -92,24 +92,10 @@ class BackgroundDiscovery:
             if epoch!=self.epoch:raise ValueError('Profile replaced; stale discovery discarded.')
             if self.semantic(wallets)==self.semantic(old['wallets']) and history_ready(self.config,old):self.notify(old);return
             catalog={'schema':132,'wallets':wallets,'loaded_utc':datetime.now(timezone.utc).isoformat()}
-            service=self
-            class IdleRPC(RegistryRPC):
-                def nodes(self):return service.eligible()
-                def call(self,node,method,params=None,wallet=None):
-                    service.pause()
-                    state=self.registry.rpc.call(node,method,params or [],wallet,timeout_seconds=120,consume=True,priority=100,cancel=service.stop)
-                    if state['state']!='succeeded':raise ValueError(str((state.get('error') or {}).get('message',state['state'])))
-                    return state['result']
-            configure(IdleRPC(self.registry,priority=100),catalog)
-            snapshot=scan(catalog,HistoryClient(None),self.log)
             self.pause()
             with self.sessions.profile_gate.access():
                 if epoch!=self.epoch:raise ValueError('Profile replaced; stale discovery discarded.')
-                # A profile reset disconnects all claims. Never publish its old scan.
-                if not claims<=set(getattr(self.registry,'connections',{})):raise ValueError('Agent connections changed; discovery will retry.')
-                if not {n['id'] for n in nodes}<={n['id'] for n in self.eligible()}:raise ValueError('Node availability changed; discovery will retry.')
                 if DescriptorStore.fingerprint(store.read())!=DescriptorStore.fingerprint(old):raise ValueError('Wallet catalog changed; discovery will retry.')
-                publish_history(self.config,catalog,snapshot)
                 store.replace_node_wallets(wallets)
                 from builder_identity import migrate
                 migrate(self.config,superseded)
@@ -126,6 +112,23 @@ class BackgroundDiscovery:
                             item={'id':rid,'kind':'descriptor','source':w['id'],'source_name':w['name'],'name':w['name'] if w.get('extinct') else suggest_wallet_name(w['name']),'extinct':bool(w.get('extinct')),'has_vault':bool(w.get('has_vault')),'watch_only':bool(w.get('watch_only'))}
                             if rid not in previous:meta['inventory'].append(item)
                         meta['descriptor_fingerprint']=fp
+                self.notify(catalog)
+            self.log('Public wallets discovered. Ownership is available; checking complete wallet history in the background.')
+            service=self
+            class IdleRPC(RegistryRPC):
+                def nodes(self):return service.eligible()
+                def call(self,node,method,params=None,wallet=None):
+                    service.pause()
+                    state=self.registry.rpc.call(node,method,params or [],wallet,timeout_seconds=120,consume=True,priority=100,cancel=service.stop)
+                    if state['state']!='succeeded':raise ValueError(str((state.get('error') or {}).get('message',state['state'])))
+                    return state['result']
+            configure(IdleRPC(self.registry,priority=100),catalog)
+            snapshot=scan(catalog,HistoryClient(None),self.log)
+            self.pause()
+            with self.sessions.profile_gate.access():
+                if epoch!=self.epoch:raise ValueError('Profile replaced; stale discovery discarded.')
+                if DescriptorStore.fingerprint(store.read())!=DescriptorStore.fingerprint(catalog):raise ValueError('Wallet catalog changed; discovery will retry.')
+                publish_history(self.config,catalog,snapshot)
                 self.notify(catalog)
             self.log('Public wallet discovery complete. Ownership is ready for review.')
         finally:

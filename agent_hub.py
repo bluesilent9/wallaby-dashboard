@@ -144,11 +144,13 @@ class AgentHub:
         for target in sorted(ready):
             dest=self.inventories.get(target,{})
             if not dest.get('complete'):continue
-            for source in sorted(ready):
+            for source in sorted(ready,key=lambda node:(-sum(len(w['raw']['descriptors']) for w in self.inventories.get(node,{}).get('wallets',[]) if w.get('extinct')),node)):
                 if source==target:continue
                 origin=self.inventories.get(source,{})
                 if not origin.get('complete'):continue
-                for wallet in origin['wallets']:
+                from extinct_sync import containers,supersede_children
+                for wallet in containers(origin['wallets']):
+                    if wallet.get('extinct'):supersede_children(state,target,wallet)
                     if wallet.get('signing_only') or self.permissions.permits(target,wallet['raw']) is not True:continue
                     from wallet_retirement import suppress_sync
                     if suppress_sync(state,wallet['raw']):continue
@@ -166,17 +168,17 @@ class AgentHub:
                     policy_keys={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet['raw']['descriptors']}
                     if any(policy_keys=={NodeWalletLoader.descriptor_key(d) for d in setup.get('descriptors',[])} and (setup.get('workspace_id') in active_setups or setup['state']!='ready' or not set(setup['routes'].values())<=set(setup.get('completion_confirmed',{}))) for setup in setups):continue
                     from policy_lineage import related
-                    if any(related(self,wallet['raw'],w['raw']) for w in dest['wallets'] if not w.get('signing_only')):continue
+                    if not wallet.get('extinct') and any(related(self,wallet['raw'],w['raw']) for w in dest['wallets'] if not w.get('signing_only')):continue
                     if self.transfers.contains([w for w in dest['wallets'] if not w.get('signing_only')],wallet['raw']):continue
                     # One canonical source per missing public wallet, independent of names/private-key flags.
-                    if any(r.get('kind')=='wallet_transfer' and r.get('direction')=='receive' and r['node_id']==target and equivalent(r['public_wallet'],wallet['raw']) for r in state['requests'].values()):continue
+                    if any(r.get('kind')=='wallet_transfer' and r.get('direction')=='receive' and r['node_id']==target and not r.get('superseded_container') and ((policy_keys<={NodeWalletLoader.descriptor_key(d['desc']) for d in r['public_wallet']['descriptors']}) if wallet.get('extinct') else equivalent(r['public_wallet'],wallet['raw'])) for r in state['requests'].values()):continue
                     ident=digest({'target':target,'descriptor_id':wallet['id']})
                     earliest=min((r.get('timestamp',0) for r in wallet['raw']['descriptors']),default=0)
                     health=self.registry.health.status(ready[target]);requires=bool(health.get('pruned') and (not earliest or not health.get('prune_time') or earliest<health['prune_time']))
                     for node,peer,direction in ((source,target,'send'),(target,source,'receive')):
                         key=digest({'transfer':ident,'direction':direction})
                         if key in state['requests']:continue
-                        state['requests'][key]={'kind':'wallet_transfer','node_id':node,'peer_id':peer,'direction':direction,'transfer_id':ident,'state':'pending','descriptor_id':wallet['id'],'public_wallet':wallet['raw'],'source_has_private_keys':wallet['private_keys_enabled'],'earliest_timestamp':earliest,'requires_blockchain_redownload':requires,'created_utc':self.utc()}
+                        state['requests'][key]={'kind':'wallet_transfer','node_id':node,'peer_id':peer,'direction':direction,'transfer_id':ident,'state':'pending','descriptor_id':wallet['id'],'public_wallet':wallet['raw'],'source_has_private_keys':wallet['private_keys_enabled'],'earliest_timestamp':earliest,'requires_blockchain_redownload':requires,'created_utc':self.utc(),**({'subwallets':wallet['subwallets']} if wallet.get('extinct') else {})}
     @staticmethod
     def utc():
         from datetime import datetime,timezone
@@ -192,7 +194,11 @@ class AgentHub:
         if not self.transfers.modern(node):raise ValueError('Update Wallaby Agent to V2 Development Build 8 or later.')
         if not isinstance(items,list) or len(items)>8 or not isinstance(known,list) or len(known)>128 or any(not isinstance(k,str) or not re.fullmatch('[0-9a-f]{64}',k) for k in known):raise ValueError('Invalid Agent exchange bounds.')
         caps=data.get('capabilities',[])
-        if not isinstance(caps,list) or len(caps)>16 or any(k not in CAPS for k in caps):raise ValueError('Unsupported Agent capabilities.')
+        if not isinstance(caps,list) or len(caps)>16 or any(not isinstance(k,str) or not re.fullmatch('[a-z0-9_]{1,64}',k) for k in caps):raise ValueError('Invalid Agent capability list.')
+        unsupported=sorted(set(caps)-CAPS)
+        if unsupported:
+            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 28; Agent '+str(c.get('agent_version','unknown'))+'.')
+            raise ValueError('Unsupported Agent capabilities.')
         canonical(data)
         verified=[]
         for item in items:
@@ -218,14 +224,17 @@ class AgentHub:
             if item['kind']=='broadcast_result':
                 from agent_transactions import verify_broadcast_result
                 verify_broadcast_result(self,node,item['payload'])
-        previews={}
+        previews={};obsolete_previews=set()
         previous=self.read()
         for item in verified:
             if item['kind']=='wallet_transfer_preview' and node+':'+item['id'] not in previous['receipts']:
                 payload=item['payload']
                 if not isinstance(payload,dict) or set(payload)!={'request_hash','preview','public_key','signature'}:raise ValueError('Invalid preview outbox fields.')
-                from wallet_preview import verify
-                previews[item['id']]=verify(self.config,{k:payload[k] for k in ('preview','public_key','signature')})
+                from wallet_preview import verify,validate
+                validate({k:payload[k] for k in ('preview','public_key','signature')},fresh=False)
+                obsolete=self.transfers.obsolete_preview(previous,node,payload)
+                previews[item['id']]=verify(self.config,{k:payload[k] for k in ('preview','public_key','signature')},fresh=not obsolete)
+                if obsolete:obsolete_previews.add(item['id'])
         self.permissions.proposals(node,token)
         deferred_permissions=set()
         # Authenticate current connection identities before processing results
@@ -287,7 +296,9 @@ class AgentHub:
                     result(state,node,p)
                     if p.get('status')=='complete':self.transfers.refresh_nodes.add(node)
                 elif kind=='wallet_transfer_result':self.transfers.accept_result(state,node,p)
-                elif kind=='wallet_transfer_preview':self.transfers.accept_preview(state,node,p,previews[item['id']])
+                elif kind=='wallet_transfer_preview':
+                    if item['id'] not in obsolete_previews:self.transfers.accept_preview(state,node,p,previews[item['id']])
+                    else:self.registry.diagnostic_log.append('Agent protocol','Obsolete historical-wallet preview acknowledged; transfer outcomes were retained.')
                 # Legacy sign_result means already broadcast; never interpret it as a partial signature.
                 elif kind=='sign_result':raise ValueError('Legacy signing broadcasts immediately and cannot complete this partial-signing workflow.')
                 if kind!='wallet_sync_preferences':state['receipts'][receipt]=self.utc()

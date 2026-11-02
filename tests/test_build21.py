@@ -70,7 +70,7 @@ class Service(unittest.TestCase):
  def test_rpc_failure_logs_have_exact_categories_and_no_payload_or_tokens(self):
   with tempfile.TemporaryDirectory() as d:
    reg=NodeRegistry(Path(d)/'config.cfg');reg.health.closed=True;n=reg.register('02:00:00:00:00:22','test-node',{'version':1,'methods':sorted(METHODS)},'2.0.0~dev20');q=reg.rpc.queue(n['node_id'],METHOD,[]);reg.rpc.poll(n['connection_token'],0);reg.rpc.ack(n['connection_token'],q['id']);reg.rpc.result(n['connection_token'],q['id'],error={'code':'local_rpc_response_limit','message':'not logged sensitive payload','data':{'boundary':'core_local','limit_bytes':67108864,'observed_bytes':67108865,'secret':'not logged'}})
-   text=reg.log_text();self.assertIn('request='+q['id'],text);self.assertIn('method='+METHOD,text);self.assertIn('boundary=core_local',text);self.assertIn('Agent 2.0.0~dev20',text);self.assertIn('V1 Build 27',text);self.assertNotIn('sensitive payload',text);self.assertNotIn(n['connection_token'],text)
+   text=reg.log_text();self.assertIn('request='+q['id'],text);self.assertIn('method='+METHOD,text);self.assertIn('boundary=core_local',text);self.assertIn('Agent 2.0.0~dev20',text);self.assertIn('V1 Build 28',text);self.assertNotIn('sensitive payload',text);self.assertNotIn(n['connection_token'],text)
  def test_dashboard_validation_limit_and_agent_lower_bound_are_distinguished(self):
   with tempfile.TemporaryDirectory() as d:
    reg=NodeRegistry(Path(d)/'config.cfg');reg.health.closed=True;n=reg.register('02:00:00:00:00:23','limit-fixture',{'version':1,'methods':[METHOD]});q=reg.rpc.queue(n['node_id'],METHOD,[]);reg.rpc.poll(n['connection_token'],0);reg.rpc.ack(n['connection_token'],q['id'])

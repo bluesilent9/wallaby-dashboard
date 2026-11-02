@@ -1,3 +1,5 @@
+Build 28: [public discovery and grouped Extinct synchronisation](docs/BUILD28_DISCOVERY_AND_SYNC.md). Use matching Agent V2 Build 24.
+
 > Dashboard Build 27: [archive queue and public-policy renewal contract](docs/BUILD27_AGENT_CONTRACT.md). Requires matching Agent V2 Build 23.
 
 # Wallaby Agent protocol — v1 with RPC capability v1 (V156)

@@ -29,7 +29,7 @@ def expand(replica,address_info):
         address=parse_policy(row['desc'].split('#')[0])[0].address
         info=address_info(address)
         labels=info.get('labels',[])
-        if not isinstance(labels,list) or len(labels)!=1 or not isinstance(labels[0],str):raise ValueError('Set one wallet label for historical address '+address+' in Bitcoin Core, then Load Node Wallets again.')
+        if not isinstance(labels,list) or len(labels)!=1 or not isinstance(labels[0],str):raise ValueError('Set one wallet label for historical address '+address+' in Bitcoin Core, then wait for automatic wallet discovery.')
         name,lost=label_parts(labels[0]);key=name.casefold()
         if key not in groups:groups[key]={'name':name,'rows':[],'addresses':{}}
         group=groups[key];group['rows'].append(row);group['addresses'][address]={'label':labels[0],'lost_utc':lost}

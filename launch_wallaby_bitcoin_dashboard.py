@@ -89,9 +89,9 @@ class Session:
         user=next((u for u in data['users'] if u['id']==self.user_id),None)
         self.sync_workspace(data)
         descriptor_store=DescriptorStore(self.preferences_path)
-        descriptors=descriptor_store.summary();descriptors['ready']=descriptors['ready'] and history_ready(self.preferences_path,descriptor_store.read())
+        descriptors=descriptor_store.summary();ledger_ready=history_ready(self.preferences_path,descriptor_store.read())
         context=None
-        if user and descriptors['ready'] and self.descriptor_fingerprint==descriptors['fingerprint'] and self.inventory_ready and self.inventory:
+        if user and descriptors['ready'] and ledger_ready and self.descriptor_fingerprint==descriptors['fingerprint'] and self.inventory_ready and self.inventory:
             try:
                 resolved=resolve_ownership(data,self.inventory)
                 fields=('id','kind','source','name','owner_id','external','smsf','confirmed')
@@ -108,7 +108,7 @@ class Session:
             elif saved is None:self.report=None;self.report_context=None
             self.report_generation=generation
         report_ready=ready and self.report is not None and self.report_context==context
-        return {'discovery_revision':descriptors['fingerprint'],'node_ready':bool(self.node_registry and self.node_registry.ready_for_builders()),'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
+        return {'descriptor_history_ready':ledger_ready,'discovery_revision':descriptors['fingerprint'],'node_ready':bool(self.node_registry and self.node_registry.ready_for_builders()),'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
     def invalidate_transaction_refresh(self):
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False
     def confirm_transaction_refresh(self):
@@ -239,7 +239,7 @@ class Session:
             self.run_context=access['ownership_context']
             self.run_refresh=False
             descriptor_store=DescriptorStore(self.preferences_path)
-            if not descriptor_store.summary()['ready'] or not history_ready(self.preferences_path,descriptor_store.read()):raise ValueError('Wait for automatic node wallet discovery to complete before reviewing ownership.')
+            if not descriptor_store.summary()['ready']:raise ValueError('Wait for automatic public wallet discovery before reviewing ownership.')
             window=matching_window(settings.get('matching_window',DEFAULT_WINDOW))
             refresh=settings.get('refresh_descriptor_history',False)
             if not isinstance(refresh,bool):raise ValueError('Descriptor refresh must be Yes or No.')

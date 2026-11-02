@@ -1,3 +1,5 @@
+Build 28: Ownership unlocks after the public wallet list is discovered; the full historical check may continue in Terminal Activity. You can upload records immediately. Balance verification waits for complete history. Extinct synchronisation now appears as one parent with child wallet names; review and authorise it locally on each Agent. If old child denials remain, use Agent Build 24’s local cleanup control; the Dashboard cannot clear them.
+
 Vault spending: finish a payment arrow to check the source against connected Core nodes. A fully locked vault cannot connect. A wallet with unlocked funds can connect and spend that available portion, with fees reserved from it. Send maximum and manually using the available balance warn when other funds remain locked. These yellow UTC-timestamped notices are immediately read, appear above the diagram and can be deleted from Notifications. A failed node check does not create an unchecked arrow. Final coin selection and Agent review remain authoritative.
 
 ## Build 27 workflow
