@@ -67,7 +67,7 @@ class ExtinctSync(Setup):
  def test_mismatch_diagnostic_names_public_capability_and_version(self):
   with patch.object(self.registry.diagnostic_log,'append') as log:
    with self.assertRaisesRegex(ValueError,'Unsupported Agent capabilities'):self.exchange(self.a,caps=['unknown_feature'])
-  self.assertIn('unknown_feature',str(log.call_args));self.assertIn('Dashboard V1 Build 30',str(log.call_args))
+  self.assertIn('unknown_feature',str(log.call_args));self.assertIn('Dashboard V1 Build 31',str(log.call_args))
 
  def signed_old_preview(self):
   import base64,time,subprocess

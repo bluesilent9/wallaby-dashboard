@@ -201,7 +201,7 @@ class AgentHub:
         if not isinstance(caps,list) or len(caps)>16 or any(not isinstance(k,str) or not re.fullmatch('[a-z0-9_]{1,64}',k) for k in caps):raise ValueError('Invalid Agent capability list.')
         unsupported=sorted(set(caps)-CAPS)
         if unsupported:
-            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 30; Agent '+str(c.get('agent_version','unknown'))+'.')
+            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 31; Agent '+str(c.get('agent_version','unknown'))+'.')
             raise ValueError('Unsupported Agent capabilities.')
         canonical(data)
         verified=[]

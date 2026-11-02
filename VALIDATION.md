@@ -1,3 +1,11 @@
+# V1 Build 31 validation
+
+387 Python tests and 28 JavaScript suites pass with Agent V2 Build 27 source. New tests reproduce an empty live review queue caused by an expired, genuinely signed snapshot and verify explicit blocked-review status, changed endpoint explanations, missing fresh permissions, confirmation-required batch recovery, refusal to replay history recovery, malformed-input rejection and late operation-result retention after supersession. A three-node recovery fixture renews all eleven missing wallets for both receivers together, preserving all 22 previous paired attempts. UI tests cover the explanatory state, deduplication across paired nodes, cancelling confirmation, bounded batch submission and specific failure feedback.
+
+The latest supplied log establishes that Dashboard sent zero-row live queues. That log does not contain the persisted snapshot timestamps or blocker reasons needed to prove which condition suppressed every individual request. The reproducible expiry/visibility fault is corrected; changed blocker counts now make remaining deployment causes distinguishable without collecting wallet payloads. Frozen endpoints, snapshots, local denial authority and pending recovery evidence are preserved.
+
+Package checks verify installed-source parity, source-download bundling, version, runtime/private-file exclusions, service enable/start instructions and isolated IPv4/IPv6 web/Agent-health startup. The package is not installed here. No family-node wallets, profiles, denial lists or Agent source are modified. Vault and signing-policy logic is unchanged; no new physical-media or real-funds test is claimed.
+
 # V1 Build 30 validation
 
 376 Python tests and 27 JavaScript suites pass. New real SSH-signed tests reproduce a changed frozen preview followed by a fresh permission response in the same batch: both notices are acknowledged and the original snapshot stays unchanged. Expired/late notices never become live snapshots. Wrong source, wallet, challenge or peer bindings, unknown requests and forged signatures still fail. Actual transfer and history-recovery outcomes remain recorded separately.

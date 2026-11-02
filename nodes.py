@@ -112,7 +112,8 @@ class NodeRegistry:
             prior=self.warnings.get(key)
             active[key]=prior or {'id':key,'kind':'node_conflict','severity':'red','dismissible':False,'target':'nodes','created_utc':utc(),'text':'Warning: Conflicting node '+('MAC address' if kind=='mac' else 'hostname')+' ('+value+'). This could either be spoofing or something is misconfigured.'}
         for warning in self.hub.sync_warnings():
-            active[warning['id']]=self.warnings.get(warning['id'],warning)
+            prior=self.warnings.get(warning['id'])
+            active[warning['id']]=dict(warning,created_utc=prior['created_utc'] if prior else warning['created_utc'])
         self.warnings=active
         self.rpc.reconcile()
         active_ids=set(active)

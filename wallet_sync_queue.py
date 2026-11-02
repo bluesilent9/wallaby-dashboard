@@ -20,7 +20,7 @@ def schedule(transfers,state):
     ready={c['node_id']:c for c in list(hub.registry.connections.values()) if hub.registry.rpc._unique(c)}
     for rows in transfers.pairs(state).values():
         if len(rows)!=2:continue
-        if any(r.get('superseded_container') for r in rows):
+        if any(r.get('superseded_container') or r.get('superseded_attempt') for r in rows):
             for row in rows:row['queue_visible']=False
             continue
         source=next(r for r in rows if r['direction']=='send');receiver=next(r for r in rows if r['direction']=='receive')
@@ -72,6 +72,15 @@ def schedule(transfers,state):
         if snapshot!=entry.get('sync_snapshot'):
             entry['sync_revision']=entry.get('sync_revision',-1)+1;entry['sync_snapshot']=snapshot
             hub.registry.diagnostic_log.append('Wallet sync','Queue updated · node='+node[:12]+' · revision='+str(entry['sync_revision'])+' · receiving='+str(sum(r['direction']=='receive' for r in rows))+' · sending='+str(sum(r['direction']=='send' for r in rows)))
+        from sync_status import reason
+        counts={}
+        for ident,pair in transfers.pairs(state).items():
+            if not any(r['node_id']==node for r in pair) or any(r.get('superseded_container') for r in pair) or any(r.get('retry_of')==ident for r in state['requests'].values()):continue
+            code=reason(hub,state,pair)[0]
+            if code:counts[code]=counts.get(code,0)+1
+        if counts!=entry.get('sync_blockers'):
+            entry['sync_blockers']=counts
+            hub.registry.diagnostic_log.append('Wallet sync','Queue status · node='+node[:12]+' · queued='+str(len(rows))+' · blockers='+(','.join(k+':'+str(v) for k,v in sorted(counts.items())) or 'none'))
         for row in rows:row['queue_revision']=entry['sync_revision']
 
 
@@ -101,12 +110,17 @@ def warnings(hub):
         if any(r.get('superseded_container') for r in rows) and all(r['state']=='pending' for r in rows):continue
         if any(r['direction']=='receive' and r['state']=='complete' for r in rows):continue
         recovery=any(r['state']=='recovery_required' for r in rows)
+        if any(r.get('superseded_attempt') for r in rows) and not recovery:continue
         if not recovery and not any(r['state']=='pending' for r in rows):continue
         receiver=next((r for r in rows if r['direction']=='receive'),None)
         if receiver and hub.permissions.permits(receiver['node_id'],receiver['public_wallet']) is not True and not recovery:continue
         from wallet_retirement import suppress_sync
         if suppress_sync(state,rows[0]['public_wallet']):continue
         name=rows[0]['public_wallet']['wallet_name'];peers=', '.join(names.get(r['node_id'],'node') for r in rows)
+        from sync_status import reason
+        blocked=reason(hub,state,rows)[0]
         text=('Wallet data received, but history recovery is incomplete for ' if recovery else 'Wallet synchronisation needs local review for ')+name+' ('+peers+'). Open the local Agent’s Synchronisation page.'
+        if blocked in ('preview_expired','preview_changed','peer_changed'):
+            text='Wallet synchronisation needs a fresh review for '+name+' ('+peers+'). Reconcile the old attempts on both Agents, then open Dashboard Nodes and choose Start fresh sync reviews.'
         result.append({'id':'wallet-sync-'+ident,'kind':'wallet_sync','severity':'yellow','dismissible':False,'target':'nodes','created_utc':rows[0]['created_utc'],'text':text})
     return result

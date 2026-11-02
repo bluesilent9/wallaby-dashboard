@@ -749,6 +749,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 if path=='/api/wallets/retire':
                     from wallet_retirement import propose
                     return self.json(propose(sessions.nodes.hub,session,data.get('wallet_id'),data.get('node_id'),data.get('confirmed')))
+                if path=='/api/nodes/transfers/refresh-reviews':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    return self.json(sessions.nodes.hub.transfers.refresh_reviews(data.get('transfer_ids'),data.get('confirmed')))
                 if path=='/api/nodes/transfers/retry':
                     if not session.user():raise ValueError('Select a family user first.')
                     return self.json(sessions.nodes.hub.transfers.retry(data.get('transfer_id'),data.get('confirmed')))
