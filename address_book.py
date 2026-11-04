@@ -149,6 +149,10 @@ def shared_address_book(snapshot,local=None):
     """Combine this browser's current wallets with persisted, profile-scoped accounts."""
     users={u['id'] for u in snapshot['users']}
     entries=[dict(e) for e in (local or {}).get('entries',[]) if e.get('kind') in ('descriptor','wallet')]
+    from wallet_names import dashboard_name
+    labels={r['id']:dashboard_name(r) for r in snapshot.get('ownership',[])}
+    for entry in entries:
+        if entry.get('id') in labels:entry['name']=labels[entry['id']]
     checked=[(local or {}).get('generated_utc') or '']
     for user_id,entry in snapshot.get('bitaroo_addresses',{}).items():
         if user_id.removesuffix(':smsf') not in users:continue

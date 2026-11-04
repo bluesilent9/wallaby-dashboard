@@ -36,6 +36,28 @@ def estimate(height,target,now=None):
     if block>=500000000:raise ValueError('The predicted height exceeds the block-height timelock range.')
     return {'most_likely_utc':(now+timedelta(seconds=max(0,k-1)*TARGET_SPACING)).isoformat(),'height':block,'current_height':height,'required_new_blocks':k,'confidence':1-poisson_cdf_left(k-1,mean),'expected_blocks':mean,'target_utc':end.astimezone(timezone.utc).isoformat(),'calculated_utc':now.astimezone(timezone.utc).isoformat(),'future_height_available':block>height,'model':'Poisson arrivals at a constant 600 seconds per block; hashrate changes, difficulty adjustments, reorgs and observation delays are not modelled.'}
 
+def estimate_height(current_height,height,now=None):
+    """Estimate the mean and 99% crossing time for an exact chosen height."""
+    now=now or datetime.now(timezone.utc)
+    if type(current_height) is not int or not 0<current_height<500000000:raise ValueError('Invalid current block height.')
+    if type(height) is not int or not current_height<height<500000000:raise ValueError('Enter a whole block height above the current node height and below 500,000,000.')
+    k=height-current_height+1
+    if k*TARGET_SPACING>366*86400*100:raise ValueError('Choose a height within the next 100 model years.')
+    lo=k-1;hi=max(1,k)
+    while poisson_cdf_left(k-1,hi)>1-CONFIDENCE:hi*=2
+    for _ in range(64):
+        mid=(lo+hi)/2
+        if poisson_cdf_left(k-1,mid)>1-CONFIDENCE:lo=mid
+        else:hi=mid
+    return {'most_likely_utc':(now+timedelta(seconds=(k-1)*TARGET_SPACING)).isoformat(),
+            'height':height,'current_height':current_height,'required_new_blocks':k,
+            'confidence':1-poisson_cdf_left(k-1,hi),'expected_blocks':hi,
+            'target_utc':(now+timedelta(seconds=hi*TARGET_SPACING)).isoformat(),
+            'calculated_utc':now.astimezone(timezone.utc).isoformat(),
+            'future_height_available':True,'manual_height':True,
+            'model':'Poisson arrivals at a constant 600 seconds per block; hashrate changes, difficulty adjustments, reorgs and observation delays are not modelled.'}
+
+
 def target_at_seven(day,zone):
     """Resolve local 07:00, rejecting skipped/ambiguous wall times rather than shifting them."""
     from datetime import date,time
@@ -96,14 +118,19 @@ def _timezone_details(year):
     return {'timezones':zones,'details':details,'year':year}
 
 
-def from_nodes(registry,day,zone,now=None):
+def from_nodes(registry,day,zone,now=None,selected_height=None):
     from node_chain import RegistryRPC,NodeDataUnavailable
     rpc=RegistryRPC(registry);errors=[]
     for node in rpc.nodes():
         try:
             info=rpc.call(node['id'],'getblockchaininfo')
             if info.get('chain')!='main' or info.get('initialblockdownload') or info.get('blocks',0)<info.get('headers',0):raise ValueError('Wait for a mainnet node to synchronise.')
-            result=estimate(info['blocks'],target_at_seven(day,zone),now)
+            if selected_height is None:result=estimate(info['blocks'],target_at_seven(day,zone),now)
+            else:
+                from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
+                try:ZoneInfo(zone)
+                except (TypeError,ValueError,ZoneInfoNotFoundError):raise ValueError('Choose a valid IANA timezone.') from None
+                result=estimate_height(info['blocks'],selected_height,now)
             if not result['future_height_available']:raise ValueError('Choose a later date; no future unlock height meets the 99% threshold.')
             result.update(target_timezone=zone,source=node['hostname']);return result
         except (ValueError,NodeDataUnavailable) as exc:errors.append(str(exc))

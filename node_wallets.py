@@ -42,7 +42,9 @@ class NodeWalletLoader:
         if not isinstance(names,list) or any(not isinstance(n,str) for n in names):raise ValueError('Invalid listwallets response from '+node['hostname'])
         if not isinstance(directory,dict) or not isinstance(directory.get('wallets'),list):raise ValueError('Invalid listwalletdir response from '+node['hostname'])
         unavailable=[w.get('name') for w in directory['wallets'] if w.get('name') not in names]
-        if unavailable:raise ValueError(node['hostname']+': load these wallets in Bitcoin Core and retry: '+', '.join(str(n) for n in unavailable))
+        if unavailable:
+            if not self.tolerate_errors:raise ValueError(node['hostname']+': load these wallets in Bitcoin Core and retry: '+', '.join(str(n) for n in unavailable))
+            self.progress(node['hostname']+': '+str(len(unavailable))+' unloaded wallet folders; checking loaded wallets only. Existing saved accounts are retained.')
         self.progress(node['hostname']+': '+str(len(names))+' loaded wallets discovered.')
         return [(node,name) for name in sorted(set(names))]
     def export(self,replica):
@@ -193,7 +195,7 @@ class NodeWalletLoader:
         # Retirement preserves the original local wallet. Count its history through
         # the node's verified labelled archive only after all received addresses
         # are present there; unrelated historical wallets never hide live accounts.
-        retired=[r for r in self.registry.hub.read()['requests'].values() if r.get('kind')=='wallet_retire' and r.get('state')=='complete']
+        retired=[r for r in self.registry.hub.read()['requests'].values() if r.get('kind')=='wallet_retire' and r.get('state')=='complete' and (r.get('proposal',{}).get('version')!=3 or r['proposal'].get('phase')=='delete')]
         kept=[]
         for replica in replicas:
             hidden=False
@@ -210,10 +212,15 @@ class NodeWalletLoader:
         replicas=kept
         # Independent private key accounts for a shared policy are signing roles,
         # not duplicate balance wallets. Preserve any account with its own funds/history.
-        from policy_accounts import signing_account
+        from setup_wallet_views import SetupWalletViews
         flat=[{'raw':r['wallet']['raw'],'private_keys_enabled':r['private_keys_enabled']} for r in replicas]
-        replicas=[r for r,account in zip(replicas,flat) if r['history'].get('transactions') or not any(signing_account(account,m) for m in flat if m is not account)]
-        if not replicas:raise ValueError('The connected nodes have no loaded descriptor wallets.')
+        views=SetupWalletViews(self.registry.config if hasattr(self.registry,'config') else self.registry.hub.config,flat)
+        had_replicas=bool(replicas)
+        replicas=[r for r in replicas if r['history'].get('transactions') or not views.hidden(r['wallet']['raw'])]
+        if not replicas:
+            if had_replicas:
+                self.check();self.progress('Only separate signing accounts or unfinished setup policies found; no additional Ownership assignment is needed yet.');return []
+            raise ValueError('The connected nodes have no loaded descriptor wallets.')
         groups=[]
         for replica in replicas:
             keys=self.keys(replica)
@@ -228,7 +235,7 @@ class NodeWalletLoader:
         # Keep discovery/node order for a reproducible suggested name.
         order={id(r):i for i,r in enumerate(replicas)}
         for group in groups:group.sort(key=lambda r:order[id(r)])
-        wallets=[self.merge(group) for group in groups]
+        wallets=[views.annotate(self.merge(group)) for group in groups]
         # Different descriptors with identical Core labels remain separate wallets.
         used=set()
         for wallet in wallets:

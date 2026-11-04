@@ -3,6 +3,21 @@ import re
 from pathlib import Path
 from preferences import resource_id
 
+def dashboard_name(record):
+    return record.get("dashboard_name",record["name"])
+
+def set_dashboard_name(record,label,user_id=None):
+    """Keep readable rename lineage without changing calculation identity."""
+    from datetime import datetime,timezone
+    old=dashboard_name(record)
+    if old!=label:
+        history=record.setdefault('dashboard_name_history',[])
+        if len(history)>=10000:raise ValueError('This wallet’s Dashboard-name history is full.')
+        event={'old_name':old,'new_name':label,'changed_utc':datetime.now(timezone.utc).isoformat()}
+        if user_id is not None:event['user_id']=user_id
+        history.append(event)
+    record['dashboard_name']=label;record['display_name_set']=True
+
 def suggest_wallet_name(name):
     stem=Path(name).stem.strip()
     stem=re.sub(r'(?i)(?<![a-z0-9])watch(?![a-z0-9])',' ',re.sub(r'[_-]+',' ',stem))
@@ -13,15 +28,17 @@ def suggest_wallet_name(name):
 
 def display_inventory(inventory,catalog):
     sources={w['id']:w['name'] for w in catalog['wallets']}
+    suggestions={w['id']:w.get('setup_name') for w in catalog['wallets']}
     vaults={w['id']:bool(w.get('has_vault')) for w in catalog['wallets']}
     watch={w['id']:bool(w.get('watch_only')) for w in catalog['wallets']}
     result=[]
     for item in inventory:
         item=dict(item)
         if item['kind']=='descriptor':
+            if item['source'] not in sources:continue
             raw=sources.get(item['source'],item.get('source_name',item['name']))
             item['multisig']=__import__('policy_accounts').multisig_summary(next((w.get('raw',{}) for w in catalog['wallets'] if w['id']==item['source']),{}))
-            item.update(source_name=raw,name=raw if item.get('extinct') else suggest_wallet_name(raw),has_vault=vaults.get(item['source'],False),watch_only=watch.get(item['source'],False))
+            item.update(source_name=raw,name=raw if item.get('extinct') else suggestions.get(item['source']) or suggest_wallet_name(raw),has_vault=vaults.get(item['source'],False),watch_only=watch.get(item['source'],False))
         result.append(item)
     return result
 
@@ -30,7 +47,7 @@ def display_summary(summary,snapshot):
     summary=dict(summary);summary['wallets']=[dict(w) for w in summary['wallets']]
     for w in summary['wallets']:
         w['source_name']=w['name'];record=records.get(resource_id('descriptor',w['id']))
-        w['name']=record['name'] if record and record.get('confirmed') else (w['name'] if w.get('extinct') else suggest_wallet_name(w['name']))
+        w['name']=dashboard_name(record) if record and record.get('confirmed') else (w['name'] if w.get('extinct') else w.get('setup_name') or suggest_wallet_name(w['name']))
     return summary
 
 def apply_display_names(core,wallets,resolved):

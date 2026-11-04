@@ -147,7 +147,7 @@ class RPCBroker:
         if not self._unique(connection):return []
         commands=[]
         active=sum(r['token']==token and r['state'] in ('delivered','running') for r in self.rows.values())
-        foreground=any(r['token']==token and r['state'] in ('queued','delivered','running') and r.get('priority',0)==0 for r in self.rows.values())
+        foreground=self.registry.hub.foreground_active(connection['node_id']) or any(r['token']==token and r['state'] in ('queued','delivered','running') and r.get('priority',0)==0 for r in self.rows.values())
         for row in sorted(self.rows.values(),key=lambda r:r.get('priority',0)):
             if foreground and row.get('priority',0)>0 and row['state']=='queued':continue
             if row['token']==token and (row['state']=='delivered' or row['state']=='queued' and active<MAX_IN_FLIGHT_PER_AGENT):

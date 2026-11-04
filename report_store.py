@@ -78,14 +78,15 @@ class ReportStore:
             stamp=datetime.now(timezone.utc).isoformat()
             index.update(state='ready',users=sorted(reports),completed_utc=stamp);self._write(self.index,index)
             with FamilyStore(self.config).transaction() as data:data['cgt_completed_utc']=stamp
-    def load(self,uid,signature,known=None):
-        with storage_lock(self.config):
-            index=self._index();generation=index.get('generation')
-            if index.get('state')!='ready' or index.get('signature')!=signature or uid not in index.get('users',[]):return generation,None
-            if generation==known:return generation,True
-            path=self.root/(uid+'.json')
-            if not path.is_file() or path.is_symlink():return generation,None
-            try:report=json.loads(path.read_text())
-            except (OSError,ValueError):return generation,None
-            if not isinstance(report,dict) or report.get('owner_id')!=uid:return generation,None
-            return generation,report
+    def load(self,uid,signature,known=None,*,allow_saved=False):
+        index=self._index();generation=index.get('generation')
+        if index.get('state')!='ready' or (not allow_saved and index.get('signature')!=signature) or uid not in index.get('users',[]):return generation,None
+        if generation==known:return generation,True
+        path=self.root/(uid+'.json')
+        if not path.is_file() or path.is_symlink():return generation,None
+        try:report=json.loads(path.read_text())
+        except (OSError,ValueError):return generation,None
+        if not isinstance(report,dict) or report.get('owner_id')!=uid:return generation,None
+        latest=self._index()
+        if latest!=index:return latest.get('generation'),None
+        return generation,report

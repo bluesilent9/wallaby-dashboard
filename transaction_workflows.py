@@ -11,14 +11,6 @@ from bitaroo_freshness import statement_age
 class WorkflowStore:
     def __init__(self,config):
         self.config=Path(config);self.path=data_directory(self.config)/'transactions'/'workflows.json'
-        # V145's session-refresh notices are retired for every profile on upgrade.
-        if self.path.exists():
-            with storage_lock(self.config):
-                data=self._read();changed=False
-                for user,rows in data['notices'].items():
-                    kept=[n for n in rows if n.get('kind')!='template_refresh' and not n.get('job_id')]
-                    if len(kept)!=len(rows):data['notices'][user]=kept;changed=True
-                if changed:self._write(data)
     def _read(self):return json.loads(self.path.read_text(encoding='utf-8')) if self.path.exists() else {'jobs':{},'notices':{},'change_cursors':{}}
     def _write(self,data):
         self.path.parent.mkdir(parents=True,exist_ok=True);temp=self.path.with_suffix('.tmp')
@@ -30,6 +22,7 @@ class WorkflowStore:
             for row in data['jobs'].values():
                 if row['creator_id'] not in valid or any(u not in valid for u in row['participants']):row['cancelled']=True
             data['notices']={u:rows for u,rows in data['notices'].items() if u in valid}
+            data['archive_event_cursors']={u:rows for u,rows in data.get('archive_event_cursors',{}).items() if u in valid}
             data['dismissed_bitaroo_warnings']={u:stamp for u,stamp in data.get('dismissed_bitaroo_warnings',{}).items() if u in valid}
             self._write(data)
     def sync_bitaroo_warning(self,user,stamp,local_date,zone="UTC"):
@@ -92,6 +85,30 @@ class WorkflowStore:
         with storage_lock(self.config):
             data=self._read();data['notices'].setdefault(user,[]).append(notice);self._write(data)
         return notice
+    def sync_archive_events(self,user,requests,page=''):
+        """Shared task outcomes, independently read/dismissed by each profile.
+
+        A durable seen ledger prevents a repeated Agent receipt from recreating
+        a dismissed notice. Opening Wallets only reads these archive notices.
+        """
+        with storage_lock(self.config):
+            data=self._read();before=json.dumps(data,sort_keys=True);rows=data['notices'].setdefault(user,[]);seen=data.setdefault('archive_event_cursors',{}).setdefault(user,{})
+            for ident,r in requests.items():
+                if r['state'] not in ('complete','deleted') or not r.get('outcome_utc'):continue
+                event=ident+':'+r['state']
+                if event in seen:continue
+                task=r['request'];host=r['hostname'];wallet=task.get('wallet') or task.get('label','Archive disc');deleted=r['state']=='deleted' or task['kind']=='archive_cancel'
+                if task['kind']=='archive_cancel':text='Archive cancellation completed locally on '+host+': '+wallet+('. Created disc destruction confirmed on Agent.' if r.get('result',{}).get('disc_created') else '. No disc was created.')
+                elif deleted:text='Archive request deleted on '+host+': '+wallet+'. This does not confirm a successful archive or disc destruction.'
+                elif task['kind']=='destroy_disc':text='Old archive disc destruction confirmed locally on '+host+': '+wallet+'.'
+                else:text='Archive completed and disc read-back verified on '+host+': '+wallet+'.'
+                notice={'id':uuid.uuid4().hex,'kind':'archive_outcome','target':'balances','request_id':ident,'outcome':r['state'],'severity':'red' if deleted else 'green','dismissible':True,'text':text,'created_utc':r['outcome_utc'],'read':page in ('notifications','balances')}
+                rows.append(notice);seen[event]=notice['created_utc']
+            if page in ('notifications','balances'):
+                for n in rows:
+                    if n.get('kind')=='archive_outcome':n['read']=True
+            if json.dumps(data,sort_keys=True)!=before:self._write(data)
+
     def notifications(self,user,scope=None):
         with storage_lock(self.config):
             state=self._read();rows=[dict(n,cancelled=state['jobs'].get(n.get('job_id'),{}).get('cancelled',False),cancel_reason=state['jobs'].get(n.get('job_id'),{}).get('cancel_reason')) for n in state['notices'].get(user,[])]
@@ -109,8 +126,7 @@ class WorkflowStore:
             self._write(data)
         return self.notifications(user)
     def active(self,user):
-        with storage_lock(self.config):
-            return [{'id':j['id'],'created_utc':j['created_utc']} for j in self._read()['jobs'].values() if not j.get('cancelled') and not j.get('completed') and user==j['creator_id']]
+        return [{'id':j['id'],'created_utc':j['created_utc']} for j in self._read()['jobs'].values() if not j.get('cancelled') and not j.get('completed') and user==j['creator_id']]
     def job(self,user,ident):
         if not isinstance(ident,str) or not re.fullmatch(r'[0-9a-f]{32}',ident):raise ValueError('Invalid transaction ID.')
         with storage_lock(self.config):

@@ -1,0 +1,17 @@
+const assert=require('assert'),path=require('path');
+const graph=require(path.resolve(process.argv[2],'history.js'));
+const record=(id,fee)=>({transaction_id:id.repeat(64),utc:'2026-11-03T00:00:00Z',network_fee_btc:fee});
+const purchase=record('a','0'),refresh=record('b','0.00001000'),refresh2=record('c','0.00002000'),sale=record('d','0');
+const wallet=(incoming,outgoing)=>({kind:'wallet',label:'Example wallet',stage:'receipt',incoming,outgoing});
+const end={kind:'exchange',label:'Example exchange',stage:'disposal',incoming:sale};
+const nodes=[wallet(purchase,refresh),wallet(refresh,refresh2),wallet(refresh2,sale),end];
+const event={disposal:end,paths:[{nodes,allocated_btc:'0.1',allocated_cost_aud:'100'}]},before=JSON.stringify(event);
+const result=graph.build(event),boxes=result.nodes.filter(n=>n.node.kind==='wallet');
+assert.equal(boxes.length,3);assert.equal(new Set(boxes.map(n=>n.column)).size,3);
+assert(result.edges.every(e=>e.from!==e.to));
+assert.equal(boxes[0].outgoing[0].records[0].network_fee_btc,'0.00001000');assert.equal(boxes[1].outgoing[0].records[0].network_fee_btc,'0.00002000');
+assert.equal(JSON.stringify(event),before,'presentation does not mutate tax records');
+const merged=graph.build({...event,paths:[event.paths[0],{...event.paths[0],allocated_btc:'0.2',allocated_cost_aud:'200'}]});
+assert.equal(merged.nodes.filter(n=>n.node.kind==='wallet').length,3,'parcel branches share a visit, not different transfers');
+assert.equal(merged.edges[0].btc,'0.3');
+console.log('PASS: repeated same-wallet vault transfers have separate boxes, preserve fees and merge parcel branches without changing CGT records.');

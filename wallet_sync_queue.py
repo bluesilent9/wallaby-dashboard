@@ -15,9 +15,28 @@ def contains(wallets,raw):
     return keys(raw)<=available
 
 
+def withdraw_signer_offers(transfers,state):
+    """Withdraw invitations, retaining every frozen binding and actual outcome."""
+    from policy_accounts import intentional_account,shared
+    hub=transfers.hub;setups=list(hub.wallet_builder.read()['sessions'].values())
+    monitors=[w for inv in hub.inventories.values() for w in inv.get('wallets',[])]
+    monitors += [w for n in state['nodes'].values() for w in n.get('known_wallets',{}).values()]
+    count=0
+    for rows in transfers.pairs(state).values():
+        sender=next((r for r in rows if r['direction']=='send'),None)
+        if not sender or not sender.get('source_has_private_keys') or not (intentional_account(sender['public_wallet'],setups,monitors) or shared(sender['public_wallet'])):continue
+        if all(r.get('superseded_container') for r in rows):continue
+        for row in rows:
+            row.update(superseded_container=True,queue_visible=False,
+                       superseded_message='Withdrawn: this is an intentionally separate signing account, not a missing wallet replica. Original operation outcomes are retained.')
+        count+=1
+    if count:hub.registry.diagnostic_log.append('Wallet sync','Withdrawn separate signer invitations · transfers='+str(count)+' · creation proposals and receipts unchanged.')
+
+
 def schedule(transfers,state):
     hub=transfers.hub
     from sync_routes import renew,prior_in_progress
+    withdraw_signer_offers(transfers,state)
     renew(transfers,state)
     ready={c['node_id']:c for c in list(hub.registry.connections.values()) if hub.registry.rpc._unique(c)}
     for rows in transfers.pairs(state).values():
@@ -98,7 +117,7 @@ def proposals(transfers,state,node):
     for rows in transfers.pairs(state).values():
         row=next((r for r in rows if r['node_id']==node and r.get('queue_v2') and r.get('queue_visible')),None)
         if not row:continue
-        row['base_sent']=row.get('base_sent',0)+1
+        row['base_sent']=max(1,row.get('base_sent',0))
         sender=next(r for r in rows if r['direction']=='send');payload=sender.get('signed_preview')
         if row['direction']=='receive' and row['state']=='pending' and payload:
             previews.append({'kind':'wallet_transfer_preview',**copy.deepcopy(payload)})
@@ -113,6 +132,7 @@ def warnings(hub):
     state=hub.read();result=[]
     names={n['id']:n['hostname'] for n in hub.registry._read()['nodes']}
     for ident,rows in hub.transfers.pairs(state).items():
+        if any(r.get('node_deleted') for r in rows):continue
         if any(r.get('superseded_container') for r in rows) and all(r['state']=='pending' for r in rows):continue
         if any(r['direction']=='receive' and r['state']=='complete' for r in rows):continue
         recovery=any(r['state']=='recovery_required' for r in rows)

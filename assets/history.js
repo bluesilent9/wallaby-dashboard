@@ -24,12 +24,16 @@ const sink=make(terminal,'disposal');
 function member(list,i){if(!list.includes(i))list.push(i);}
 function port(n,side,record,i){if(!record)return null;const key=recordIdentity(record);let p=n[side].find(p=>p.key===key);if(!p){p={id:n.id+'-'+side+'-'+n[side].length,key,data:{...record},records:[],members:[],side};n[side].push(p);}member(p.members,i);const raw={...record};delete raw.source_lot_btc;const signature=JSON.stringify(raw);if(!p.records.some(r=>JSON.stringify(r)===signature))p.records.push(raw);return p;}
 for(const [i,path]of event.paths.entries()){
- const chain=[];
+ const chain=[],visits=new Map();
  for(const [j,original]of path.nodes.entries()){
   const end=j===path.nodes.length-1;
-  // Wallet identity is shared across receipt visits; exchange purchases keep
-  // their acquisition identity, and the disposal remains one event endpoint.
-  const key=(original.kind==='wallet'||original.kind==='exchange'&&original.stage==='receipt')&&original.stage!=='acquisition'?JSON.stringify(['account',original.kind,original.label]):JSON.stringify([original.kind,original.label,original.stage,original.utc,recordIdentity(original.incoming||original.details)]);
+  // Merge parcel branches at the same visit, but give a later visit to the
+  // same wallet its own sending/receiving box. Self transfers retain their
+  // transaction ports (and fee details) without a loop back into one box.
+  const account=(original.kind==='wallet'||original.kind==='exchange'&&original.stage==='receipt')&&original.stage!=='acquisition';
+  const identity=JSON.stringify(['account',original.kind,original.label]),visit=visits.get(identity)||0;
+  if(account)visits.set(identity,visit+1);
+  const key=account?JSON.stringify([identity,visit]):JSON.stringify([original.kind,original.label,original.stage,original.utc,recordIdentity(original.incoming||original.details)]);
   let n=end?sink:intern.get(key);if(!n){n=make(original,key);intern.set(key,n);}member(n.members,i);n.records.push({node:original,path:i});chain.push(n);
  }
  for(let j=1;j<chain.length;j++){
@@ -53,8 +57,8 @@ for(const n of nodes){
  n.parcel_btc=decimalSum(n.members.map(i=>event.paths[i].allocated_btc));n.parcel_cost=decimalSum(n.members.map(i=>event.paths[i].allocated_cost_aud));
  n.width=190;n.height=Math.max(110,36+Math.max(n.incoming.length,n.outgoing.length)*25);
 }
-// Condense cycles before assigning columns. A wallet visited again remains a
-// single box; return transfers are drawn as arcs rather than duplicated boxes.
+// Condense any remaining cross-path cycles before assigning columns. Repeat
+// visits within a path already have separate wallet boxes.
 let count=0;const stack=[],components=[];function visit(n){n._index=n._low=count++;stack.push(n);n._stack=true;for(const c of n.children){if(c._index===undefined){visit(c);n._low=Math.min(n._low,c._low);}else if(c._stack)n._low=Math.min(n._low,c._index);}if(n._low===n._index){const component=[];let c;do{c=stack.pop();c._stack=false;c.component=components.length;component.push(c);}while(c!==n);components.push(component);}}
 for(const n of nodes)if(n._index===undefined)visit(n);
 // A strongly connected component is a return visit, not a reason to stack all

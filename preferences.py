@@ -127,7 +127,7 @@ class FamilyStore:
     def __init__(self,path):
         self.path=Path(path).expanduser().resolve();self.path.parent.mkdir(parents=True,exist_ok=True)
         migrate_storage(self.path)
-        with self.transaction():pass
+        self.snapshot()
     @contextmanager
     def transaction(self):
         with _MUTEX:
@@ -177,7 +177,15 @@ class FamilyStore:
                     try:fcntl.flock(handle,fcntl.LOCK_UN)
                     except NameError:handle.seek(0);msvcrt.locking(handle.fileno(),msvcrt.LK_UNLCK,1)
     def snapshot(self):
-        with self.transaction() as data:return copy.deepcopy(data)
+        try:
+            raw=self.path.read_text(encoding='utf-8-sig')
+            data=json.loads(raw)
+        except (FileNotFoundError,json.JSONDecodeError):
+            with self.transaction() as data:return copy.deepcopy(data)
+        if data.get('schema')!=124 or not isinstance(data.get('users'),list) or not isinstance(data.get('ownership'),list):
+            raise ValueError('Unsupported family config.cfg format')
+        data['ownership']=[r for r in data['ownership'] if r.get('kind')!='csv']
+        return data
     def user(self,user_id):return next((u for u in self.snapshot()['users'] if u['id']==user_id),None)
     @staticmethod
     def revision(data,revision):
@@ -252,6 +260,17 @@ class FamilyStore:
             if not any(u['id']==user_id.removesuffix(':smsf') for u in data['users']):raise ValueError('User no longer exists.')
             data.setdefault('bitaroo_addresses',{})[user_id]=clean
         return self.snapshot()
+    def rename_dashboard(self,user_id,resource,label):
+        if not isinstance(label,str) or not label.strip() or len(label)>1000 or any(ord(c)<32 or ord(c)==127 for c in label):raise ValueError('Enter a Dashboard name of 1–1,000 characters without control characters.')
+        label=label.strip()
+        from wallet_names import dashboard_name
+        with self.transaction() as data:
+            row=next((r for r in data['ownership'] if r['id']==resource),None)
+            if not row or row['kind']!='descriptor' or row.get('owner_id')!=user_id:raise ValueError('Select this wallet’s owner profile before renaming it.')
+            if label.casefold()=='bitaroo' or any(r['id']!=resource and dashboard_name(r).casefold()==label.casefold() for r in data['ownership']):raise ValueError('Dashboard wallet names must be unique; Bitaroo is reserved.')
+            __import__('wallet_names').set_dashboard_name(row,label,user_id)
+        return self.snapshot()
+
     def save_ownership(self,rows,revision,inventory):
         if not isinstance(rows,list) or len(rows)>10000:raise ValueError('Invalid ownership entries.')
         expected={r['id']:r for r in inventory}
@@ -270,8 +289,15 @@ class FamilyStore:
                 if type(row.get('smsf')) is not bool or type(external) is not bool or (owner not in users if not external else owner is not None):raise ValueError('Choose a user or Someone else / external for every entry.')
                 if not name or len(name)>1000 or any(ord(c)<32 for c in name):raise ValueError('Every wallet needs a name (maximum 1,000 characters).')
                 if (src['kind']!='descriptor' or src.get('extinct')) and name!=src['name']:raise ValueError('Wallet and exchange names must match their source.')
+                previous=existing.get(row['id'],{});dashboard_label=name if src['kind']=='descriptor' and not src.get('extinct') and previous.get('confirmed') else None
+                if dashboard_label is not None:name=previous['name']
                 existing[row['id']]={'display_name_set':True,'id':row['id'],'kind':src['kind'],'source':src['source'],'name':name,'owner_id':owner,'external':external,'smsf':row['smsf'],'confirmed':True}
-            names=[existing[r['id']]['name'].casefold() for r in inventory if r['kind'] in ('descriptor','wallet','exchange')]
+                if dashboard_label is not None:
+                    if previous.get('dashboard_name_history'):existing[row['id']]['dashboard_name_history']=previous['dashboard_name_history']
+                    if 'dashboard_name' in previous:existing[row['id']]['dashboard_name']=previous['dashboard_name']
+                    __import__('wallet_names').set_dashboard_name(existing[row['id']],dashboard_label)
+            from wallet_names import dashboard_name
+            names=[dashboard_name(existing[r['id']]).casefold() for r in inventory if r['kind'] in ('descriptor','wallet','exchange')]
             if len(set(names))!=len(names) or 'bitaroo' in names:raise ValueError('Wallet names must be unique; Bitaroo is reserved for the exchange ledger.')
             data['ownership']=list(existing.values())
         return self.snapshot()

@@ -20,7 +20,7 @@ def validate(state,users,config=None):
             if not re.fullmatch('[0-9a-f]{64}',str(w.get('archive_id'))):raise ValueError('Invalid saved archive package identity.')
         for archive,record in row.get('archive_inventory',{}).items():
             m=record['message']
-            if archive!=m.get('archive_id') or record['envelope'].get('message')!=m or m.get('readback_verified') is not True or not re.fullmatch('[0-9a-f]{64}',archive):raise ValueError('Invalid saved public archive evidence.')
+            if archive!=m.get('archive_id') or record['envelope'].get('message')!=m or not ((m.get('event')=='archive_observed' and m.get('payload_verified') is True and m.get('payload_sha256')==archive and m.get('readback_verified') is False) or (m.get('event') in ('archive_verified','replacement_verified') and m.get('readback_verified') is True)) or not re.fullmatch('[0-9a-f]{64}',archive):raise ValueError('Invalid saved public archive evidence.')
             for member in m['members']:clean_wallet(member['public_wallet'])
             if config:
                 from setup_signatures import verify
@@ -46,6 +46,9 @@ def validate(state,users,config=None):
             if p.get('kind')!='wallet_policy_refresh' or p.get('request_id')!=ident or p.get('chain')!='main' or len(p.get('previous_descriptors',[]))!=2:raise ValueError('Invalid saved public policy refresh.')
             from builder_destinations import validate_record
             clean_wallet({'wallet_name':p['wallet'],'descriptors':[{'desc':d,'range':[0,999],'active':False,'internal':bool(i%2)} for i,d in enumerate([*p['previous_descriptors'],p['receive_descriptor'],p['change_descriptor']])]})
+        if row.get('kind')=='wallet_retire' and row.get('proposal',{}).get('version')==3:
+            from wallet_retirement import validate_saved
+            validate_saved(state,ident,row,users)
         if row.get('kind')=='wallet_retire' and row.get('proposal',{}).get('version')==2:
             from wallet_retirement import result
             p=row['proposal'];body=dict(p);request_id=body.pop('request_id',None)
@@ -58,10 +61,10 @@ def validate(state,users,config=None):
                 if test['state']!=row['state']:raise ValueError('Saved retirement outcome mismatch.')
             if row.get('disc_status')!='unconfirmed' and (row['state']!='complete' or not row.get('disc_confirmed_utc')):raise ValueError('Unverified saved disc confirmation.')
             root=row.get('root_hash')
-            if root not in state['requests'] or not state['requests'][root].get('expected_holders'):raise ValueError('Invalid retirement holder group.')
+            if root not in state['requests'] or 'expected_holders' not in state['requests'][root]:raise ValueError('Invalid retirement holder group.')
             if ident==root:
                 holders=row['expected_holders']
-                if not isinstance(holders,dict) or not 1<=len(holders)<=256 or row['node_id'] not in holders or any(not isinstance(k,str) or not isinstance(v,str) for k,v in holders.items()):raise ValueError('Invalid expected retirement holders.')
+                if not isinstance(holders,dict) or not (0 if row.get('node_removal_parked') else 1)<=len(holders)<=256 or row['node_id'] not in holders and not row.get('node_deleted') or any(not isinstance(k,str) or not isinstance(v,str) for k,v in holders.items()):raise ValueError('Invalid expected retirement holders.')
                 if row.get('disc_status')!='unconfirmed':
                     from wallet_retirement import group_complete
                     if not group_complete(state,ident):raise ValueError('Not every holder confirmed retirement.')

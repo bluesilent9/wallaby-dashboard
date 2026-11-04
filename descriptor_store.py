@@ -76,11 +76,21 @@ class DescriptorStore:
     def fingerprint(data):
         # Replica availability and private/watch role are live presentation
         # metadata. They must not discard verified balances or tax reports.
-        wallets=[{k:v for k,v in w.items() if k not in ('watch_only','node_sources')} for w in data.get('wallets',[])]
+        wallets=[{k:v for k,v in w.items() if k not in ('watch_only','node_sources','setup_name')} for w in data.get('wallets',[])]
         return hashlib.sha256(json.dumps({'history_algorithm':9,'wallets':wallets},sort_keys=True,separators=(',',':')).encode()).hexdigest()
-    def summary(self):
+    @staticmethod
+    def revision(data):
+        # Presentation updates refresh browsers without invalidating calculations.
+        return hashlib.sha256(json.dumps(data.get('wallets',[]),sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    def _summary(self):
         data=self.read();pending=[w for w in data['wallets'] if needs_history(w) and not w.get('public_history')]
-        return {'ready':bool(data['wallets']) and not pending,'loaded':bool(data['wallets']),'fingerprint':self.fingerprint(data),'loaded_utc':data.get('loaded_utc'),'wallets':[{'id':w['id'],'name':w['name'],'extinct':bool(w.get('extinct')),'records':len(w['raw']['descriptors']),'has_vault':bool(w.get('has_vault')),'watch_only':bool(w.get('watch_only')),'multisig':__import__('policy_accounts').multisig_summary(w['raw']),'node_sources':w.get('node_sources',[]),'needs_public_history':needs_history(w),'public_history_loaded':bool(w.get('public_history')),'public_history_utc':w.get('public_history',{}).get('exported_utc')} for w in data['wallets']]}
+        return {'ready':bool(data['wallets']) and not pending,'loaded':bool(data['wallets']),'fingerprint':self.fingerprint(data),'revision':self.revision(data),'loaded_utc':data.get('loaded_utc'),'wallets':[{'id':w['id'],'name':w['name'],'setup_name':w.get('setup_name'),'extinct':bool(w.get('extinct')),'records':len(w['raw']['descriptors']),'has_vault':bool(w.get('has_vault')),'watch_only':bool(w.get('watch_only')),'multisig':__import__('policy_accounts').multisig_summary(w['raw']),'node_sources':w.get('node_sources',[]),'needs_public_history':needs_history(w),'public_history_loaded':bool(w.get('public_history')),'public_history_utc':w.get('public_history',{}).get('exported_utc')} for w in data['wallets']]}
+    def summary(self):
+        try:
+            stat=self.path.stat();identity=(stat.st_mtime_ns,stat.st_size,stat.st_ino)
+        except FileNotFoundError:identity=None
+        from copy import deepcopy
+        return deepcopy(_cached_summary(str(self.config),identity))
     def load(self,text):
         incoming={};names={}
         for raw in extract_all(text):
@@ -101,9 +111,9 @@ class DescriptorStore:
             try:os.replace(tmp,self.path)
             finally:tmp.unlink(missing_ok=True)
         return self.summary()
-    def replace_node_wallets(self,wallets):
+    def replace_node_wallets(self,wallets,*,allow_empty=False):
         """Publish a complete all-node discovery atomically, after all reads succeed."""
-        if not wallets:raise ValueError('No node wallets discovered.')
+        if not wallets and not allow_empty:raise ValueError('No node wallets discovered.')
         for wallet in wallets:
             checked=clean_wallet(wallet['raw'])
             if checked['id']!=wallet['id'] or checked['name']!=wallet['name']:raise ValueError('Invalid node wallet identity.')
@@ -156,3 +166,8 @@ class DescriptorStore:
             try:os.replace(tmp,self.path)
             finally:tmp.unlink(missing_ok=True)
         return self.summary()
+
+from functools import lru_cache
+@lru_cache(maxsize=16)
+def _cached_summary(config,identity):
+    return DescriptorStore(config)._summary()

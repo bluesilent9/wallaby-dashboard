@@ -47,7 +47,7 @@ class VaultMonitor:
             try:public_vault(v);valid=True;reason=None
             except ValueError as exc:valid=False;reason=str(exc)
             source=next((w for w in catalog['wallets'] if any(NodeWalletLoader.descriptor_key(r['desc'])==NodeWalletLoader.descriptor_key(v.get('source',{}).get('descriptor','')) for r in w['raw']['descriptors'])),None)
-            uid=source['id'] if source else ident;name=owners.get(uid,{}).get('name') or (source or {}).get('name') or 'Vault '+v.get('address','unknown')[:18]
+            uid=source['id'] if source else ident;name=(owners.get(uid,{}).get('dashboard_name') or owners.get(uid,{}).get('name')) or (source or {}).get('setup_name') or (source or {}).get('name') or 'Vault '+v.get('address','unknown')[:18]
             g=groups.setdefault(uid,{'id':uid,'name':name,'policies':[],'issues':[],'source_wallet':source,'vault_sats':0,'outside_sats':0,'outpoints':set()})
             if source is None:g['issues'].append('The vault source has not been matched to a loaded Ownership wallet. Refresh node wallets and Ownership.')
             g['policies'].append({'id':ident,'public':v,'valid':valid,'funds':0})
@@ -66,7 +66,7 @@ class VaultMonitor:
         for wallet in catalog['wallets']:
             for row in wallet['raw']['descriptors']:
                 if 'after(' not in row['desc'] or NodeWalletLoader.descriptor_key(row['desc']) in known:continue
-                uid=wallet['id'];g=groups.setdefault(uid,{'id':uid,'name':owners.get(uid,{}).get('name') or wallet['name'],'policies':[],'issues':[],'source_wallet':wallet,'vault_sats':0,'outside_sats':0,'outpoints':set()})
+                uid=wallet['id'];g=groups.setdefault(uid,{'id':uid,'name':(owners.get(uid,{}).get('dashboard_name') or owners.get(uid,{}).get('name')) or wallet.get('setup_name') or wallet['name'],'policies':[],'issues':[],'source_wallet':wallet,'vault_sats':0,'outside_sats':0,'outpoints':set()})
                 try:
                     from vendor.embit.descriptor import Descriptor
                     from multisig_psbt import witness_policy

@@ -15,7 +15,17 @@ def stamp():return datetime.now(timezone.utc).isoformat(timespec='seconds').repl
 def digest(v):return hashlib.sha256(json.dumps(v,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
 def serialised(fn):
  def wrapped(*args,**kwargs):
-  with LOCK:return fn(*args,**kwargs)
+  import time
+  started=time.monotonic()
+  with LOCK:
+   entered=time.monotonic()
+   try:return fn(*args,**kwargs)
+   finally:
+    if fn.__name__=='exchange' and time.monotonic()-started>=1:
+     hub=args[0];now=time.monotonic();prior=getattr(hub,'slow_exchange_at',0)
+     if now-prior>=60:
+      hub.slow_exchange_at=now
+      hub.registry.diagnostic_log.append('Agent exchange','Slow response · elapsed_ms='+str(round((now-started)*1000))+' · coordinator_wait_ms='+str(round((entered-started)*1000)))
  return wrapped
 
 def clean_draft(kind,value):
@@ -42,6 +52,12 @@ class BuilderWorkspace:
   for kind,w in s['workspaces'].items():
    path=data_directory(self.config)/('wallet-setups.json' if kind=='wallet' else 'transactions/workflows.json')
    rows=json.loads(path.read_text()).get('sessions' if kind=='wallet' else 'jobs',{}) if path.exists() else {}
+   if kind=='wallet':
+    # A hash-sorted setup ledger is not a creation-order index. Retain only
+    # links without an explicit different workspace owner. Unknown records
+    # remain available for reconciliation; they are not evidence of a mismatch.
+    # This repairs association only; all signed setup evidence remains intact.
+    w['operations']=[ident for ident in w['operations'] if not rows.get(ident,{}).get('workspace_id') or rows[ident]['workspace_id']==w['id']]
    for ident,row in rows.items():
     if row.get('workspace_id')==w['id'] and ident not in w['operations']:w['operations'].append(ident)
   return s
@@ -96,7 +112,7 @@ class BuilderWorkspace:
   blocked=row['owner_id']!=user;public={k:copy.deepcopy(v) for k,v in row.items() if not blocked or k in ('id','kind','owner_id','created_utc')};public['owner_name']=users.get(row['owner_id'],'another user')
   result={'workspace':public,'blocked':blocked,'cancellation':None}
   if row.get('cancellation_id'):
-   batch=s['cancellations'][row['cancellation_id']];connected={n['id'] for n in registry.snapshot()['nodes'] if n['connected']} if registry else set();targets=[]
+   batch=s['cancellations'][row['cancellation_id']];connected={n['id'] for n in registry.presence()['nodes'] if n['connected']} if registry else set();targets=[]
    for node,t in batch['targets'].items():
     received=bool(t.get('received_utc'));online=node in connected;targets.append({'node_id':node,'hostname':t['hostname'],'status':'Complete' if received else 'Agent online, sending request' if online else 'Agent offline','colour':'green' if received else 'amber' if online else 'red'})
    result['cancellation']={'id':row['cancellation_id'],'targets':targets,'complete':all(t.get('received_utc') for t in batch['targets'].values())}
@@ -108,7 +124,7 @@ class BuilderWorkspace:
   if not row or row['owner_id']!=user:raise ValueError('Only the builder creator can cancel it.')
   if row.get('cancellation_id'):return self.snapshot(user,kind,hub.registry)
   targets={};requests=hub.read()['requests'];setups=hub.wallet_builder.read()['sessions'];exports=hub.read()['exports']
-  nodes={n['id']:n['hostname'] for n in hub.registry.snapshot()['nodes']}
+  nodes={n['id']:n['hostname'] for n in hub.registry.presence()['nodes']}
   def add(node,operation,request_hash=None):
    t=targets.setdefault(node,{'hostname':nodes.get(node,node),'operations':[],'request_hashes':[],'exports':[]})
    if operation not in t['operations']:t['operations'].append(operation)

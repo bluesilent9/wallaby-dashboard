@@ -28,7 +28,7 @@ def identity(mac,hostname):
 class NodeRegistry:
     def __init__(self,config,clock=time.monotonic):
         self.config=Path(config);self.path=self.config.with_name('data')/'nodes.json';self.clock=clock
-        self.lock=threading.RLock();self.connections={};self.warnings={};self.read_by={};self.diagnostic_log=DiagnosticLog(self.config.parent/'logs');self.rpc=RPCBroker(self)
+        self.lock=threading.RLock();self.connections={};self.warnings={};self.sync_warning_cache=[];self.sync_warning_at=0;self.sync_warning_lock=threading.Lock();self.read_by={};self.diagnostic_log=DiagnosticLog(self.config.parent/'logs');self.rpc=RPCBroker(self)
         from node_health import Health
         from agent_hub import AgentHub
         self.health=Health(self);self.hub=AgentHub(self)
@@ -111,7 +111,7 @@ class NodeRegistry:
             key='node-conflict-'+hashlib.sha256((kind+':'+value).encode()).hexdigest()[:24]
             prior=self.warnings.get(key)
             active[key]=prior or {'id':key,'kind':'node_conflict','severity':'red','dismissible':False,'target':'nodes','created_utc':utc(),'text':'Warning: Conflicting node '+('MAC address' if kind=='mac' else 'hostname')+' ('+value+'). This could either be spoofing or something is misconfigured.'}
-        for warning in self.hub.sync_warnings():
+        for warning in self.sync_warning_cache:
             prior=self.warnings.get(warning['id'])
             active[warning['id']]=dict(warning,created_utc=prior['created_utc'] if prior else warning['created_utc'])
         self.warnings=active
@@ -126,7 +126,35 @@ class NodeRegistry:
             ready=any(self.health.status(c).get('state')=='ready' for c in claims)
             self.health.refresh(claims)
             return ready
+    def presence(self):
+        with self.lock:
+            self._expire();data=self._read();rows=[]
+            for n in data['nodes']:
+                claims=[c for c in self.connections.values() if c['node_id']==n['id']]
+                unique=len(claims)==1 and self.rpc._unique(claims[0])
+                rows.append(dict(n,connected=bool(claims),rpc_ready=unique and bool(claims[0].get('rpc_methods')),
+                    rpc_methods=claims[0].get('rpc_methods',[]) if unique else [],
+                    blockchain=self.health.status(claims[0]) if unique else {}))
+            return {'nodes':rows}
+    def card_snapshot(self):
+        state=self.presence()
+        with self.lock:claims=[dict(c) for c in self.connections.values()]
+        for node in state['nodes']:
+            matching=[c for c in claims if c['node_id']==node['id']]
+            node['agent']={'version':matching[0].get('agent_version') if len(matching)==1 else None}
+        self.health.refresh([c for c in claims if c.get('rpc_methods')])
+        return dict(state,warnings=[])
+    def refresh_sync_warnings(self):
+        try:
+            stat=self.hub.path.stat();signature=(stat.st_mtime_ns,stat.st_size,stat.st_ino)
+        except OSError:signature=None
+        if signature==getattr(self,'sync_warning_signature',None) and time.monotonic()-self.sync_warning_at<10:return
+        if not self.sync_warning_lock.acquire(blocking=False):return
+        try:
+            self.sync_warning_cache=self.hub.sync_warnings();self.sync_warning_at=time.monotonic();self.sync_warning_signature=signature
+        finally:self.sync_warning_lock.release()
     def snapshot(self):
+        self.refresh_sync_warnings()
         with self.lock,storage_lock(self.config):
             self._expire();self._conflicts();data=self._read();rows=[]
             for n in data['nodes']:
@@ -134,7 +162,8 @@ class NodeRegistry:
                 rows.append(dict(n,blockchain=self.health.status(claims[0]) if len(claims)==1 else {},agent=self.hub.node_summary(n['id']),connected=bool(claims),connection_count=len(claims),reported_hostnames=sorted({c['hostname'] for c in claims}),rpc_ready=len(claims)==1 and bool(claims[0].get('rpc_methods')) and self.rpc._unique(claims[0]),rpc_methods=claims[0].get('rpc_methods',[]) if len(claims)==1 and self.rpc._unique(claims[0]) else []))
             self.health.refresh([c for c in self.connections.values() if c.get('rpc_methods') and self.rpc._unique(c)])
             return {'nodes':sorted(rows,key=lambda r:(r['hostname'],r['mac'])),'warnings':[dict(w) for w in self.warnings.values()]}
-    def notifications(self,user,read=False):
+    def notifications(self,user,read=False,*,refresh=True):
+        if refresh:self.refresh_sync_warnings()
         with self.lock:
             self._expire();self._conflicts();seen=self.read_by.setdefault(user,set())
             if read:seen.update(self.warnings)

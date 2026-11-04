@@ -89,7 +89,7 @@ class Session:
         user=next((u for u in data['users'] if u['id']==self.user_id),None)
         self.sync_workspace(data)
         descriptor_store=DescriptorStore(self.preferences_path)
-        descriptors=descriptor_store.summary();ledger_ready=history_ready(self.preferences_path,descriptor_store.read())
+        descriptors=descriptor_store.summary();ledger_ready=history_ready(self.preferences_path,None,fingerprint=descriptors['fingerprint'])
         context=None
         if user and descriptors['ready'] and ledger_ready and self.descriptor_fingerprint==descriptors['fingerprint'] and self.inventory_ready and self.inventory:
             try:
@@ -102,13 +102,17 @@ class Session:
             try:declarations(data['users'],self.settings,self.uploads);declarations(data['users'],self.settings,self.uploads,smsf=True)
             except ValueError:context=None
         ready=context is not None
-        if ready and self.status not in {'running','waiting'}:
-            generation,saved=ReportStore(self.preferences_path).load(self.user_id,report_signature(data,descriptors['fingerprint']),self.report_generation if self.report_context==context and self.report else None)
+        saved_balance=BalanceStore(self.preferences_path).latest() if user else None
+        balance_current=bool(ready and saved_balance and saved_balance.get('signature')==report_signature(data,descriptors['fingerprint']))
+        node_ready=bool(self.node_registry and self.node_registry.ready_for_builders())
+        available=ready or bool(saved_balance)
+        if available and self.status not in {'running','waiting'}:
+            generation,saved=ReportStore(self.preferences_path).load(self.user_id,report_signature(data,descriptors['fingerprint']),self.report_generation if self.report_context==context and self.report else None,allow_saved=True)
             if isinstance(saved,dict):self.report=saved;self.report_context=context
             elif saved is None:self.report=None;self.report_context=None
             self.report_generation=generation
-        report_ready=ready and self.report is not None and self.report_context==context
-        return {'descriptor_history_ready':ledger_ready,'discovery_revision':descriptors['fingerprint'],'node_ready':bool(self.node_registry and self.node_registry.ready_for_builders()),'balances_ready':bool(ready and BalanceStore(self.preferences_path).ready(report_signature(data,descriptors['fingerprint']))),'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
+        report_ready=available and self.report is not None
+        return {'login_page':'balances' if available and self.user_id in data.get('ownership_runs',{}) else 'ownership','ownership_available':available,'balances_available':bool(saved_balance),'saved_data':bool(available and (not balance_current or not node_ready)), 'descriptor_history_ready':ledger_ready,'discovery_revision':descriptors['revision'],'node_ready':node_ready,'balances_ready':balance_current,'descriptors_ready':descriptors['ready'],'bitaroo_as_of_date':self.bitaroo_as_of_date,'ownership_completed_utc':self.ownership_completed_utc,'activity_started':bool(user) and self.activity_started,'process_active':bool(user) and (self.status in {'running','waiting'} or self.active_operations>0 or self.rpc_broker is not None and self.rpc_broker.pending(self.session_dir.name+':'+self.user_id)),'ownership_ready':ready,'templates_ready':ready,'report_ready':report_ready,'report_generation':self.report_generation,'ownership_context':context}
     def invalidate_transaction_refresh(self):
         self.transaction_refresh_context=None;self.transaction_refresh_scanned=False
     def confirm_transaction_refresh(self):
@@ -119,7 +123,7 @@ class Session:
         data=FamilyStore(self.preferences_path).snapshot();access=self.access(data);user=next((u for u in data['users'] if u['id']==self.user_id),None)
         active=WorkflowStore(self.preferences_path).active(self.user_id) if user else []
         latest=max(active,key=lambda row:row['created_utc'])['id'] if active else None
-        balance_report=BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user) if user and access['ownership_ready'] else None
+        balance_report=BalanceStore(self.preferences_path).personal(report_signature(data,DescriptorStore(self.preferences_path).summary()['fingerprint']),user,allow_saved=True) if user and access['ownership_available'] else None
         from wallet_views import annotate_signers
         annotate_signers(balance_report,self.node_registry.hub if self.node_registry else None)
         from live_wallet_traits import annotate
@@ -134,9 +138,9 @@ class Session:
                 row['archive_sources']=[{k:v for k,v in item.items() if k not in ('public_wallet','related_policies')} for item in archive.options(resource)]
         from balance_evidence import annotate as balance_evidence
         balance_evidence(balance_report,DescriptorStore(self.preferences_path).read(),data,self.preferences_path)
-        result={'rename_queue':__import__('wallet_renames').RenameQueue(self.node_registry.hub).snapshot() if self.node_registry and user else {'operations':[]},'archive_queue':archive.snapshot() if archive else {'requests':[]},'wallet_disc_traits':discs,'wallet_traits':traits,'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':data['ownership'],'user':user,
+        result={'rename_queue':__import__('wallet_renames').RenameQueue(self.node_registry.hub).snapshot() if self.node_registry and user else {'operations':[]},'archive_queue':archive.snapshot() if archive else {'requests':[]},'wallet_disc_traits':discs,'wallet_traits':traits,'builders':{kind:BuilderWorkspace(self.preferences_path).snapshot(self.user_id,kind,self.node_registry) for kind in ('wallet','transaction')} if user else {},'balance_report':balance_report,'last_job_error':self.last_job_error,'active_transaction':latest,'users':data['users'],'revision':data['revision'],'ownership':[dict(r,name=__import__('wallet_names').dashboard_name(r)) for r in data['ownership']],'user':user,
                 'descriptors':dict(display_summary(DescriptorStore(self.preferences_path).summary(),data),ready=access['descriptors_ready']),'inventory':[dict(item,**source_suggestions(item,data['users'])) for item in display_inventory(self.inventory,DescriptorStore(self.preferences_path).read())] if user else [],'inventory_ready':self.inventory_ready if user else False,
-                **access,'address_book':shared_address_book(data,self.address_book) if access['ownership_ready'] else None,
+                **access,'address_book':shared_address_book(data,self.address_book or data.get('ownership_runs',{}).get(self.user_id,{}).get('address_book')) if access['ownership_available'] else None,
                 'restore_error':self.restore_error,'settings':self.settings if user else {},'loaded_slots':{slot:([p.name for p in sorted(path.rglob('*')) if p.is_file()] if path.is_dir() else [path.name]) for slot,path in self.uploads.items()} if user else {}}
         for row in result['inventory']:
             if row.get('source') in traits:row['watch_only']=traits[row['source']]
@@ -146,6 +150,7 @@ class Session:
             row['disc_only']=discs.get(row['id'],False)
         return result
     def select_user(self,user_id):
+        started=time.monotonic()
         with self.lock:
             if self.status in {'running','waiting'}:raise ValueError('Cancel the active job before switching users.')
             user=FamilyStore(self.preferences_path).user(user_id) if user_id else None
@@ -154,7 +159,9 @@ class Session:
             self.cancel();self.last_job_error=None;self.user_id=user_id;self.current_page='';self.presence_seen=time.monotonic();self.presence_activity=self.presence_seen;self.presence_connected=bool(user_id);self.report=None;self.job_result=None;self.events=[];self.pending=None;self.status='idle';self.sequence=0;self.activity_started=False;self.inventory=[];self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
             self.transaction_refresh_context=None;self.transaction_refresh_scanned=False;self.ownership_completed_utc=None;self.descriptor_fingerprint=None;self.bitaroo_as_of_date=None;self.restore_error='';self.uploads={};self.settings={};shutil.rmtree(self.input_dir,ignore_errors=True);self.input_dir.mkdir(parents=True,exist_ok=True)
             self.workspace_dirty=False;self.workspace_stamp=None;self.report_generation=None
-            return self.family()
+            result=self.family()
+            self.diagnostic_log.append('Browser','Login completed · elapsed_ms='+str(round((time.monotonic()-started)*1000))+' · saved_data='+str(result['saved_data']).lower())
+            return result
     def close(self):
         with self.lock:
             if self.closed:return
@@ -257,7 +264,7 @@ class Session:
             settings=dict(self.settings,financial_year=settings.get('financial_year',''),taxpayer=user['name'],matching_window=window['key'],refresh_descriptor_history=refresh,display_timezone=zone)
             self.events=[];self.pending=None;self.activity_started=True;self.status='running';self.mode=mode;self.job_result=None
             if mode=='cgt':self.report=None;self.report_context=None
-            if mode=='inventory':self.inventory_ready=False;self.address_book=None;self.report=None;self.report_context=None;self.invalidate_transaction_refresh()
+            if mode=='inventory':self.inventory_ready=False;self.invalidate_transaction_refresh()
             if mode=='cgt':
                 self.run_signature=report_signature(snapshot,descriptor_store.summary()['fingerprint'])
                 self.report_generation=ReportStore(self.preferences_path).begin(self.run_signature)
@@ -429,7 +436,9 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
             if not self.safe_endpoint():return None
             return sessions.get(self.headers.get('X-Session-Token'))
         def notices(self,session):
-            result=WorkflowStore(session.preferences_path).notifications(session.user_id,session.session_dir.name)
+            workflows=WorkflowStore(session.preferences_path)
+            workflows.sync_archive_events(session.user_id,__import__('archive_queue').ArchiveQueue(sessions.nodes.hub).read()['requests'],session.current_page)
+            result=workflows.notifications(session.user_id,session.session_dir.name)
             result['notifications']+=sessions.nodes.notifications(session.user_id)
             result['notifications'].sort(key=lambda n:n['created_utc'],reverse=True)
             result['unread_count']=sum(not n['read'] for n in result['notifications'])
@@ -474,14 +483,27 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         return self.json(state)
                     except ValueError as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/vaults':
-                    if not session.access()['ownership_ready']:return self.json({'error':'Complete Ownership first.'},400)
+                    if not session.access()['ownership_available']:return self.json({'error':'Complete Ownership first.'},400)
                     return self.json(sessions.nodes.vaults.snapshot())
+                if path=='/api/wallets/rename-names':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    return self.json(__import__('wallet_renames').RenameQueue(sessions.nodes.hub).names(session.user_id,parse_qs(urlsplit(self.path).query).get('wallet_id',[''])[0]))
                 if path=='/api/wallets/rename-queue':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     return self.json(__import__('wallet_renames').RenameQueue(sessions.nodes.hub).snapshot())
+                if path=='/api/wallets/archive-options':
+                    if not session.user():return self.json({'error':'Select a family user first.'},400)
+                    resource=parse_qs(urlsplit(self.path).query).get('wallet_id',[''])[0]
+                    queue=__import__('archive_queue').ArchiveQueue(sessions.nodes.hub);options=queue.options(resource)
+                    return self.json({'sources':[{k:v for k,v in item.items() if k not in ('public_wallet','related_policies')} for item in options],'agents':queue.destinations(resource,options)})
                 if path=='/api/wallets/archive-queue':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     return self.json(__import__('archive_queue').ArchiveQueue(sessions.nodes.hub).snapshot())
+                if path=='/api/wallets/processes':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    from wallet_retirement import advance,snapshot
+                    advance(sessions.nodes.hub)
+                    return self.json({'retirements':snapshot(sessions.nodes.hub,session.user_id),'archives':__import__('archive_queue').ArchiveQueue(sessions.nodes.hub).snapshot(),'renames':__import__('wallet_renames').RenameQueue(sessions.nodes.hub).snapshot(),'builders':{kind:BuilderWorkspace(session.preferences_path).snapshot(session.user_id,kind,sessions.nodes) for kind in ('wallet','transaction')},'nodes':[{k:n[k] for k in ('id','hostname','connected')} for n in sessions.nodes.snapshot()['nodes']]})
                 if path=='/api/wallets/retirements':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
                     from wallet_retirement import snapshot
@@ -511,11 +533,10 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     except (ValueError,TypeError) as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/wallet-builder':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
-                    if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
                     return self.json(sessions.nodes.hub.wallet_builder.snapshot())
                 if path=='/api/nodes':
                     if not session.user():return self.json({'error':'Select a family user first.'},400)
-                    state=sessions.nodes.snapshot();sessions.nodes.notifications(session.user_id,read=True)
+                    state=sessions.nodes.card_snapshot();sessions.nodes.notifications(session.user_id,read=True,refresh=False)
                     return self.json(state)
                 if path=='/api/profile/save':
                     try:
@@ -562,6 +583,13 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         body=base64.b64decode(job['psbt']);
                         self.send_response(200);self.send_header('Content-Type','application/octet-stream');self.send_header('Content-Disposition','attachment; filename="Wallaby_'+'unsigned_'+ident+'.psbt"');self.send_header('Content-Length',str(len(body)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                     except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
+                if path=='/api/wallets/valuation':
+                    if not session.user():return self.json({'error':'Select a user first.'},400)
+                    try:
+                        price=fee_service.fx()
+                        from wallet_valuation import revalue
+                        return self.json({'balance_report':revalue(session.family().get('balance_report'),price)})
+                    except (ValueError,OSError,KeyError) as exc:return self.json({'error':str(exc)},400)
                 if path=='/api/templates':
                     if not sessions.nodes.ready_for_builders():return self.json({'error':'Connect a fully synchronised Bitcoin Core node through Wallaby Agent first.'},400)
                     if not session.access()['templates_ready']:return self.json({'error':'Complete Ownership and save all assignments first.'},400)
@@ -572,7 +600,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         return self.json(templates.read(ident) if ident else {'templates':templates.listing()})
                     except (ValueError,OSError) as exc:return self.json({'error':str(exc)},400)
                 if path in ('/api/salary','/api/salary/context','/api/salary/tax-tables'):
-                    if not session.user() or not session.access()['balances_ready']:return self.json({'error':'Verify Balances in Ownership before using Salary Builder.'},400)
+                    if not session.user() or not session.access()['balances_available']:return self.json({'error':'Verify Balances in Ownership before using Salary Builder.'},400)
                     if path=='/api/salary':return self.json(__import__('salary_builder').SalaryStore(session.preferences_path).snapshot(session.user_id))
                     if path=='/api/salary/tax-tables':return self.json(tax_tables.snapshot(refresh=parse_qs(urlsplit(self.path).query).get('refresh',[''])[0]=='1'))
                     from salary_planning import context
@@ -598,7 +626,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     self.send_header('Content-Disposition',f'attachment; filename="Wallaby_Bitcoin_Dashboard_{personal["financial_year"]}.html"')
                     self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(body);return
                 return self.json({'error':'No completed report is available'},404)
-            files={'/assets/wallet_renames.js':'assets/wallet_renames.js','/assets/address_history.js':'assets/address_history.js','/assets/ownership_hints.js':'assets/ownership_hints.js','/assets/wallet_archives.js':'assets/wallet_archives.js','/assets/node_explorer.js':'assets/node_explorer.js','/assets/salary_diagram.js':'assets/salary_diagram.js','/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
+            files={'/assets/wallet_processes.js':'assets/wallet_processes.js','/assets/wallet_renames.js':'assets/wallet_renames.js','/assets/address_history.js':'assets/address_history.js','/assets/ownership_hints.js':'assets/ownership_hints.js','/assets/wallet_archives.js':'assets/wallet_archives.js','/assets/node_explorer.js':'assets/node_explorer.js','/assets/salary_diagram.js':'assets/salary_diagram.js','/assets/icon_tooltips.js':'assets/icon_tooltips.js','/assets/salary.js':'assets/salary.js','/assets/builder_workspace.js':'assets/builder_workspace.js','/assets/vault_estimator.js':'assets/vault_estimator.js','/assets/timezones.json':'assets/timezones.json','/assets/timezones-CODE_LICENSE':'assets/timezones-CODE_LICENSE','/assets/timezones-DATA_LICENSE':'assets/timezones-DATA_LICENSE','/':'index.html','/assets/wallet_builder.js':'assets/wallet_builder.js','/assets/builder_values.js':'assets/builder_values.js','/assets/builder.js':'assets/builder.js','/assets/style.css':'assets/style.css','/assets/app.js':'assets/app.js','/assets/history.js':'assets/history.js','/assets/fees.js':'assets/fees.js','/assets/node_blocks.js':'assets/node_blocks.js','/assets/mempool_blocks.css':'assets/mempool_blocks.css','/assets/family.js':'assets/family.js','/assets/descriptors.js':'assets/descriptors.js','/assets/logo.svg':'assets/logo.svg'}
             if path not in files:return self.json({'error':'Not found'},404)
             file=ROOT/files[path]
             body=render_html().encode() if path=='/' else file.read_bytes();self.send_response(200)
@@ -660,7 +688,7 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                 store=FamilyStore(session.preferences_path)
                 if path.startswith('/api/salary/'):
                     if data.get('user_id')!=session.user_id:raise ValueError('Salary profile changed. Reopen Salary Builder before editing.')
-                    if not session.user() or not session.access()['balances_ready']:raise ValueError('Verify Balances in Ownership before using Salary Builder.')
+                    if not session.user() or not session.access()['balances_available']:raise ValueError('Verify Balances in Ownership before using Salary Builder.')
                     if path in ('/api/salary/calculate','/api/salary/template'):
                         from salary_planning import context
                         from salary_funding import calculate
@@ -701,12 +729,12 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                         return self.json(__import__('vault_refresh').finish(sessions.nodes.hub,session.user_id,data.get('height')))
                     if path.endswith('/estimate'):
                         from vault_estimator import from_nodes
-                        return self.json(from_nodes(sessions.nodes,data.get('date'),data.get('timezone')))
-                    if path.endswith('/discover'):return self.json(setup.discover())
+                        return self.json(from_nodes(sessions.nodes,data.get('date'),data.get('timezone'),selected_height=data.get('height')))
+                    if path.endswith('/discover'):return self.json(setup.discover(foreground=True))
                     if path.endswith('/create'):
                         if workspace.owned(session.user_id,'wallet').get('renewal'):raise ValueError('Return this public vault policy to Transaction Builder; do not create replacement signing keys.')
                         if workspace.owned(session.user_id,'wallet')['operations']:raise ValueError('A wallet ceremony is already active. Finish or cancel it before starting another.')
-                        result=setup.start(session.user_id,data,workspace.owned(session.user_id,'wallet')['id']);created=next(reversed(setup.read()['sessions']));workspace.attach(session.user_id,'wallet',created);return self.json(result)
+                        result=setup.start(session.user_id,data,workspace.owned(session.user_id,'wallet')['id']);workspace.attach(session.user_id,'wallet',result['created_id']);return self.json(result)
                     raise ValueError('Unknown Wallet Builder operation.')
                 if path in ('/api/builder/agent-lease','/api/builder/agent-leave','/api/builder/vault-prepare','/api/builder/vault-estimate','/api/transaction/sign','/api/transaction/broadcast'):
                     if not session.user():raise ValueError('Select a family user first.')
@@ -729,14 +757,20 @@ def create_server(state_dir,port=0,preferences_path=None,max_sessions=32,idle_se
                     for connection in list(sessions.nodes.connections.values()):
                         if not sessions.nodes.rpc._unique(connection):continue
                         hub.inventory_times[connection['node_id']]=0
-                        threading.Thread(target=hub.refresh_inventory,args=(connection['node_id'],connection['token']),daemon=True).start()
+                        threading.Thread(target=hub.refresh_inventory,args=(connection['node_id'],connection['token']),kwargs={'requested':True},daemon=True).start()
                     return self.json({'queued':True})
                 if path in ('/api/wallets/rename','/api/wallets/rename-cancel','/api/wallets/rename-route'):
                     if not session.user():raise ValueError('Select a family user first.')
                     queue=__import__('wallet_renames').RenameQueue(sessions.nodes.hub)
                     if path.endswith('rename-cancel'):return self.json(queue.cancel(session.user_id,data.get('id')))
                     if path.endswith('rename-route'):return self.json(queue.route_archive(session.user_id,data.get('id'),data.get('target'),data.get('node_id')))
-                    return self.json(queue.create(session.user_id,data.get('wallet_id'),data.get('name')))
+                    return self.json(queue.rename(session.user_id,data.get('wallet_id'),data.get('filename'),data.get('dashboard_name')))
+                if path=='/api/nodes/delete':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    with BUILDER_LOCK:return self.json(__import__('node_removal').remove(sessions.nodes,data.get('node_id'),session.user_id,data.get('confirmed')))
+                if path=='/api/wallets/archive-route':
+                    if not session.user():raise ValueError('Select a family user first.')
+                    return self.json(__import__('archive_queue').ArchiveQueue(sessions.nodes.hub).route(session.user_id,data.get('id'),data.get('node_id')))
                 if path in ('/api/wallets/archive','/api/wallets/archive-cancel'):
                     if not session.user():raise ValueError('Select a family user first.')
                     queue=__import__('archive_queue').ArchiveQueue(sessions.nodes.hub)

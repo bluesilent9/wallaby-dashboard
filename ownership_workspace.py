@@ -1,5 +1,6 @@
 """Durable per-profile Ownership inputs; CGT runs and answers are never saved here."""
 import copy,hashlib,re,shutil,uuid
+from contextlib import contextmanager
 from pathlib import Path,PurePosixPath
 from datetime import datetime,timezone
 from preferences import FamilyStore
@@ -38,38 +39,56 @@ def save_workspace(config,user_id,uploads,inventory,address_book,settings,comple
             previous=data.setdefault('ownership_runs',{}).get(user_id,{})
             data['ownership_runs'][user_id]=meta
         # Remove the prior generation only after the config commit succeeds.
-        # Loaders hold that same lock until their private copies are complete.
+        # File readers hold a separate generation lock, never the profile lock.
         old=previous.get('data_id','')
-        if re.fullmatch('[0-9a-f]{32}',old) and old!=generation:shutil.rmtree(root/old,ignore_errors=True)
+        if re.fullmatch('[0-9a-f]{32}',old) and old!=generation:
+            with generation_access(root,old,exclusive=True):shutil.rmtree(root/old,ignore_errors=True)
     except BaseException:
         shutil.rmtree(dest,ignore_errors=True);raise
     return meta
 
-def restore_workspace(config,user_id,input_dir):
+@contextmanager
+def generation_access(root,generation,*,exclusive=False):
+    import fcntl
+    with (root/('.generation-'+generation+'.lock')).open('a+b') as handle:
+        fcntl.flock(handle,fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        try:yield
+        finally:fcntl.flock(handle,fcntl.LOCK_UN)
+
+def restore_workspace(config,user_id,input_dir,_attempt=0):
     """Restore verified inputs into a browser's private working directory."""
     store=FamilyStore(config);input_dir=Path(input_dir)
-    with store.transaction() as data:
-        meta=copy.deepcopy(data.get('ownership_runs',{}).get(user_id))
-        if not meta:return None
-        generation=meta.get('data_id','')
-        if not re.fullmatch('[0-9a-f]{32}',generation):raise ValueError('Invalid saved Ownership workspace. Run Ownership again.')
-        root=data_root(config)/generation;uploads={};seen=set()
-        try:
-            files=meta['files']
-            if not isinstance(files,list) or len(files)>100000:raise ValueError('Invalid Ownership input manifest.')
-            for item in files:
-                slot=item['slot'];name=PurePosixPath(item['name'])
-                if slot=='historical':continue
-                if (slot not in SLOTS and account_id(slot) is None) or name.is_absolute() or not name.parts or any(p in {'.','..'} for p in name.parts) or '\\' in str(name) or (not folder_slot(slot) and len(name.parts)!=1):raise ValueError('Invalid saved Ownership filename.')
-                if (slot,str(name)) in seen or (not folder_slot(slot) and slot in uploads):raise ValueError('Duplicate saved Ownership input.')
-                seen.add((slot,str(name)));source=root/slot/Path(*name.parts)
-                if not source.is_file() or source.is_symlink() or digest(source)!=item['sha256']:raise ValueError('Saved Ownership inputs are missing or changed. Run Ownership again.')
-                target=input_dir/slot/Path(*name.parts);target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,target);target.chmod(0o600)
-                uploads[slot]=input_dir/slot if folder_slot(slot) else target
-            if not {'exchanges','chain'}.issubset(uploads):raise ValueError('Saved Ownership inputs are incomplete. Run Ownership again.')
-            datetime.fromisoformat(meta['completed_utc'].replace('Z','+00:00'))
-            if not isinstance(meta.get('inventory'),list) or not isinstance(meta.get('settings'),dict):raise ValueError('Invalid saved Ownership metadata.')
-        except (KeyError,TypeError,ValueError,OSError) as exc:
-            shutil.rmtree(input_dir,ignore_errors=True);input_dir.mkdir(parents=True,exist_ok=True)
-            raise ValueError('Could not restore saved Ownership data. Run Ownership again. '+str(exc)) from exc
-        return meta,uploads
+    data=store.snapshot()
+    meta=copy.deepcopy(data.get('ownership_runs',{}).get(user_id))
+    if not meta:return None
+    generation=meta.get('data_id','')
+    if not re.fullmatch('[0-9a-f]{32}',generation):raise ValueError('Invalid saved Ownership workspace. Run Ownership again.')
+    root=data_root(config)
+    with generation_access(root,generation):
+        latest=store.snapshot().get('ownership_runs',{}).get(user_id,{})
+        if latest.get('data_id')!=generation:
+            if _attempt>=2:raise ValueError('Saved records are changing. Retry after the current update completes.')
+            return restore_workspace(config,user_id,input_dir,_attempt+1)
+        return restore_generation(meta,input_dir,root/generation)
+
+def restore_generation(meta,input_dir,root):
+    uploads={};seen=set()
+    try:
+        files=meta['files']
+        if not isinstance(files,list) or len(files)>100000:raise ValueError('Invalid Ownership input manifest.')
+        for item in files:
+            slot=item['slot'];name=PurePosixPath(item['name'])
+            if slot=='historical':continue
+            if (slot not in SLOTS and account_id(slot) is None) or name.is_absolute() or not name.parts or any(p in {'.','..'} for p in name.parts) or '\\' in str(name) or (not folder_slot(slot) and len(name.parts)!=1):raise ValueError('Invalid saved Ownership filename.')
+            if (slot,str(name)) in seen or (not folder_slot(slot) and slot in uploads):raise ValueError('Duplicate saved Ownership input.')
+            seen.add((slot,str(name)));source=root/slot/Path(*name.parts)
+            if not source.is_file() or source.is_symlink() or digest(source)!=item['sha256']:raise ValueError('Saved Ownership inputs are missing or changed. Run Ownership again.')
+            target=input_dir/slot/Path(*name.parts);target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,target);target.chmod(0o600)
+            uploads[slot]=input_dir/slot if folder_slot(slot) else target
+        if not {'exchanges','chain'}.issubset(uploads):raise ValueError('Saved Ownership inputs are incomplete. Run Ownership again.')
+        datetime.fromisoformat(meta['completed_utc'].replace('Z','+00:00'))
+        if not isinstance(meta.get('inventory'),list) or not isinstance(meta.get('settings'),dict):raise ValueError('Invalid saved Ownership metadata.')
+    except (KeyError,TypeError,ValueError,OSError) as exc:
+        shutil.rmtree(input_dir,ignore_errors=True);input_dir.mkdir(parents=True,exist_ok=True)
+        raise ValueError('Could not restore saved Ownership data. Run Ownership again. '+str(exc)) from exc
+    return meta,uploads

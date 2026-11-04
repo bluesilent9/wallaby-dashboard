@@ -17,12 +17,11 @@ class Renames(Setup):
   return p
  def test_all_descriptor_copies_watch_suffix_public_only(self):
   ident=self.start();p=self.q.proposal(self.b['node_id']);self.assertEqual(len(p['requests']),1);self.assertEqual(p['requests'][0]['new_name'],'Renamed Wallet_watch');self.assertEqual(len(self.q.read()['operations'][ident]['targets']),2);validate(self.q.read());self.assertNotIn('xprv',str(p))
- def test_late_success_after_cancel_restores_remaining(self):
-  ident=self.start();self.q.proposal(self.a['node_id']);self.q.cancel(self.user,ident);self.assertFalse(self.q.proposal(self.a['node_id'])['requests']);self.reply(ident,self.a['node_id']);o=self.q.snapshot()['operations'][0];self.assertFalse(o['can_cancel']);self.assertEqual(o['state'],'active');self.assertTrue(self.q.proposal(self.b['node_id'])['requests'])
- def test_first_success_locks_cancel_all_holders_complete(self):
-  ident=self.start();self.reply(ident,self.a['node_id'])
-  with self.assertRaisesRegex(ValueError,'already renamed'):self.q.cancel(self.user,ident)
-  self.reply(ident,self.b['node_id']);self.assertEqual(self.q.snapshot()['operations'][0]['state'],'complete');self.assertEqual(self.family.snapshot()['ownership'][0]['name'],'Renamed Wallet')
+ def test_late_success_after_cancel_keeps_remaining_withdrawn(self):
+  ident=self.start();self.q.proposal(self.a['node_id']);self.q.cancel(self.user,ident);self.reply(ident,self.a['node_id']);o=self.q.snapshot()['operations'][0];self.assertFalse(o['can_cancel']);self.assertEqual(o['state'],'withdrawn');self.assertFalse(self.q.proposal(self.b['node_id'])['requests'])
+ def test_partial_success_can_cancel_but_complete_cannot(self):
+  ident=self.start();self.reply(ident,self.a['node_id']);self.assertTrue(self.q.snapshot()['operations'][0]['can_cancel']);self.q.cancel(self.user,ident);self.assertEqual(self.q.read()['operations'][ident]['state'],'withdrawn')
+  self.assertEqual(self.family.snapshot()['ownership'][0]['name'],'Example Wallet')
  def test_wrong_node_cannot_complete(self):
   ident=self.start();p=self.reply(ident,self.a['node_id'])
   with patch('wallet_policy_updates.verified',return_value=p):
@@ -43,9 +42,8 @@ class Renames(Setup):
   p.update(archive_skipped=True,duplicate_wallet='independently verified local signer')
   with patch('wallet_policy_updates.verified',return_value=p):self.q.accept(self.a['node_id'],{})
   self.assertEqual(self.q.read()['operations'][ident]['targets'][key]['state'],'complete')
- def test_uncertain_attempt_locks_cancellation(self):
-  ident=self.start();self.reply(ident,self.a['node_id'],'error',identity_verified=False,attempted=True,outcome_uncertain=True)
-  with self.assertRaisesRegex(ValueError,'already renamed'):self.q.cancel(self.user,ident)
+ def test_uncertain_attempt_can_stop_remaining_without_erasing_evidence(self):
+  ident=self.start();self.reply(ident,self.a['node_id'],'error',identity_verified=False,attempted=True,outcome_uncertain=True);self.q.cancel(self.user,ident);o=self.q.read()['operations'][ident];self.assertEqual(o['state'],'withdrawn');self.assertTrue(o['locked']);self.assertTrue(any(t.get('result',{}).get('outcome_uncertain') for t in o['targets'].values() if t.get('result')))
  def test_verified_creation_archive_inventory_is_included(self):
   m={'version':1,'event':'archive_verified','archive_id':'c'*64,'image_sha256':'b'*64,'readback_verified':True,'disc_count':1,'replacements':[],'members':[{'member_id':'d'*64,'policy_hash':'a'*64,'name':'Original Archive','role_id':'role','public_wallet':self.wallet['raw'],'related_policies':[]}]}
   with patch('wallet_policy_updates.verified',return_value=m):ArchiveQueue(self.hub).followup(self.a['node_id'],{'signed':'fixture'})

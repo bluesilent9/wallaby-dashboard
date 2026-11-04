@@ -26,7 +26,7 @@ def renew(transfers,state):
         origin=[w for w in hub.inventories[sender['node_id']]['wallets'] if not w.get('signing_only')]
         if not transfers.contains(origin,sender['public_wallet']):continue
         from wallet_preview import policies
-        private=any(w.get('private_keys_enabled') and policies(sender['public_wallet'],True)<=policies(w['raw'],True) for w in origin)
+        private=not __import__('policy_accounts').shared(sender['public_wallet']) and any(w.get('private_keys_enabled') and policies(sender['public_wallet'],True)<=policies(w['raw'],True) for w in origin)
         dest=hub.inventories[receiver['node_id']]['wallets']
         if transfers.contains([w for w in dest if not w.get('signing_only')],receiver['public_wallet']):continue
         fresh=secrets.token_hex(32)

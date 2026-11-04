@@ -15,7 +15,7 @@ from agent_rpc import PRIVATE
 
 from builder_workspace import serialised,BuilderWorkspace
 
-CAPS={'wallet_rename_v1','archive_inventory_v1','wallet_archive_queue_v1','wallet_policy_refresh_v1','builder_cancellation_v1','node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2','wallet_retirement_cancel_v1'}
+CAPS={'wallet_archive_cancel_v1','wallet_rename_v1','archive_inventory_v1','wallet_archive_queue_v1','wallet_policy_refresh_v1','builder_cancellation_v1','node_identity','partial_signing','broadcast','wallet_transfer','wallet_retirement','wallet_retirement_v2','wallet_retirement_v3','wallet_retirement_cancel_v1'}
 def digest(value):return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode()).hexdigest()
 def canonical(value):
     raw=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False)
@@ -33,7 +33,7 @@ def ipv6(value):
 
 class AgentHub:
     def __init__(self,registry):
-        self.registry=registry;self.config=registry.config;self.path=data_directory(self.config)/'agent-hub.json';self.lock=threading.RLock();self.leases={};self.caps={};self.inventories={};self.inventory_times={};self.inventory_busy=set();self.retired=set()
+        self.registry=registry;self.config=registry.config;self.path=data_directory(self.config)/'agent-hub.json';self.lock=threading.RLock();self.leases={};self.caps={};self.inventories={};self.inventory_times={};self.inventory_busy=set();self.retired=set();self.foreground_until={}
         from wallet_transfers import Transfers
         self.transfers=Transfers(self)
         from wallet_builder import WalletBuilder
@@ -42,13 +42,20 @@ class AgentHub:
         self.permissions=Permissions(self)
     def reset_live(self):
         with self.lock:
-            self.leases.clear();self.retired.clear();self.caps.clear();self.inventories.clear();self.inventory_times.clear()
+            self.retirement_readbacks={};self.leases.clear();self.retired.clear();self.caps.clear();self.inventories.clear();self.inventory_times.clear()
             from wallet_transfers import Transfers
             self.transfers=Transfers(self)
             from wallet_builder import WalletBuilder
             self.wallet_builder=WalletBuilder(self)
             from sync_permissions import Permissions
             self.permissions=Permissions(self)
+    def prioritise(self,nodes,seconds=90):
+        until=time.monotonic()+seconds
+        for node in nodes:self.foreground_until[node]=until
+    def foreground_active(self,node=None):
+        now=time.monotonic()
+        if node is not None:return self.foreground_until.get(node,0)>now
+        return any(until>now for until in self.foreground_until.values())
     def read(self):
         return json.loads(self.path.read_text()) if self.path.exists() else {'version':1,'vaults':{},'nodes':{},'requests':{},'exports':{},'receipts':{}}
     @contextmanager
@@ -56,6 +63,7 @@ class AgentHub:
         with storage_lock(self.config),self.lock:
             state=self.read();yield state
             raw=canonical(state)
+            if self.path.exists() and self.path.read_text()==raw:return
             if len(raw.encode())>64*1024*1024:raise ValueError('Agent exchange storage is full.')
             self.path.parent.mkdir(parents=True,exist_ok=True);temp=self.path.with_suffix('.tmp');temp.write_text(raw,encoding='utf-8');temp.chmod(0o600)
             with temp.open('rb') as f:os.fsync(f.fileno())
@@ -67,36 +75,58 @@ class AgentHub:
     def rpc(self,node,method,params=None,wallet=None):
         from wallet_transfers import SynchronisationBusy
         if self.transfers.is_busy(node):raise SynchronisationBusy('Wallet synchronisation is active; node reads resume after both Agents finish.')
-        try:row=self.registry.rpc.call(node,method,params or [],wallet,timeout_seconds=30,consume=True,priority=1)
+        try:row=self.registry.rpc.call(node,method,params or [],wallet,timeout_seconds=30,consume=True,priority=0 if self.foreground_active(node) else 50)
         except ValueError:
             if self.transfers.is_busy(node):raise SynchronisationBusy('Wallet synchronisation is active; node reads resume afterwards.') from None
             raise
         if (row.get('error') or {}).get('code')=='synchronisation_busy':raise SynchronisationBusy('Agent wallet synchronisation is temporarily busy.')
         if row['state']!='succeeded':raise ValueError(str((row.get('error') or {}).get('message',row['state'])))
         return row['result']
-    def refresh_inventory(self,node,token):
+    def refresh_inventory(self,node,token,*,requested=False):
         if self.transfers.is_busy(node):return
+        if requested:self.prioritise([node])
+        if not requested and self.foreground_active(node):
+            rows=self.wallet_builder.read()['sessions'].values()
+            if not any((r['state']=='policy' and node in r.get('inventories',{})) or (r['state']=='ready' and node in r['routes'].values() and node not in r.get('completion_confirmed',{})) for r in rows):return
         with self.lock:
-            if node in self.inventory_busy or time.monotonic()-self.inventory_times.get(node,0)<60:return
+            if node in self.inventory_busy or not requested and time.monotonic()-self.inventory_times.get(node,0)<60:return
             self.inventory_busy.add(node);self.inventory_times[node]=time.monotonic()
         try:
-            names=self.rpc(node,'listwallets');directory=self.rpc(node,'listwalletdir');wallets=[]
+            names=self.rpc(node,'listwallets');directory=self.rpc(node,'listwalletdir');wallets=[];archive_wallets=[]
             if not isinstance(names,list) or not all(isinstance(n,str) for n in names) or len(names)>256:raise ValueError('Invalid node wallet list.')
-            if any(w.get('name') not in names for w in directory.get('wallets',[])):raise ValueError('Load every node wallet before checking missing wallets.')
+            entries=directory.get('wallets') if isinstance(directory,dict) else None
+            if not isinstance(entries,list) or len(entries)>4096 or any(not isinstance(w,dict) or not isinstance(w.get('name'),str) or len(w['name'])>256 for w in entries):raise ValueError('Invalid node wallet directory.')
+            unloaded=sorted({w['name'] for w in entries if w['name'] not in names})
             for name in names:
                 info=self.rpc(node,'getwalletinfo',wallet=name);raw=self.rpc(node,'listdescriptors',[False],name)
                 if not isinstance(info.get('walletname'),str) or raw.get('wallet_name')!=info['walletname']:raise ValueError('Node wallet identity changed during discovery.')
+                historical=bool(info.get('wallaby_extinct') is True or raw.get('descriptors') and all(r.get('desc','').startswith('addr(') for r in raw['descriptors']))
+                if historical:
+                    if info.get('private_keys_enabled') is not False:raise ValueError('Historical archive must have private keys disabled.')
+                    archive_wallets.append(name)
+                    if not raw.get('descriptors'):continue
                 checked=clean_wallet(raw)
                 item={'name':name,'signing_only':info['walletname']!=name,'id':checked['id'],'raw':checked['raw'],'private_keys_enabled':info.get('private_keys_enabled') is True,'scanning':bool(info.get('scanning'))}
+                managed=info.get('wallaby_managed')
+                if isinstance(managed,dict):
+                    item['managed']={k:managed[k] for k in ('setup_id','policy_hash','kind','role_id') if isinstance(managed.get(k),str)}
                 if info.get('wallaby_storage')=='disc' and re.fullmatch('[0-9a-f]{64}',str(info.get('wallaby_archive_id'))):item['archive_id']=info['wallaby_archive_id']
                 from labelled_wallets import expand
                 replica={'wallet':checked,'private_keys_enabled':item['private_keys_enabled'],'history':{'transactions':[]}}
                 for child in expand(replica,lambda address:self.rpc(node,'getaddressinfo',[address],name)):
                     w=child['wallet'];wallets.append(dict(item,id=w['id'],raw=w['raw'],extinct=bool(w.get('extinct')),address_labels=w.get('address_labels',{})))
             with self.lock:
-                if token in self.registry.connections:self.inventories[node]={'wallets':wallets,'complete':True}
+                if token not in self.registry.connections:return
+                self.inventories[node]={'wallets':wallets,'archive_wallets':archive_wallets,'complete':not unloaded,'loaded_complete':True,'unloaded_wallets':unloaded,'scanned_utc':self.utc(),
+                    **({'error':'Loaded wallets are available. '+str(len(unloaded))+' unloaded wallet folders prevent missing-wallet sync checks.'} if unloaded else {})}
+            signature=(tuple(names),tuple(unloaded))
+            logged=getattr(self,'inventory_diagnostics',{})
+            if logged.get(node)!=signature:
+                self.registry.diagnostic_log.append('Wallet inventory','Loaded wallets collected · node='+node[:12]+' · loaded='+str(len(names))+' · unloaded='+str(len(unloaded))+(' · missing-wallet sync deferred' if unloaded else ''))
+                logged[node]=signature;self.inventory_diagnostics=logged
             self.wallet_builder.confirm_installed(node,token,[w for w in wallets if not w.get('signing_only')])
             with self.edit() as saved:
+                if token not in self.registry.connections:return
                 holder=saved['nodes'].setdefault(node,{})
                 known=holder.setdefault('known_wallets',{})
                 archives=holder.setdefault('known_archives',{})
@@ -129,8 +159,9 @@ class AgentHub:
             self.leases[key]={'node_id':node,'user_id':session.user_id,'draft_id':draft,'expires':time.monotonic()+20,'consumed':bool(rows)}
         return {'exports':rows}
     def clear_lease(self,session):
+        prefix=session.session_dir.name
+        if not any(k==prefix or k.startswith(prefix+':') for k in list(self.leases)):return
         with self.lock:
-            prefix=session.session_dir.name
             for key in [k for k in self.leases if k==prefix or k.startswith(prefix+':')]:
                 prior=self.leases.pop(key);self.retired.add((key,prior['draft_id']))
     def lease_all(self,session,draft):
@@ -141,10 +172,11 @@ class AgentHub:
         return {'exports':result}
     def pair_transfers(self,state):
         ready={c['node_id']:c for c in list(self.registry.connections.values()) if self.registry.rpc._unique(c)}
-        from policy_accounts import cosigner_accounts,keys as account_keys
+        from policy_accounts import intentional_account
         setups=list(self.wallet_builder.read()['sessions'].values())
         active_setups={w['id'] for w in BuilderWorkspace(self.config).read()['workspaces'].values() if w['kind']=='wallet'}
-        intentional=cosigner_accounts([w for inv in self.inventories.values() for w in inv.get('wallets',[])])
+        monitors=[w for inv in self.inventories.values() for w in inv.get('wallets',[])]
+        monitors += [w for n in state['nodes'].values() for w in n.get('known_wallets',{}).values()]
         for target in sorted(ready):
             dest=self.inventories.get(target,{})
             if not dest.get('complete'):continue
@@ -163,12 +195,7 @@ class AgentHub:
                         policies(wallet['raw'],allow_addresses=True)
                     except ValueError:continue
                     if any(NodeWalletLoader.descriptor_key(r['desc']) in {NodeWalletLoader.descriptor_key(v['public']['descriptor']) for v in state['vaults'].values()} for r in wallet['raw']['descriptors']):continue
-                    if wallet in intentional:continue
-                    own=account_keys(wallet['raw'])
-                    # A producing Agent installs a private role before its public
-                    # monitor. Public signed contributions already identify that
-                    # intentional key account during this short inventory window.
-                    if wallet.get('private_keys_enabled') and own and any(own<={e['message'][f].split(']')[-1].replace("'",'h') for f in ('receive_key','change_key')} for setup in setups for e in setup['contributions'].values()):continue
+                    if wallet.get('private_keys_enabled') and intentional_account(wallet['raw'],setups,monitors):continue
                     policy_keys={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet['raw']['descriptors']}
                     if any(policy_keys=={NodeWalletLoader.descriptor_key(d) for d in setup.get('descriptors',[])} and (setup.get('workspace_id') in active_setups or setup['state']!='ready' or not set(setup['routes'].values())<=set(setup.get('completion_confirmed',{}))) for setup in setups):continue
                     from policy_lineage import related
@@ -182,7 +209,7 @@ class AgentHub:
                     for node,peer,direction in ((source,target,'send'),(target,source,'receive')):
                         key=digest({'transfer':ident,'direction':direction})
                         if key in state['requests']:continue
-                        state['requests'][key]={'kind':'wallet_transfer','node_id':node,'peer_id':peer,'direction':direction,'transfer_id':ident,'state':'pending','descriptor_id':wallet['id'],'public_wallet':wallet['raw'],'source_has_private_keys':wallet['private_keys_enabled'],'earliest_timestamp':earliest,'requires_blockchain_redownload':requires,'created_utc':self.utc(),**({'subwallets':wallet['subwallets']} if wallet.get('extinct') else {})}
+                        state['requests'][key]={'kind':'wallet_transfer','node_id':node,'peer_id':peer,'direction':direction,'transfer_id':ident,'state':'pending','descriptor_id':wallet['id'],'public_wallet':wallet['raw'],'source_has_private_keys':wallet['private_keys_enabled'] and not __import__('policy_accounts').shared(wallet['raw']),'earliest_timestamp':earliest,'requires_blockchain_redownload':requires,'created_utc':self.utc(),**({'subwallets':wallet['subwallets']} if wallet.get('extinct') else {})}
     @staticmethod
     def utc():
         from datetime import datetime,timezone
@@ -198,10 +225,10 @@ class AgentHub:
         if not self.transfers.modern(node):raise ValueError('Update Wallaby Agent to V2 Development Build 8 or later.')
         if not isinstance(items,list) or len(items)>8 or not isinstance(known,list) or len(known)>128 or any(not isinstance(k,str) or not re.fullmatch('[0-9a-f]{64}',k) for k in known):raise ValueError('Invalid Agent exchange bounds.')
         caps=data.get('capabilities',[])
-        if not isinstance(caps,list) or len(caps)>16 or any(not isinstance(k,str) or not re.fullmatch('[a-z0-9_]{1,64}',k) for k in caps):raise ValueError('Invalid Agent capability list.')
+        if not isinstance(caps,list) or len(caps)>32 or any(not isinstance(k,str) or not re.fullmatch('[a-z0-9_]{1,64}',k) for k in caps):raise ValueError('Invalid Agent capability list.')
         unsupported=sorted(set(caps)-CAPS)
         if unsupported:
-            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard V1 Build 33; Agent '+str(c.get('agent_version','unknown'))+'.')
+            self.registry.diagnostic_log.append('Agent protocol','Unsupported capabilities: '+', '.join(unsupported)+'; Dashboard '+__import__('version').LABEL+'; Agent '+str(c.get('agent_version','unknown'))+'.')
             raise ValueError('Unsupported Agent capabilities.')
         canonical(data)
         verified=[]
@@ -260,6 +287,8 @@ class AgentHub:
                 if self.permissions.accept(node,item['payload'],item['id']) is None:deferred_permissions.add(item['id'])
             elif item['kind']=='wallet_setup_identity' and self.permissions.identity_reply(node,item['payload']):pass
             elif item['kind'].startswith('wallet_setup_'):self.wallet_builder.accept(node,item['kind'],item['payload'])
+        from wallet_retirement import delivery_checks
+        retirement_ready=delivery_checks(self,node)
         setup_proposals=self.permissions.proposals(node,token)+self.wallet_builder.proposals(node,token)
         accepted=[]
         with self.edit() as state:
@@ -270,7 +299,9 @@ class AgentHub:
                 info=data['node_info']
                 if not isinstance(info,dict) or set(info)!={'ipv6'}:raise ValueError('Invalid Agent peer identity.')
                 entry['ipv6']=ipv6(info['ipv6'])
-            entry['known_vaults']=known;entry['last_exchange_utc']=self.utc()
+            entry['known_vaults']=known
+            if time.monotonic()-getattr(self,'exchange_stamps',{}).get(node,0)>=60:
+                entry['last_exchange_utc']=self.utc();self.exchange_stamps=getattr(self,'exchange_stamps',{});self.exchange_stamps[node]=time.monotonic()
             for item in verified:
                 p=item['payload'];kind=item['kind'];receipt=node+':'+item['id']
                 if item['id'] in deferred_permissions:continue
@@ -311,8 +342,9 @@ class AgentHub:
                 elif kind=='sign_result':raise ValueError('Legacy signing broadcasts immediately and cannot complete this partial-signing workflow.')
                 if kind!='wallet_sync_preferences':state['receipts'][receipt]=self.utc()
                 accepted.append(item['id'])
-            self.pair_transfers(state)
-            self.transfers.schedule_queues(state)
+            if not self.foreground_active():
+                self.pair_transfers(state)
+                self.transfers.schedule_queues(state)
             transfer_proposals=self.transfers.proposals(state,node)
             proposals=list(transfer_proposals) if not self.transfers.is_busy(node) else []
             if self.transfers.is_busy(node):proposals=transfer_proposals
@@ -326,11 +358,13 @@ class AgentHub:
                     has=any(any(NodeWalletLoader.descriptor_key(r['desc'])==NodeWalletLoader.descriptor_key(row['public']['descriptor']) for r in w['raw']['descriptors']) for w in self.inventories.get(node,{}).get('wallets',[]))
                     if ident not in known and node not in row['sources'] and not has:proposals.append({'kind':'vault_sync','vault':row['public']})
                 for key,row in sorted(state['requests'].items()):
-                    if row['node_id']!=node or row['state']!='pending' or row['kind']=='wallet_transfer':continue
-                    if row['kind']=='wallet_retire' and row['proposal'].get('version')==2 and 'wallet_retirement_v2' in caps:
+                    if row.get('node_deleted') or row['node_id']!=node or row['state']!='pending' or row['kind']=='wallet_transfer':continue
+                    if row['kind']=='wallet_retire' and row['proposal'].get('version')==3 and 'wallet_retirement_v3' in caps:
                         if row.get('cancel_requested'):
                             if 'wallet_retirement_cancel_v1' in caps:proposals.append({'kind':'wallet_retire_cancel','version':1,'request_hash':key})
                             continue
+                        from wallet_retirement import deliverable
+                        if not deliverable(state,key) or row['proposal']['phase']=='delete' and key not in retirement_ready:continue
                         row['delivered']=True;proposals.append(row['proposal']);continue
                     if row['kind']=='sign_psbt_partial' and 'partial_signing' in caps or row['kind']=='broadcast_transaction' and 'broadcast' in caps:
                         row['delivered']=True;proposals.append(row['proposal'])

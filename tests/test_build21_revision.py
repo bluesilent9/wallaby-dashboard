@@ -19,7 +19,7 @@ class Discovery(unittest.TestCase):
   self.nodes=[dict(n,connected=True,rpc_ready=True,rpc_methods=['listwallets','listwalletdir','getwalletinfo','listdescriptors','listsinceblock','getaddressinfo'],blockchain={'state':'ready'}) for n in self.core.nodes()]
   reg=SimpleNamespace(snapshot=lambda:{'nodes':self.nodes},diagnostic_log=SimpleNamespace(append=lambda *a:None))
   reg.rpc=SimpleNamespace(call=lambda node,method,params=None,wallet=None,**kw:{'state':'succeeded','result':self.core.call(node,method,params,wallet)})
-  reg.hub=SimpleNamespace(read=lambda:{'requests':{}})
+  reg.hub=SimpleNamespace(read=lambda:{'requests':{}},foreground_active=lambda *a:False)
   sessions=SimpleNamespace(nodes=reg,preferences_path=self.config,sessions={},profile_gate=ProfileGate())
   self.service=BackgroundDiscovery(sessions,start=False);self.addCleanup(self.service.close)
  def cycle(self,wallets=None):

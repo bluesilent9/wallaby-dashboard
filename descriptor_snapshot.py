@@ -80,10 +80,19 @@ def shared_history(config, catalog, discover, *, force=False, now=None, require_
 def saved_history(config,catalog):
     return shared_history(config,catalog,lambda:None,require_existing=True,allow_stale=True)[0]
 
-def history_ready(config,catalog):
+def history_ready(config,catalog,*,fingerprint=None):
+    fingerprint=fingerprint or DescriptorStore.fingerprint(catalog)
+    path=data_directory(config)/'descriptor-history'/(fingerprint+'.json')
     try:
-        fingerprint=DescriptorStore.fingerprint(catalog)
-        path=data_directory(config)/'descriptor-history'/(fingerprint+'.json')
+        stat=path.stat()
+        return _history_ready(str(path),fingerprint,stat.st_mtime_ns,stat.st_size,stat.st_ino)
+    except OSError:return False
+
+from functools import lru_cache
+@lru_cache(maxsize=16)
+def _history_ready(filename,fingerprint,mtime,size,inode):
+    try:
+        path=Path(filename)
         envelope=json.loads(path.read_text(encoding='utf-8'));payload=envelope['payload']
         if hashlib.sha256(payload.encode()).hexdigest()!=envelope['sha256']:return False
         value=json.loads(payload)

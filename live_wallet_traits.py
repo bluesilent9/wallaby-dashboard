@@ -4,8 +4,8 @@ from policy_accounts import signing_account
 
 def watch_flags(catalog,registry):
     if registry is None:return {}
-    active={n['id'] for n in registry.snapshot()['nodes'] if n.get('connected') and n.get('rpc_ready')}
-    inventories=[w for node,inv in list(registry.hub.inventories.items()) if node in active and inv.get('complete') for w in inv.get('wallets',[])]
+    active={n['id'] for n in registry.presence()['nodes'] if n.get('connected') and n.get('rpc_ready')}
+    inventories=[w for node,inv in list(registry.hub.inventories.items()) if node in active and (inv.get('complete') or inv.get('loaded_complete')) for w in inv.get('wallets',[])]
     result={}
     for wallet in catalog['wallets']:
         keys={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet['raw']['descriptors']}
@@ -30,8 +30,8 @@ def annotate(report,catalog,registry):
 def disc_flags(catalog,registry):
     """Temporary aliases do not establish a persistent node copy."""
     if registry is None:return {}
-    active={n['id'] for n in registry.snapshot()['nodes'] if n.get('connected') and n.get('rpc_ready')}
-    inventories=[w for node,inv in list(registry.hub.inventories.items()) if node in active and inv.get('complete') for w in inv.get('wallets',[])]
+    active={n['id'] for n in registry.presence()['nodes'] if n.get('connected') and n.get('rpc_ready')}
+    inventories=[w for node,inv in list(registry.hub.inventories.items()) if node in active and (inv.get('complete') or inv.get('loaded_complete')) for w in inv.get('wallets',[])]
     result={}
     for wallet in catalog['wallets']:
         keys={NodeWalletLoader.descriptor_key(r['desc']) for r in wallet['raw']['descriptors']}

@@ -50,7 +50,12 @@ class Loading(unittest.TestCase):
         elif method=='listsinceblock':reply['result']={'transactions':[],'lastblock':'1'*64}
         else:reply['error']={'code':-32601,'message':'Unknown fixture method'}
         payload=json.dumps(reply).encode();self.send_response(200);self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload)
-    core=ThreadingHTTPServer(('127.0.0.1',0),Handler);thread=threading.Thread(target=core.serve_forever);thread.start();cookie=self.root/'.cookie';cookie.write_text('fixture:fixture');stop=self.root/'stop';agent=__import__('nodes').create_agent_server(self.pool.nodes,0,self.pool.profile_gate,ipv6=True);agent.start();done=threading.Event()
+    class CoreServer(ThreadingHTTPServer):
+      address_family=__import__('socket').AF_INET6
+      def server_bind(self):
+        self.socket.setsockopt(__import__('socket').IPPROTO_IPV6,__import__('socket').IPV6_V6ONLY,0)
+        super().server_bind()
+    core=CoreServer(('::',0),Handler);thread=threading.Thread(target=core.serve_forever);thread.start();cookie=self.root/'.cookie';cookie.write_text('fixture:fixture');stop=self.root/'stop';agent=__import__('nodes').create_agent_server(self.pool.nodes,0,self.pool.profile_gate,ipv6=True);agent.start();done=threading.Event()
     def scan(session,preserve_events=False):session.job_result={'ok':True};session.emit({'type':'complete'});done.set()
     process=subprocess.Popen([sys.executable,str(ROOT/'tests/agent_runner.py'),str(Path(source).resolve()),str(cookie),str(core.server_port),str(agent.server_port),str(stop)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     try:

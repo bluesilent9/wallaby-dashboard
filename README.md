@@ -2,19 +2,121 @@
 <h1 align="center">Wallaby Bitcoin Dashboard</h1>
 <p align="center">Bitcoin tools, wallet insights and family workflows.</p>
 
-**V1 Build 33 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev33_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
+**V1 Build 56 · Development DEB available for Ubuntu/Kubuntu 26.04 LTS.** [Download the DEB](dist/wallaby-dashboard_1.0.0~dev56_all.deb) and verify [SHA256SUMS.txt](dist/SHA256SUMS.txt). This resets the public version numbering following the earlier V156/V157 work; it does not reset saved data formats.
 
 [Program page](https://bluesilent9.github.io/wallaby-suite/dashboard/) · [Wallaby Suite](https://bluesilent9.github.io/wallaby-suite/) · [Issues](https://github.com/bluesilent9/wallaby-dashboard/issues) · [User guide](docs/USER_GUIDE.md)
 
-## Build 33
+## Build 56
 
-- The reported MAC address continues to identify a node across hostname/IP changes. Changed direct-peer IPv6 routes now generate a fresh public invitation automatically for the same node identities, after current inventories and node readiness are checked. Original approvals/signatures are not reused; late delivery/recovery results remain authoritative and stop replacement invitations.
-- Delayed permission polling no longer withdraws already-offered reviews; current local Agent exclusions and approval remain authoritative. Wallet synchronisation stays independent of users and Ownership assignments. Nodes explicitly distinguishes blockchain readiness from wallet inventory, permission and outstanding-request checks.
-- Background discovery and restored/completed jobs no longer pull the browser back to Ownership. Explicitly followed foreground Ownership jobs still return to their correct stage. A dismissible yellow reminder reappears while discovered wallets lack ownership and clears when assignments are complete.
-- Nodes status processing reuses bounded, validated public-policy identities instead of repeatedly parsing the same descriptors under shared locks. The profiled three-node fixture improved from 4.65 seconds to 0.15 seconds per snapshot; changed records still revalidate.
-- Use **Agent V2 Build 29** for the matching authenticated-session revision reset and local request restoration fixes. No Agent source is changed by this Dashboard update.
+Wallet Builder progress cards distinguish participation, policy installation and verified physical backups. Signers start red, become amber after participation, and turn green only with the relevant authenticated completion evidence. The combined wallet remains amber until every signer and final Core confirmation is complete. Existing setup evidence and wallet files are unchanged.
 
-See [Build 33 coordination details](docs/BUILD33_SYNC_ROUTES.md).
+## Build 55
+
+An unrelated unloaded Core wallet directory no longer discards the inventory of loaded wallets. Archive choices and live wallet traits can use a successfully collected loaded-wallet inventory. Missing-wallet synchronisation still requires the full inventory: unloaded directories are unknown, never proof of a missing wallet. Background discovery collects loaded wallets without dropping previously saved accounts for unloaded folders. Strict full scans still report unknown unloaded folders. An installed ceremony waiting for disc backups can refresh its loaded wallet information during foreground activity. Explicit inventory refreshes run as foreground work. No setup, approval or existing wallet is deleted or regenerated.
+
+## Build 54
+
+Login and routine presentation use read-only profile snapshots and lightweight node presence instead of repeatedly rebuilding synchronisation history. Saved-input restoration performs file verification/copying outside the profile write lock. Explicit Wallet Builder identity checks pause routine discovery and inventory work, while Agent exchanges continue serving replies and urgent control requests. Nodes contains coloured cards only; detailed issue/activity lists are removed and operational diagnostics remain downloadable.
+
+## Build 53
+
+Combined signer-and-policy wallets retain one logical Dashboard name from Wallet Builder, including vaults. Signer visibility now binds the local private-key-enabled account to its signed setup role, rather than mistaking the public keys of the other cosigners for locally held private keys. Distinct combined accounts on one Agent have distinct signing-request identities. Missing nodes receive public-only policy sync offers, never private-role clones. The wallet hover lists the signed role names and visibility alongside the quorum. Disconnected and watch-only copies do not count as visible signers. No private descriptors are requested.
+
+## Build 52
+
+Nodes now shows distinct coloured cards and current issues or outstanding reviews only. Completed/superseded communication history stays in the downloadable diagnostic log.
+
+Wallet creation now attaches the exact new proposal hash returned by creation, rather than treating the last alphabetically stored hash as the newest setup. Workspace reconstruction includes only sessions bound to that workspace; old setup evidence and cancellation records are retained. This fixes duplicate approval stages caused by an older setup being linked into a later creation.
+
+The Dashboard accepts the Agent’s combined encrypted key-and-policy wallet layout: the monitoring and signing wallet names may be identical. Private keys remain local. Archive eligibility continues to require a connected Agent’s persistent private wallet and fresh public verification; queued disc work is not a Dashboard exclusion.
+
+## Build 51
+
+Archive this Wallet always opens an Agent chooser before sending a request, including when only one compatible private-wallet holder is connected. Nothing is preselected. Cancel and Escape send no request. Connected Agents that cannot supply the backup remain listed with a reason, including watch-only copies, an incomplete inventory or missing archive capability. Only explicitly selected eligible sources are queued, and the server still rechecks the wallet and connection before accepting them.
+
+Archive creation/cancellation remains independent of Wallet Builder: active proposals, signer keys, approvals and disc proofs are unchanged. Cancelling an archive request preserves the source wallet and any unrelated disc members; a started burn still finishes verification and any required physical cleanup stays locally authorised.
+
+This fixes direct archive destination selection. Receiving an encrypted wallet from another Agent into protected RAM solely for burning is a separate Agent-to-Agent handoff. It is not implemented by offering a watch-only copy as a full wallet or by ordinary wallet synchronisation. The Dashboard will need the Agent chat's exact new protocol before enabling that path.
+
+## Build 50
+
+A temporary Agent reconnect no longer stops policy delivery after its signing contributions are known. An interrupted setup can recover after a Dashboard restart when its active creator workspace is still bound, every original signed role contribution is available, the proposal is unexpired, and retained policy/approvals independently validate. Recovery reconstructs the same exact public policy and resumes policy approval only; it never sends a replacement participation/key-generation request.
+
+Existing approvals, producer routes, policy hashes, local Core confirmations and required disc-backup receipts remain intact. Denied, cancelled, expired, altered or unbound setups stay stopped. Partial restart recovery waits for the remaining already-generated signed contributions; it does not assume missing private keys can be recreated. Existing signed outcomes and cancellation authority are retained.
+
+Keep the Agents' protected workspaces open while installing this Dashboard update. The Agent's matching participation session must still exist in protected RAM for local policy approval to continue. No Agent protocol change is introduced. This does not prove that any particular live Agent still holds its keys; the read-only status check in the Agent chat establishes that before resuming the user's test.
+
+## Build 49
+
+The editable vault-height field now has dark text on an explicit white background. Its scoped styling takes precedence over the general Wallet Builder input rules, including focused and narrow-screen layouts. Calculation, exact-height edits, local/UTC estimates, copy and existing setup data are unchanged.
+
+## Build 48
+
+Ownership now distinguishes a logical wallet from its internal signing accounts. Empty BIP84 signer accounts are identified from authenticated public creation contributions, even before a monitor appears. Empty unfinished public policies wait until the producing nodes confirm completion. Completed policies appear once across nodes with the proposed readable wallet name; existing user-selected Dashboard names and actual Core filenames stay intact.
+
+Background discovery removes previously cached, proven-empty internal entries and their obsolete Ownership rows. Missing history, receipts, sends or vault-funding evidence prevent that cleanup. A newly observed real transaction preserves the account and its existing ownership. The shared public policy, role routes, keys, creation approvals, disc receipts, cancellation requests and real sync outcomes are never rewritten by this presentation cleanup.
+
+Build 46's signer-sync withdrawal remains included. The Agent chat provides the separate local guard against signer transfers. To abandon an unfinished test, use Wallet Builder cancellation and approve the correctly bound cleanup locally on each Agent. Dashboard cache cleanup does not delete Core wallets or erase the cancellation evidence needed by those Agents.
+
+## Build 47
+
+Calculate vault height still starts from 7:00 AM on the selected local date. The resulting block-height field is editable. Leaving that field recalculates the most-likely and 99% crossing estimates in the selected timezone and UTC for the exact entered height. Copying uses plain digits.
+
+Only whole future block heights are accepted. While a change is awaiting its estimate, creation/refresh submission remains disabled; outdated responses cannot validate a newer edit. The chosen height and estimates stay in the saved Wallet Builder draft. This applies to single-signature and multisignature vault creation and vault refreshes; existing approved creation ceremonies are unchanged. No Agent update is required.
+
+## Build 46
+
+Separate signer accounts are never offered as ordinary missing-wallet replicas. Detection compares the actual BIP84 public branches with authenticated creation contributions or a known shared public policy. Core's additional default legacy, nested-SegWit and Taproot descriptors no longer prevent that match. Wallet names do not establish signer identity.
+
+Previously queued signer invitations are withdrawn from both Agents' authoritative sync lists, including after reconnect. Their original request bindings, signed previews and actual operation outcomes remain recorded; delayed Agent results are still accepted. This changes no creation proposal, role assignment, approval, backup receipt, keys or workspace. Ordinary missing-wallet synchronisation and shared public-policy monitoring remain available.
+
+Install this as an upgrade while keeping the existing Dashboard profile. No cancellation or reset of an in-progress creation is required. No new Agent protocol or Agent change is required for this correction. Withdrawal does not undo a transfer already authorised and completed locally.
+
+## Build 45
+
+A connected Agent with a complete matching persistent private-key wallet inventory can receive an archive request while its chain status is Checking, busy with wallet synchronisation, downloading, or unavailable. Blockchain readiness is not required to request a local wallet backup. Disconnected/conflicting nodes, watch-only wallets, disc-loaded accounts, extinct wallets and scanning wallets remain excluded.
+
+Before queueing, Dashboard still obtains fresh public wallet information and descriptors from the selected Agent, verifies the actual private-key capability and exact reviewed wallet identity, and requires local Agent authorisation. A refused live query never creates an archive request. Existing wallet-creation drafts, proposals, role keys, receipts and cancellation state are not modified by archive selection or queueing.
+
+The Agent chat is separately fixing its local busy gates during idle creation/approval waits. That change may still be needed for a running Agent to answer the fresh read-only checks. This Dashboard build adds no new Agent protocol and requires no setup cancellation or configuration reset.
+
+## Build 44
+
+Wallet Builder cards show the wallet icon first and disc icon last. Choosing encrypted physical-disc storage updates the icon immediately, including on ordinary new-wallet proposals. Participation and policy/backup approval cards show the same wallet/vault/multisig/disc indicators.
+
+An active Wallet Builder remains open when an Agent is busy, its node health is being checked, or it reconnects. Read-only ceremony progress remains available without ready nodes. New setup/discovery actions still require ready nodes, and completion stays disabled until every producing Core node confirms its monitor. Drafting immediately after starting a workspace is also covered, before the general family poll sees that workspace.
+
+The Agent chat handles its separate Authorise layout, passphrase retype prompts and adding unrelated archive requests to Disc Operations. This Dashboard build changes no Agent code or approval protocol.
+
+## Build 43
+
+Returning users with saved Ownership data now land on Wallets at login; new users and fresh Dashboard profiles start at Ownership. Saved Wallets, Address Book, reports, Vaults and Salary views remain available while node discovery refreshes data, including when no node is connected. Current-state checks still protect new transactions and calculations.
+
+Opening Ownership no longer restarts a balance run solely because its latest fingerprint is pending. Ownership, descriptor and balance jobs leave the chosen page in place. Terminal Activity is available for progress or questions and opens only when selected. An explicit CGT run retains its existing report workflow.
+
+A separate last-verified balance snapshot survives incomplete replacement traces and is included in profile backups. Old data is labelled as saved. A current BTC/AUD quote can refresh Wallets values and hypothetical gains without changing Bitcoin quantities, cost bases, ownership or saved tax reports, and without a node connection.
+
+## Build 42
+
+Node health checks now wait at least 15 seconds between attempts when an Agent is busy with protected local work. Busy replies do not count as a fresh verified node result or keep a stale node marked ready. This prevents repeated browser/status polls from flooding the same busy Agent.
+
+Wallet Builder and Transaction Builder workspace polling now clear their own temporary error message after a successful retry. Unrelated approval, validation and concurrent-edit warnings remain visible. The Agent's separate local creation failure is being investigated in its own build; this Dashboard fix does not authorise or replay local wallet operations.
+
+## Build 41
+
+Background discovery now recognises unchanged wallet policies and transaction history separately from live node routes and watch-only status. A wallet rename, hostname change or changed connected replica updates the existing page without invalidating verified ownership, balances, reports or Address Book access. Discovery does not redirect the user when no ownership action is needed. New wallets and changed transaction/policy facts still require the normal checks.
+
+An active rename keeps its exact original source names, destination names, request IDs, receipts and history. Discovering a partly renamed replica does not restart or reverse that operation. A separate presentation revision refreshes current wallet details without changing the calculation fingerprint. No Agent update is required for this fix.
+
+## Build 40
+
+Wallets has one **Pending Wallet Requests** table below its cards, combining extinction, rename, archive, old-disc cleanup and builder-cancellation delivery. It shows Wallet / Process, Node, Request, Status and Action; completed operations remain in saved history rather than keeping the table visible. The previous separate lists and blocking cancellation-progress overlay are removed.
+
+Rename cancellation stops outstanding requests at any unfinished stage and retains completed/uncertain outcomes without renaming anything back. Make Extinct cancellation requires a connected matching private-key wallet; multisig requires **every signing role**, not just the spending threshold. The Dashboard rechecks public descriptors and private-key-enabled status through read-only RPC when submitted. Zero-balance eligibility to start extinction is unchanged. Once cancellation responses finish, ordinary synchronisation is no longer suppressed by the cancelled extinction.
+
+Archive cancellation uses the new `wallet_archive_cancel_v1` capability. Dashboard retains a signed-result-tracked cleanup task. An unused request can be removed; any started burn and verification must finish, unrelated wallets on a mixed disc must be preserved, and all created discs require local destruction confirmation. Until the Agent is updated, the task remains visibly pending; Dashboard does not claim physical cleanup. **Agent changes are required for archive cancellation only.** See the [Agent handoff](docs/BUILD40_CANCELLATION_PROTOCOL.md).
+
+Profiles retain all operation and cancellation records. Earlier independent names, rename lineage, portable-state filters and archive/extinction safeguards remain included.
 
 ## Build 32
 
@@ -216,3 +318,5 @@ That Build 8 integration boundary is completed in Build 9 with Agent Build 7.
 ## Build 9
 
 The Dashboard verifies and relays a frozen signed public wallet snapshot bound to both peers, addresses, wallet policy and a fresh challenge. Only one pair is dispatched at a time, alphabetically. Temporary synchronisation busy responses preserve node status and delay inventory refresh. Duplicate delivery is idempotent; expired snapshots are not renewed, and failed/denied operations require an explicit new attempt. Requests, previews and outcomes survive restart/profile backup. Private wallet files travel directly between Agents after local approval, never through the Dashboard. Existing tax and Balance Trace calculations are unchanged.
+
+The combined pending-request table includes remembered offline nodes. Obsolete nodes can be forgotten after disconnection, retaining applied history and leaving portable disc work available for reassignment to a matching loaded Agent. Same-wallet transfers were checked: new-address cards start at zero, sending cards are red, receiving and network-fee cards green, and a maximum transfer accounts for its fee without adding the received amount back to the source card.

@@ -123,7 +123,7 @@ V1 Build 12 does not establish that this accounting convention has ATO approval.
 
 In Ownership, Core descriptor wallets have an editable name field. Suggestions follow the earlier CSV naming rules: underscores become spaces, words are title-cased, and “Wallet” is appended if it is not already a word in the name. For example, `family_savings` suggests `Family Savings Wallet`; `emergency_wallet` suggests `Emergency Wallet`. Edit the suggestion and select **Verify Balances**. Existing custom labels are preserved.
 
-Only live descriptor wallets can be renamed. Historical group labels and exchange names remain fixed. Names must be non-empty and unique across the loaded wallets and exchanges. The selected label is shared through config.cfg and used in Address Book, balances and CGT history. Changing a label invalidates an existing report, which can then be rebuilt with that label.
+Only live descriptor wallets can be renamed. Historical group labels and exchange names remain fixed. Names must be non-empty and unique across the loaded wallets and exchanges. The selected label is shared through config.cfg. In Wallets, **Rename** has separate **Wallet Filename** and **Wallet Dashboard Name** fields. Changing only the Dashboard name updates current wallet displays, Ownership, Address Book and Vaults locally, without Agent requests or invalidating saved balance/trace calculations. Previously generated tax reports retain their calculation labels. Changing the filename requests local Agent approval for holding node copies and replacement archive discs. Watch-only node copies retain `_watch`. Successful filename confirmations preserve the Dashboard name.
 
 These are display aliases: Bitcoin Core’s wallet name, descriptor strings, stable wallet IDs and saved scan fingerprint do not change. Reloading unchanged node descriptors or rerunning Ownership retains the saved alias. RPC requests always retain the original wallet name for each node.
 
@@ -378,3 +378,37 @@ Save Transaction Template becomes available after the first payday has a complet
 The annual network-fee reserve uses the first payday's current size/rate multiplied by the number of paydays, plus any manual fee reserve. It is a planning estimate; future transactions can use different UTXOs and fees. Card positions, sources, users, targets, shares and fee rates save with the profile.
 
 Balance Sources are acquisition-cost evidence. A Bitaroo statement reference instead of a TXID is valid when that is the evidence used for the acquisition; it does not mean the node is missing the wallet. Internal ACCOUNT references are shown as statement filename, page and account record. Temporary server paths are omitted. Source display changes do not change ownership or tax calculations.
+
+## What a portable profile retains
+
+The profile includes persistent users, ownership, uploaded records, public wallet and node identities, saved balance and trace evidence, reports, wallet creation sessions, rename history, operation queues, notifications, templates, public vault policies, reserved addresses and fetched tax tables. Filename rename operations retain old/new names, matching public descriptors, Agent targets and confirmed results, allowing old copies to be recognised after restoration. Dashboard label changes retain their own dated old/new-name history.
+
+Salary Builder is excluded from profile exports. A standalone initial Transaction Builder diagram is excluded too. Once a transaction reaches a later stage, the profile keeps its diagram along with its PSBT and signing progress. Any outstanding Agent operation, imported vault proposal, cancellation delivery or linked renewal is retained conservatively. Wallet Builder drafts remain saved. These exclusions affect only the exported copy; saving a profile does not erase the live draft.
+
+Operational logs and live browser/Agent connections are not portable profile state. Nodes must reconnect after restoration. Profiles contain public wallet information and transaction artifacts, not node private-key wallets.
+
+## Cancelling wallet requests
+
+Wallets shows one Pending Wallet Requests table below the cards while work remains. Wallet / Process, Node, Request, Status and Action identify the outstanding operation. Green rows show completed steps within a process, amber shows work awaiting progress, and red indicates an offline Agent. Completed/cancelled operations remain in the saved history and disappear from this pending list.
+
+Cancel Rename stops outstanding approvals without undoing applied names. Make Extinct can be cancelled while a matching private-key wallet remains visible; multisig requires every signer, not just its spending quorum. The Dashboard rechecks visibility on submit. The extinction balance checks for starting the operation are unchanged. A watch-only copy cannot restore deleted private keys.
+
+Archive cancellation removes an unused request. A burn already started must finish verification. The Agent then handles preservation of unrelated disc members and local confirmation of physical cleanup. This requires the Agent archive-cancellation update; until installed, the Dashboard keeps the request pending and reports the requirement. Builder cancellation delivery appears in the same list instead of a blocking progress overlay.
+
+Pending Wallet Requests includes remembered offline nodes as well as connected ones. Disc reviews that can be carried out elsewhere offer an Agent selector when the matching archive is loaded. An in-progress burn cannot be moved to another machine. On Nodes, disconnect an obsolete Agent before choosing Delete Node. This removes its Dashboard requests and remembered route; it does not delete wallets on that machine. Actual completed history remains in the Dashboard profile.
+
+When sending to a new address on the same wallet, the new-address card starts at zero. The original card is red, the receiving card and Network Fee card are green. A maximum payment leaves the original card at zero after its fee; the receiving card shows the transferred amount. These are proposed transaction amounts, not proof of broadcast or confirmation. Other unspent or locked funds may remain in the wallet.
+
+
+Background checks during a rename update wallet connection details in place. If the policy and transaction history are unchanged, saved ownership and balances stay available and your page stays open. Pending rename requests retain their original reviewed names and continue independently. Newly discovered wallets still need ownership assignments; changed transaction history still needs verification.
+
+
+Returning users open Wallets after login when their profile has saved Ownership data. New users begin on Ownership. Saved pages remain available without connected nodes; a message identifies saved data while it is being checked. Merely opening Ownership does not restart balance verification. Assigning an owner still starts verification, and the refresh control can request it deliberately. These jobs run without opening Terminal Activity or moving you on completion. Use Terminal Activity or its question indicator if the process needs an answer. New transaction creation/signing still requires a ready connected node and current verification.
+
+
+Wallet Builder keeps an active creation open while Agents finish local work or reconnect. A progress message explains when ready Agents are unavailable. Selecting physical-disc storage adds a disc icon immediately; card icons keep Wallet first and Disc last. Later approval cards show the same indicators. Completion requires all producing Core confirmations.
+
+To request an unrelated existing wallet for the same Agent's archive queue, use Wallets → its hover information → Archive this Wallet, and select the Agent with that persistent private-key wallet. Review the request locally on that Agent. The Agent controls which compatible queued wallets may share a disc; different signers of the same multisig must remain on separate discs. The updated Agent Disc Operations workflow is maintained in the Agent chat.
+
+
+Archive this Wallet does not require a fully checked or synchronised blockchain. A connected Agent must still report a complete matching persistent private-key wallet, and fresh public checks must succeed before the request is queued. The Agent must approve locally. Idle waits during another wallet's creation can therefore accept an unrelated wallet archive without cancelling the setup, once the Agent allows those read-only queries. Install Dashboard upgrades with existing data retained; do not cancel an unfinished creation to apply this fix.

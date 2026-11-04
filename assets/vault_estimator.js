@@ -14,19 +14,35 @@ function timezoneMap(c,select,details,onSelect){
 }
 
 function view({el,api,onHeight,initial=null,onChange=()=>{}}){
- let result=null,revision=0,year=0,details={},initialZone=initial?.zone||Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
+ let result=null,heightDraft=initial?.heightDraft??null,revision=0,year=0,details={},initialZone=initial?.zone||Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
  const date=el('input',{type:'date',value:initial?.date||'','aria-label':'Vault target date'}),zone=el('select',{'aria-label':'Vault target timezone'}),map=el('div'),output=el('div',{class:'vault-estimate-result',role:'status'}),calculate=el('button',{type:'button',class:'button outline',disabled:true},'Calculate vault height');
- const box=el('section',{class:'wallet-vault-estimator'},el('h3',{},'Choose the vault unlock date'),el('p',{class:'subtle'},'The target is 7:00 AM on your selected local date. The calculated height has at least a 99% chance of having been passed by then under the block-arrival model.'),el('div',{class:'form-grid'},el('label',{},'Target date',date),el('label',{},'Timezone',zone)),map,calculate,output,el('p',{class:'subtle'},'Estimates assume ten-minute average block arrivals. Hashrate and difficulty changes can shift the outcome; 99% is a model probability, not a guarantee.'));
+ const box=el('section',{class:'wallet-vault-estimator'},el('h3',{},'Choose the vault unlock date'),el('p',{class:'subtle'},'The target is 7:00 AM on your selected local date. Calculate a starting height with at least a 99% model chance of having been passed by then. You can then edit the block height; leaving the field updates its estimated unlock times.'),el('div',{class:'form-grid'},el('label',{},'Target date',date),el('label',{},'Timezone',zone)),map,calculate,output,el('p',{class:'subtle'},'Estimates assume ten-minute average block arrivals. Hashrate and difficulty changes can shift the outcome; 99% is a model probability, not a guarantee.'));
  const button=(label,cls,fn)=>el('button',{type:'button',class:'button '+cls,onclick:fn},label);
- function invalidate(){revision++;result=null;onHeight(null);output.replaceChildren();onChange();}
+ function invalidate(){revision++;result=null;heightDraft=null;onHeight(null);output.replaceChildren();onChange();}
  async function zones(){const rev=revision,yr=Number(date.value.slice(0,4))||new Date().getFullYear();calculate.disabled=true;try{const data=await(await api('/api/wallet-builder/timezones?year='+yr)).json();if(rev!==revision)return;details=data.details;year=yr;const chosen=zone.value||initialZone;zone.replaceChildren(...data.timezones.map(z=>el('option',{value:z},details[z].label)));zone.value=data.timezones.includes(chosen)?chosen:'UTC';map.replaceChildren(timezoneMap({el,button,api},zone,details,invalidate));calculate.disabled=false;}catch(e){output.replaceChildren(el('p',{class:'error-banner'},e.message));}}
  date.addEventListener('change',()=>{invalidate();if(Number(date.value.slice(0,4))!==year)zones();});zone.addEventListener('change',invalidate);
  function stamp(value,z){return new Intl.DateTimeFormat('en-GB',{timeZone:z,dateStyle:'full',timeStyle:'long',hourCycle:'h23'}).format(new Date(value));}
- calculate.addEventListener('click',async()=>{invalidate();const rev=revision;calculate.disabled=true;try{const r=await(await api('/api/wallet-builder/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:date.value,timezone:zone.value})})).json();if(rev!==revision)return;result=r;onHeight(r.height);onChange();showResult(r);}catch(e){if(rev===revision)output.replaceChildren(el('p',{class:'error-banner'},e.message));}finally{calculate.disabled=false;}});
- function showResult(r){const copy=button('Copy block height','small outline',async()=>{try{await navigator.clipboard.writeText(String(r.height));copy.textContent='Copied';}catch{copy.textContent='Select the number to copy';}});copy.setAttribute('aria-label','Copy calculated block height');output.replaceChildren(el('p',{class:'subtle'},'Calculated vault unlock block height'),el('div',{class:'vault-height-code'},el('code',{},Number(r.height).toLocaleString('en-AU')),copy),...[
- ['99% target · '+r.target_timezone,stamp(r.target_utc,r.target_timezone)],['99% target · UTC',stamp(r.target_utc,'UTC')],['Most likely · '+r.target_timezone,stamp(r.most_likely_utc,r.target_timezone)],['Most likely · UTC',stamp(r.most_likely_utc,'UTC')]
- ].map(([label,value])=>el('p',{},el('strong',{},label+': '),value)),el('p',{class:'subtle'},'Calculated from '+r.source+' at height '+Number(r.current_height).toLocaleString('en-AU')+'.'));}
- async function restore(){await zones();if(initial?.result&&initial.result.target_timezone===zone.value){result=initial.result;onHeight(result.height);showResult(result);}}
- queueMicrotask(restore);return {element:box,valid:()=>!!result,invalidate,exportState:()=>({date:date.value,zone:zone.value,result})};
+ calculate.addEventListener('click',async()=>{invalidate();const rev=revision;calculate.disabled=true;try{const r=await(await api('/api/wallet-builder/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:date.value,timezone:zone.value})})).json();if(rev!==revision)return;result=r;heightDraft=String(r.height);onHeight(r.height);onChange();showResult(r);}catch(e){if(rev===revision)output.replaceChildren(el('p',{class:'error-banner'},e.message));}finally{calculate.disabled=false;}});
+ function showResult(r){
+  const input=el('input',{type:'number',step:1,min:Number(r.current_height)+1,max:499999999,value:heightDraft??String(r.height),'aria-label':'Vault unlock block height'}),times=el('div'),message=el('p',{class:'subtle',role:'status'});
+  const copy=button('Copy block height','small outline',async()=>{try{await navigator.clipboard.writeText(String(Number(input.value)));copy.textContent='Copied';}catch{copy.textContent='Select the number to copy';}});copy.setAttribute('aria-label','Copy calculated block height');
+  function showTimes(value){times.replaceChildren(...[
+   [(value.manual_height?'99% estimated by':'99% target')+' · '+value.target_timezone,stamp(value.target_utc,value.target_timezone)],[(value.manual_height?'99% estimated by':'99% target')+' · UTC',stamp(value.target_utc,'UTC')],['Most likely · '+value.target_timezone,stamp(value.most_likely_utc,value.target_timezone)],['Most likely · UTC',stamp(value.most_likely_utc,'UTC')]
+  ].map(([label,value])=>el('p',{},el('strong',{},label+': '),value)),el('p',{class:'subtle'},'Calculated from '+value.source+' at height '+Number(value.current_height).toLocaleString('en-AU')+'.'));}
+  input.addEventListener('input',()=>{revision++;result=null;heightDraft=input.value;onHeight(null);times.replaceChildren();message.className='subtle';message.textContent='Leave the block height field to update the estimates.';copy.disabled=!/^[0-9]+$/.test(input.value);onChange();});
+  input.addEventListener('blur',async()=>{
+   if(result&&Number(input.value)===result.height)return;
+   const rev=++revision,value=input.value;result=null;onHeight(null);times.replaceChildren();onChange();
+   if(!/^[0-9]+$/.test(value)||!Number.isSafeInteger(Number(value))){message.textContent='Enter a whole future block height.';message.className='error-banner';return;}
+   message.className='subtle';message.textContent='Updating unlock estimates…';
+   try{const next=await(await api('/api/wallet-builder/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({height:Number(value),timezone:zone.value})})).json();if(rev!==revision)return;result=next;heightDraft=String(next.height);input.value=heightDraft;onHeight(next.height);message.textContent='';showTimes(next);onChange();}
+   catch(e){if(rev===revision){message.textContent=e.message;message.className='error-banner';}}
+  });
+  output.replaceChildren(el('p',{class:'subtle'},'Vault unlock block height'),el('div',{class:'vault-height-code'},input,copy),message,times);
+  if(result)showTimes(r);else message.textContent='Leave the block height field to update the estimates.';
+ }
+
+ async function restore(){await zones();if(initial?.result&&initial.result.target_timezone===zone.value){result=initial.result;heightDraft=String(result.height);onHeight(result.height);showResult(result);}else if(heightDraft!==null){showResult({height:heightDraft,current_height:0});}}
+ queueMicrotask(restore);return {element:box,valid:()=>!!result,invalidate,exportState:()=>({date:date.value,zone:zone.value,result,heightDraft})};
 }
 return {view};})();

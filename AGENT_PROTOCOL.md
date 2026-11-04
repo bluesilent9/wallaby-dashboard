@@ -128,3 +128,5 @@ Dashboard V1 Build 6 limits delivered/running work to two commands per Agent con
 ## Build 6 background scheduling
 
 Read-only calculation workers use a private loopback bridge with a per-workspace bearer secret and a strict method allowlist. Core cookies and private keys never enter worker configuration. Foreground calls use priority 0; fee observations use priority 100. Queued foreground work precedes background work, and background calls wait while foreground commands are queued or executing. Already executing RPCs are not preempted. No Agent wire-protocol change or signing permission is required.
+
+Build 34 retirement replaces new wallet-retirement requests with the two-phase wallet_retirement_v3 contract in [docs/BUILD34_EXTINCTION_PROTOCOL.md](docs/BUILD34_EXTINCTION_PROTOCOL.md). No v2 execution fallback is provided.

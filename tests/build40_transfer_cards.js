@@ -1,0 +1,12 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path'),root=process.argv[2];
+const V=require(path.join(root,'builder_values.js')),src=fs.readFileSync(path.join(root,'builder.js'),'utf8');
+const state={edges:[{from:'original',to:'receive-new',amount_sats:'99999000'},{from:'original',to:'network-fee',fee_rate:'1',amount_sats:'0'}],estimate:{confirmed_balances_sats:{original:'100000000'},wallet_fees_sats:{original:'1000'},total_fee_sats:'1000'}};
+const c={d:state,V,FEE_ID:'network-fee',btc:x=>x,cash:x=>x};vm.createContext(c);
+vm.runInContext(src.slice(src.indexOf('function colours(id)'),src.indexOf('function options(')),c);
+vm.runInContext(src.slice(src.indexOf('function shownBalance(w)'),src.indexOf('function ',src.indexOf('function shownBalance(w)')+10)),c);
+assert.equal(c.shownBalance({id:'original',btc:'1',aud:'100000'}).amount,'0.00000000');
+assert.equal(c.shownBalance({id:'receive-new',btc:'0',aud:'0',new_address:true}).amount,'0.99999000');
+assert(c.colours('original').includes('transaction-sender'));assert(c.colours('receive-new').includes('transaction-receiver'));assert(c.colours('network-fee').includes('transaction-receiver'));
+assert.equal(BigInt(V.balanceSats('1')),BigInt(state.estimate.total_fee_sats)+V.balanceSats(c.shownBalance({id:'receive-new',btc:'0',new_address:true}).amount));
+state.edges=[];state.estimate=null;assert.equal(c.shownBalance({id:'receive-new',btc:'0',new_address:true}).amount,'New Address');
+console.log('PASS: same-wallet new-address cards keep independent balances, source reaches zero after fee, recipient and fee are green, source red; untouched destination shows New Address.');

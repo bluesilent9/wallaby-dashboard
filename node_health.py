@@ -9,17 +9,22 @@ def classify(info):
     return {'state':'downloading' if downloading else 'ready','label':'Downloading Blockchain' if downloading else 'Connected','blocks':blocks,'headers':headers,'chain':'main','pruned':bool(info.get('pruned')),'pruneheight':info.get('pruneheight',0),'bestblockhash':info.get('bestblockhash'),'checked_at':time.monotonic()}
 
 class Health:
-    def __init__(self,registry):self.registry=registry;self.values={};self.pending=set();self.closed=False
+    def __init__(self,registry):self.registry=registry;self.values={};self.pending=set();self.attempted={};self.closed=False
     def refresh(self,claims):
+        active={c['token'] for c in claims}
+        self.attempted={t:stamp for t,stamp in self.attempted.items() if t in active}
         for c in claims:
             token=c['token'];last=self.values.get(token,{})
             if self.registry.hub.transfers.is_busy(c['node_id']):continue
-            if self.closed or token in self.pending or time.monotonic()-last.get('checked_at',0)<15:continue
+            if self.closed or token in self.pending or time.monotonic()-last.get('checked_at',0)<15 or time.monotonic()-self.attempted.get(token,float('-inf'))<15:continue
+            # Busy replies do not refresh the last verified health result. Still
+            # throttle attempts so browser polling cannot create a retry storm.
+            self.attempted[token]=time.monotonic()
             self.pending.add(token);threading.Thread(target=self.poll,args=(dict(c),),daemon=True).start()
     def poll(self,c):
         token=c['token'];node=c['node_id']
         try:
-            row=self.registry.rpc.call(node,'getblockchaininfo',[],timeout_seconds=25,consume=True,priority=1)
+            row=self.registry.rpc.call(node,'getblockchaininfo',[],timeout_seconds=25,consume=True,priority=0 if self.registry.hub.foreground_active(node) else 10)
             if (row.get('error') or {}).get('code')=='synchronisation_busy':return
             if row['state']!='succeeded':raise ValueError(str((row.get('error') or {}).get('message',row['state'])))
             value=classify(row['result'])

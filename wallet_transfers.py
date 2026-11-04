@@ -98,7 +98,7 @@ class Transfers:
             ident=secrets.token_hex(32)
             for old in rows:
                 row={k:copy.deepcopy(old[k]) for k in ('kind','node_id','peer_id','direction','descriptor_id','public_wallet','source_has_private_keys','earliest_timestamp','requires_blockchain_redownload')}
-                row.update(transfer_id=ident,state='pending',retry_of=transfer,created_utc=self.hub.utc(),public_wallet=copy.deepcopy(wallet['raw']),source_has_private_keys=wallet['private_keys_enabled']);
+                row.update(transfer_id=ident,state='pending',retry_of=transfer,created_utc=self.hub.utc(),public_wallet=copy.deepcopy(wallet['raw']),source_has_private_keys=wallet['private_keys_enabled'] and not __import__('policy_accounts').shared(wallet['raw']));
                 if wallet.get('subwallets'):row['subwallets']=copy.deepcopy(wallet['subwallets'])
                 state['requests'][digest({'transfer':ident,'direction':row['direction']})]=row
         return {'queued':True,'transfer_id':ident}
@@ -120,7 +120,7 @@ class Transfers:
         result=[]
         for ident,rows in self.pairs(state).items():
             for r in rows:
-                if r['node_id']!=node or r.get('superseded_container') and r['state']=='pending':continue
+                if r.get('node_deleted') or r['node_id']!=node or r.get('superseded_container') and r['state']=='pending':continue
                 receiver=next((x for x in rows if x['direction']=='receive'),None)
                 permission=self.hub.permissions.permits(receiver['node_id'],receiver['public_wallet']) if receiver else True
                 if permission is False and r['state']=='pending':continue

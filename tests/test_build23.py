@@ -30,7 +30,7 @@ class Build23(unittest.TestCase):
   import http.client,json,threading
   from launch_wallaby_bitcoin_dashboard import create_server
   server,pool=create_server(Path(self.tmp.name)/'http',0,self.cfg,ipv6=False);pool.nodes.health.closed=True
-  thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();session=pool.create();session.user_id=self.uid;session.access=lambda:{'balances_ready':True}
+  thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start();session=pool.create();session.user_id=self.uid;session.access=lambda:{'balances_ready':True,'balances_available':True}
   def request(path,body=None):
    c=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=3);c.request('POST' if body is not None else 'GET',path,json.dumps(dict(body,user_id=self.uid)) if body is not None else None,{'X-Session-Token':session.token,'Content-Type':'application/json'});r=c.getresponse();out=json.loads(r.read());c.close();self.assertEqual(r.status,200,out);return out
   try:
@@ -47,7 +47,7 @@ class Build23(unittest.TestCase):
  def test_watch_badge_tracks_connected_private_replicas_without_invalidating_history(self):
   raw=public_wallet('Public policy',0);w=clean_wallet(raw);w.update(watch_only=True,node_sources=[{'node_id':'watch','wallet_name':'Public policy'}]);live={'watch','private'}
   hub=SimpleNamespace(inventories={'watch':{'complete':True,'wallets':[{'raw':raw,'private_keys_enabled':False}]},'private':{'complete':True,'wallets':[{'raw':raw,'private_keys_enabled':True}]}})
-  reg=SimpleNamespace(hub=hub,snapshot=lambda:{'nodes':[{'id':n,'connected':True,'rpc_ready':True} for n in live]})
+  reg=SimpleNamespace(hub=hub,presence=lambda:{'nodes':[{'id':n,'connected':True,'rpc_ready':True} for n in live]})
   self.assertFalse(watch_flags({'wallets':[w]},reg)[w['id']]);live.remove('private');self.assertTrue(watch_flags({'wallets':[w]},reg)[w['id']])
   altered=copy.deepcopy(w);altered.update(watch_only=False,node_sources=[]);self.assertEqual(DescriptorStore.fingerprint({'wallets':[w]}),DescriptorStore.fingerprint({'wallets':[altered]}));altered['raw']['descriptors'][0]['next_index']+=1;self.assertNotEqual(DescriptorStore.fingerprint({'wallets':[w]}),DescriptorStore.fingerprint({'wallets':[altered]}))
  def test_smsf_and_personal_answers_cannot_cross_entity_boundary(self):

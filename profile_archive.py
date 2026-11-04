@@ -89,6 +89,21 @@ def validate(root):
     seen=set()
     for r in raw['ownership']:
         if not isinstance(r,dict) or not isinstance(r.get('id'),str) or r['id'] in seen or not isinstance(r.get('name'),str) or not isinstance(r.get('source'),str) or r.get('kind') not in ('descriptor','wallet','exchange','bitaroo') or r.get('owner_id') is not None and r['owner_id'] not in ids:raise ValueError('Invalid ownership record in profile.')
+        if 'dashboard_name' in r and (not isinstance(r['dashboard_name'],str) or not r['dashboard_name'].strip() or len(r['dashboard_name'])>1000 or any(ord(c)<32 or ord(c)==127 for c in r['dashboard_name'])):raise ValueError('Invalid Dashboard wallet name in profile.')
+        if 'dashboard_name_history' in r:
+            history=r['dashboard_name_history']
+            if not isinstance(history,list) or len(history)>10000:raise ValueError('Invalid Dashboard rename history.')
+            previous=None
+            for event in history:
+                if not isinstance(event,dict) or set(event)-{'old_name','new_name','changed_utc','user_id'}:raise ValueError('Invalid Dashboard rename event.')
+                for field in ('old_name','new_name'):
+                    v=event.get(field)
+                    if not isinstance(v,str) or not v.strip() or len(v)>1000 or any(ord(c)<32 or ord(c)==127 for c in v):raise ValueError('Invalid historical Dashboard name.')
+                from datetime import datetime
+                if not isinstance(event.get('changed_utc'),str) or datetime.fromisoformat(event['changed_utc']).utcoffset()!=__import__('datetime').timedelta(0):raise ValueError('Invalid Dashboard rename UTC timestamp.')
+                if previous is not None and event['old_name']!=previous:raise ValueError('Broken Dashboard rename lineage.')
+                previous=event['new_name']
+            if history and previous!=r.get('dashboard_name',r['name']):raise ValueError('Dashboard rename history differs from its current name.')
         seen.add(r['id'])
     cfg=root/'config.cfg';FamilyStore(cfg)
     if (root/'descriptors.cfg').exists():
@@ -159,6 +174,32 @@ def validate(root):
     # JSON is parsed as data; imported files are never executed.
     return raw
 
+def portable_state(stage):
+    """Prune only disposable calculations from the copied export, never live state.
+
+    A draft with Agent involvement is an operation, even if the diagram is
+    still visible. Retain that operation and its cancellation/renewal links.
+    """
+    data=stage/'data';(data/'salary-builder.json').unlink(missing_ok=True)
+    path=data/'builder-workspaces.json'
+    if not path.exists():return
+    state=json.loads(path.read_text());tx=state['workspaces'].get('transaction')
+    if not tx:return
+    def read(name):
+        p=data/name
+        return json.loads(p.read_text()) if p.exists() else {}
+    jobs=read('transactions/workflows.json').get('jobs',{})
+    setups=read('wallet-setups.json').get('sessions',{})
+    recovered=[ident for rows in (jobs,setups) for ident,row in rows.items() if row.get('workspace_id')==tx['id']]
+    for ident in recovered:
+        if ident not in tx['operations']:tx['operations'].append(ident)
+    hub=read('agent-hub.json')
+    related=lambda row:row.get('workspace_id')==tx['id'] or (row.get('proposal') or {}).get('workspace_id')==tx['id']
+    linked=any(w.get('renewal',{}).get('transaction_workspace')==tx['id'] for w in state['workspaces'].values())
+    protected=(tx['operations'] or tx.get('cancellation_id') or tx.get('draft',{}).get('imported_id') or linked or any(related(row) for row in hub.get('requests',{}).values()))
+    if not protected:state['workspaces'].pop('transaction')
+    path.write_text(json.dumps(state,ensure_ascii=True))
+
 class ProfileArchive:
     def __init__(self,config):self.config=Path(config).resolve()
     def save(self):
@@ -173,6 +214,7 @@ class ProfileArchive:
                     for p in paths:
                         if not p.is_file() or p.name.endswith(('.lock','.tmp')):continue
                         relative=Path(name) if source.is_file() else Path(name)/p.relative_to(source);safe_name(relative.as_posix());dest=stage/relative;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(p,dest);dest.chmod(0o600)
+            portable_state(stage)
             files={p.relative_to(stage).as_posix():digest(p) for p in stage.rglob('*') if p.is_file()}
             if len(files)>MAX_FILES or sum(p.stat().st_size for p in stage.rglob('*') if p.is_file())>MAX_BYTES:raise ValueError('Profile is too large to archive.')
             (stage/'profile.json').write_text(json.dumps({'format':'wallaby-profile','schema':152,'files':files}),encoding='utf-8')

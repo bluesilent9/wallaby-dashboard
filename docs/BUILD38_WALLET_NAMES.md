@@ -1,0 +1,9 @@
+# Separate wallet names
+
+The Dashboard rename form reads current names from `/api/wallets/rename-names?wallet_id=…`, which requires the owning profile and an active descriptor wallet. It exposes only names. It prefers a persistent private-key holder's Core name over a watch route. Filename validation retains existing safe-name restrictions; readable labels are unique, non-empty and limited to 1,000 characters.
+
+`POST /api/wallets/rename` accepts wallet_id, filename and dashboard_name. The interface sends filename:null when it has not been edited, preventing a concurrent node rename from turning a label-only save into a new Agent request. If a filename is supplied and differs, the existing filename queue performs its builder, transfer and archive checks. Both fields are validated before queueing. A pending filename operation locks the filename field but permits local label editing.
+
+Readable aliases are persisted as presentation metadata on the Ownership record. They do not alter descriptor IDs, public descriptors, account ownership or the calculation names/signature used by stored trace records. Current Wallets, Ownership, descriptor summaries, Address Book, Vaults and Agent-proposal diagram labels use the alias. Ownership saves retain it. New extinction manifests use the readable alias rather than a watch route. Portable profiles validate and retain this metadata. Previously generated tax reports retain their original calculation labels.
+
+The Agent receives the existing exact wallet_rename_v1 request only when a filename changes; the Dashboard name is not sent. Signed confirmations refresh inventory without changing the readable alias. Existing late-disc detection, latest-rename ordering, verified replacement and local destruction approval stay in force. This requires no additional Agent protocol or capability.

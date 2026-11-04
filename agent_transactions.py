@@ -25,7 +25,7 @@ def eligible(hub,wallet_id,capability='partial_signing'):
     for node in hub.registry.snapshot()['nodes']:
         if not node['rpc_ready'] or node.get('blockchain',{}).get('state')!='ready' or capability not in hub.caps.get(node['id'],set()):continue
         inventory=hub.inventories.get(node['id'],{})
-        if not inventory.get('complete'):continue
+        if not (inventory.get('complete') or inventory.get('loaded_complete')):continue
         replicas=[w for w in inventory['wallets'] if w['private_keys_enabled'] and not w['scanning'] and equivalent(wanted['raw'],w['raw'])]
         from policy_accounts import signing_account
         monitors=[w for w in inventory['wallets'] if equivalent(wanted['raw'],w['raw'])]
@@ -35,7 +35,7 @@ def eligible(hub,wallet_id,capability='partial_signing'):
         seen=set()
         for replica in replicas:
             if replica['name'] in seen:continue
-            seen.add(replica['name']);signer_id=digest({'node':node['id'],'policies':sorted(__import__('node_wallets').NodeWalletLoader.descriptor_key(r['desc']) for r in replica['raw']['descriptors'])})
+            seen.add(replica['name']);signer_id=digest({'node':node['id'],'wallet':replica['name'],'policies':sorted(__import__('node_wallets').NodeWalletLoader.descriptor_key(r['desc']) for r in replica['raw']['descriptors'])})
             result.append({'id':node['id'],'signer_id':signer_id,'hostname':node['hostname'],'wallet':replica['name']})
     return result
 
@@ -76,7 +76,7 @@ def validate_export(hub,payload,lease):
         uid=matches[0];owner=owners.get(uid)
         if not owner or owner.get('owner_id')!=lease['user_id']:raise ValueError('The open diagram profile does not own this exported transaction source.')
         rid=resource_id('descriptor',uid);input_wallets.append(rid);source_totals[rid]=source_totals.get(rid,0)+output.value;total+=output.value
-        cards[rid]={'id':rid,'name':owner['name'],'owner_id':owner['owner_id'],'owner':next(u['name'] for u in snapshot['users'] if u['id']==owner['owner_id']),'colour':'neutral','kind':'descriptor','btc':str(Decimal(source_totals[rid])/100000000),'aud':None,'can_send':True,'can_receive':True,'address':output.script_pubkey.address(NETWORKS['main'])}
+        cards[rid]={'id':rid,'name':__import__('wallet_names').dashboard_name(owner),'owner_id':owner['owner_id'],'owner':next(u['name'] for u in snapshot['users'] if u['id']==owner['owner_id']),'colour':'neutral','kind':'descriptor','btc':str(Decimal(source_totals[rid])/100000000),'aud':None,'can_send':True,'can_receive':True,'address':output.script_pubkey.address(NETWORKS['main'])}
         coin=chain.rpc.call(lease['node_id'],'gettxout',[key[0],key[1],True]);unspent.append(isinstance(coin,dict) and coin.get('confirmations',0)>0)
     if not input_wallets:raise ValueError('A vault proposal needs funding inputs.')
     from node_wallets import NodeWalletLoader
@@ -99,7 +99,7 @@ def validate_export(hub,payload,lease):
         if address==vault_address:vault_value+=output.value
         matches=[uid for uid,values in scripts.items() if output.script_pubkey.data.hex() in values]
         owner=owners.get(matches[0]) if len(matches)==1 else None
-        name=owner['name'] if owner else (owners[root['id']]['name']+' Vault' if address==vault_address else address)
+        name=__import__('wallet_names').dashboard_name(owner) if owner else (__import__('wallet_names').dashboard_name(owners[root['id']])+' Vault' if address==vault_address else address)
         cards[ident]={'id':ident,'name':name,'kind':'wallet','owner_id':owner.get('owner_id') if owner else lease['user_id'] if address==vault_address else None,'owner':next((u['name'] for u in snapshot['users'] if owner and u['id']==owner.get('owner_id')),''),'colour':'neutral','btc':'0','aud':None,'address':address,'can_send':False,'can_receive':True}
         edges.append({'from':source,'to':ident,'amount_sats':str(output.value),'fee_rate':'0','locked':True,'output_index':n})
     if not vault_value:raise ValueError('The exported PSBT does not fund the declared vault address.')

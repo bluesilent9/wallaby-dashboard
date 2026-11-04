@@ -1,7 +1,7 @@
 """Public-only, authenticated two-approval wallet setup coordinator.
 
 Keys are generated and encrypted by Agents. No secret, backup or passphrase crosses
-this boundary. Restarts interrupt unfinished ceremonies instead of regenerating keys.
+this boundary. Reconnect recovery reuses complete authenticated contributions only.
 """
 import copy,json,os,re,secrets,time
 from contextlib import contextmanager
@@ -12,13 +12,72 @@ from agent_hub import digest,canonical
 from vendor.embit.descriptor import Descriptor
 from vendor.embit.networks import NETWORKS
 
+def setup_card_progress(row):
+    """Presentation derived only from previously validated public setup evidence."""
+    roles=row['proposal']['cosigners']
+    proofs=list(row.get('acks',{}).values())
+    approved={e['public_key'] for e in proofs if e['message']['status']=='policy_approved'}
+    participating={e['public_key'] for e in proofs if e['message']['status']=='participating'}
+    backups={(e['public_key'],e['message'].get('cosigner_file')) for e in proofs if e['message']['status']=='backup_verified'}
+    stopped=row['state'] in ('cancelled','interrupted')
+    progress={}
+    for role in roles:
+        key=role['agent_key'];node=row['routes'][role['id']]
+        installed=row.get('inventories',{}).get(node,{}).get('message',{}).get('signing_wallets',{})
+        complete=key in approved and (bool(installed.get(role['id'])) if role['storage']=='node' else (key,__import__('hashlib').sha256(role['id'].encode()).hexdigest()) in backups)
+        started=role['id'] in row.get('contributions',{}) or key in participating or key in approved
+        colour='green' if complete else 'amber' if started else 'red'
+        label=('Physical backup verified' if role['storage']=='disc' else 'Node signer installed') if complete else ('Awaiting physical backup verification' if role['storage']=='disc' else 'Awaiting node wallet installation') if key in approved else 'Public contribution verified — awaiting policy approval' if role['id'] in row.get('contributions',{}) else 'Participation approved — awaiting public contribution' if started else 'Awaiting local participation'
+        if stopped:colour='amber' if started or complete else 'red';label='Setup stopped — reconcile on the Agent'
+        progress[role['id']]={'colour':colour,'label':label}
+    all_done=bool(roles) and all(p['colour']=='green' for p in progress.values())
+    confirmed=bool(row.get('routes')) and set(row['routes'].values())<=set(row.get('completion_confirmed',{}))
+    colour='green' if all_done and row['state']=='ready' and confirmed else 'amber' if any(p['colour']=='green' for p in progress.values()) else 'red'
+    label='Wallet creation confirmed' if colour=='green' else 'Waiting for remaining signers and final Core confirmation' if colour=='amber' else 'Waiting for a completed signer'
+    if stopped:colour='amber' if any(p['colour']=='amber' for p in progress.values()) else 'red';label='Setup stopped — reconcile on the Agents'
+    return {'signers':progress,'wallet':{'colour':colour,'label':label}}
+
 class WalletBuilder:
     def __init__(self,hub):
-        self.hub=hub;self.config=hub.config;self.path=data_directory(self.config)/'wallet-setups.json';self.live={}
+        self.hub=hub;self.config=hub.config;self.path=data_directory(self.config)/'wallet-setups.json';self.live={};self.progress_signatures={}
         if self.path.exists():
             with self.edit() as state:
-                for row in state['sessions'].values():
-                    if row['state'] not in ('ready','cancelled','interrupted'):row['state']='interrupted';row['message']='Dashboard restarted. Reconcile the existing setup locally on every Agent; start a new ceremony only after that.'
+                for h,row in state['sessions'].items():
+                    if row['state'] not in ('ready','cancelled','interrupted'):row.update(state='interrupted',interruption_reason='restart',message='Dashboard restarted. Reconcile the existing setup locally on every Agent; start a new ceremony only after that.')
+                    self.recover_policy(h,row)
+    def recover_policy(self,h,row):
+        """Resume public approval delivery, never participation/key generation."""
+        reasons={'Dashboard restarted. Reconcile the existing setup locally on every Agent; start a new ceremony only after that.':'restart',
+                 'Agent reconnected during setup. Reconcile its pending ceremony locally before starting another.':'reconnect'}
+        reason=row.get('interruption_reason') or reasons.get(row.get('message'))
+        if row['state']!='interrupted' or reason not in ('restart','reconnect'):return False
+        from builder_workspace import BuilderWorkspace
+        workspace=BuilderWorkspace(self.config).read()['workspaces'].get('wallet',{})
+        if not row.get('workspace_id') or workspace.get('id')!=row['workspace_id'] or workspace.get('owner_id')!=row['creator_id'] or workspace.get('cancellation_id') or h not in workspace.get('operations',[]):return False
+        roles=row['proposal']['cosigners']
+        if set(row['contributions'])!={r['id'] for r in roles}:return False
+        if any(e['message'].get('status')=='denied' for e in row['acks'].values()):return False
+        try:
+            proposal(row['proposal'])
+            candidate=copy.deepcopy(row)
+            envelopes=[row['contributions'][r['id']] for r in sorted(roles,key=lambda r:r['id'])]
+            descs=policy(row['proposal'],[e['message'] for e in envelopes])
+            binding=digest({'proposal':row['proposal'],'receive_descriptor':descs[0],'change_descriptor':descs[1],'contributions':envelopes})
+            if row.get('policy_hash') and (row['policy_hash']!=binding or row.get('descriptors')!=descs):raise ValueError('The retained policy differs from the signed contributions.')
+            candidate.update(state='policy',policy_hash=binding,descriptors=descs)
+            approvals={e['public_key'] for e in row['acks'].values() if e['message']['status']=='policy_approved'}
+            backups={e['message']['cosigner_file'] for e in row['acks'].values() if e['message']['status']=='backup_verified'}
+            if {r['agent_key'] for r in roles}<=approvals and all(__import__('hashlib').sha256(r['id'].encode()).hexdigest() in backups for r in roles if r['storage']=='disc'):candidate['state']='ready'
+            from preferences import FamilyStore
+            users={u['id'] for u in FamilyStore(self.config).snapshot()['users']}
+            validate_archive(self.config,{'version':1,'identities':{},'challenges':{},'sessions':{h:candidate}},users)
+        except (ValueError,KeyError,TypeError) as exc:
+            row['resume_error']='Existing setup could not be resumed: '+str(exc);return False
+        row.update(candidate);row.pop('interruption_reason',None);row.pop('resume_error',None)
+        row.setdefault('resume_events',[]).append({'reason':reason,'utc':self.hub.utc(),'policy_hash':binding})
+        row['message']='Connection recovered. Existing signed keys and exact policy retained; continue the local policy approvals and physical backups. No replacement keys were requested.'
+        self.hub.registry.diagnostic_log.append('Wallet Builder','Resumed existing public policy after '+reason+' · setup='+h[:12]+' · no key generation replay.')
+        return True
     def read(self):
         return json.loads(self.path.read_text()) if self.path.exists() else {'version':1,'identities':{},'challenges':{},'sessions':{}}
     @contextmanager
@@ -31,13 +90,14 @@ class WalletBuilder:
             os.replace(tmp,self.path)
     def available(self):
         result=[]
-        for node in self.hub.registry.snapshot()['nodes']:
+        for node in self.hub.registry.presence()['nodes']:
             version=(node.get('agent') or {}).get('version') or next((c.get('agent_version','') for c in self.hub.registry.connections.values() if c['node_id']==node['id']),'')
             if node.get('rpc_ready') and node.get('blockchain',{}).get('state')=='ready' and re.fullmatch(r'2\.0\.0~dev(?:9|[1-9][0-9]+)',version or ''):result.append(node)
         return result
-    def discover(self):
+    def discover(self,*,foreground=False):
         nodes=self.available()
         if not nodes:raise ValueError('No eligible synchronised Agents are connected. Check Nodes for the connection, Core status and Agent version.')
+        if foreground:self.hub.prioritise([n['id'] for n in nodes])
         with self.edit() as s:
             for n in nodes:
                 prior=s['challenges'].get(n['id']);reply=s['identities'].get(n['id'],{}).get('message',{}).get('challenge')
@@ -61,7 +121,8 @@ class WalletBuilder:
                 rid='signer-'+str(index+1);routes[rid]=r['node_id'];assigned.append({'id':rid,'name':r['name'],'storage':r['storage'],'agent_key':identity['public_key']})
             p={'kind':'wallet_setup','version':1,'session_id':secrets.token_hex(32),'chain':'main','name':data['name'].strip(),'threshold':data['threshold'],'cosigners':assigned,'height':data['height'],'expires_at':int(time.time())+86400-5};proposal(p)
             h=digest(p);s['sessions'][h]={'proposal':p,'routes':routes,'creator_id':user,'workspace_id':workspace_id,'state':'participation','contributions':{},'acks':{},'inventories':{},'created_utc':self.hub.utc(),'message':'Approve participation and key generation locally on each producing Agent.'}
-        return self.snapshot()
+        self.hub.registry.diagnostic_log.append('Wallet Builder','Created public proposal · setup='+h[:12]+' · workspace='+(workspace_id or 'unbound')[:12])
+        return dict(self.snapshot(),created_id=h)
     def accept(self,node,kind,envelope):
         s=self.read()
         if kind=='wallet_setup_identity':
@@ -120,7 +181,8 @@ class WalletBuilder:
             else:
                 same=[e for e in row['acks'].values() if e['public_key']==envelope['public_key'] and e['message']['status']==m['status'] and e['message'].get('cosigner_file')==m.get('cosigner_file')]
                 if not same:row['acks'][digest(envelope)]=envelope
-            if kind=='wallet_setup_ack' and m['status']=='denied':row['state']='interrupted';row['message']='An Agent denied this ceremony. Reconcile locally before creating a new setup.'
+            if kind=='wallet_setup_ack' and m['status']=='denied':row['state']='interrupted';row['interruption_reason']='denied';row['message']='An Agent denied this ceremony. Reconcile locally before creating a new setup.'
+            self.recover_policy(h,row)
             if row['state'] in ('cancelled','interrupted'):return
             if len(row['contributions'])==len(roles) and not row.get('policy_hash'):
                 envelopes=[row['contributions'][r['id']] for r in sorted(roles,key=lambda r:r['id'])];descs=policy(row['proposal'],[e['message'] for e in envelopes]);row['descriptors']=descs
@@ -135,9 +197,14 @@ class WalletBuilder:
             if node in s['challenges'] and s.get('identities',{}).get(node,{}).get('message',{}).get('challenge')!=s['challenges'][node]:output.append({'kind':'wallet_setup_identity','version':1,'challenge':s['challenges'][node]})
             for h,row in s['sessions'].items():
                 if node not in row['routes'].values() or row['state'] in ('cancelled','interrupted'):continue
-                if row['proposal']['expires_at']<=time.time() and row['state']!='ready':row['state']='interrupted';row['message']='Ceremony expired. Reconcile locally; existing keys must not be regenerated.';continue
+                if row['proposal']['expires_at']<=time.time() and row['state']!='ready':row['state']='interrupted';row['interruption_reason']='expired';row['message']='Ceremony expired. Reconcile locally; existing keys must not be regenerated.';continue
                 key=(h,node);prior=self.live.get(key)
-                if prior is not None and prior!=token and row['state']!='ready':row['state']='interrupted';row['message']='Agent reconnected during setup. Reconcile its pending ceremony locally before starting another.';continue
+                if prior is not None and prior!=token and row['state']!='ready':
+                    local={r['id'] for r in row['proposal']['cosigners'] if row['routes'][r['id']]==node}
+                    if row['state']=='participation' and local<=set(row['contributions']):
+                        self.live[key]=token;continue
+                    row.update(state='interrupted',interruption_reason='reconnect',message='Agent reconnected during setup. Reconcile its pending ceremony locally before starting another.')
+                    if not self.recover_policy(h,row):continue
                 self.live[key]=token
                 if row['state']=='ready':
                     if node in row.get('completion_confirmed',{}):continue
@@ -149,7 +216,9 @@ class WalletBuilder:
                     proofs=[e for e in row['acks'].values() if e['message']['status'] in ('policy_approved','backup_verified')];output.append({'kind':'wallet_setup_complete','version':1,'proposal_hash':h,'policy_hash':row['policy_hash'],'acknowledgements':proofs});continue
                 row.setdefault('delivered_nodes',[])
                 if node not in row['delivered_nodes']:row['delivered_nodes'].append(node)
-                if row['state']=='participation':output.append(row['proposal'])
+                if row['state']=='participation':
+                    local={r['id'] for r in row['proposal']['cosigners'] if row['routes'][r['id']]==node}
+                    if not local<=set(row['contributions']):output.append(row['proposal'])
                 elif row['state']=='policy':output.append({'kind':'wallet_setup_policy','version':1,'proposal':row['proposal'],'contributions':[row['contributions'][r['id']] for r in sorted(row['proposal']['cosigners'],key=lambda r:r['id'])],'receive_descriptor':row['descriptors'][0],'change_descriptor':row['descriptors'][1]})
         return output
     def confirm_installed(self,node,token,wallets):
@@ -197,7 +266,12 @@ class WalletBuilder:
                         elif vault.get('funding_status')=='unlocked':status='unlocked';label='Unlocked — vault height reached'
                         elif vault.get('funding_status')=='needs_attention':status='needs_attention';label='Vault needs attention — check Vaults'
                         break
-            row.update(setup_status=status,setup_label=label)
+            row.update(setup_status=status,setup_label=label,card_progress=setup_card_progress(r))
+            signature=(r['state'],status,len(r['contributions']),len(r['acks']),len(confirmed))
+            signatures=getattr(self,'progress_signatures',{})
+            if signatures.get(h)!=signature:
+                self.hub.registry.diagnostic_log.append('Wallet Builder','Progress · setup='+h[:12]+' · workspace='+(r.get('workspace_id') or 'unbound')[:12]+' · state='+r['state']+' · status='+status+' · contributions='+str(len(r['contributions']))+'/'+str(len(r['proposal']['cosigners']))+' · proofs='+str(len(r['acks']))+' · confirmed='+str(len(confirmed))+'/'+str(len(required)))
+                signatures[h]=signature;self.progress_signatures=signatures
             sessions.append(row)
         return {'nodes':nodes,'sessions':sessions}
 
